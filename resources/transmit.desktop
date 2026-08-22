@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Transmit
+GenericName=Environment migration
+Comment=Move this computer's files, settings and programs to another one
+Exec=transmit
+Icon=transmit
+Terminal=false
+Categories=Utility;Archiving;FileTools;
+Keywords=migration;backup;transfer;archive;usb;move;
+StartupNotify=true
+StartupWMClass=transmit

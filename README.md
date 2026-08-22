@@ -217,10 +217,18 @@ Honest list of what the design covers but the code does not:
   NetworkManager, but `secret-tool` can only look a secret up by attribute, not
   list the keyring, so application passwords there stay behind. Linking
   libsecret directly would fix this.
-- **Packaging.** No deb, rpm, AppImage, MSI or dmg recipes.
 - **Volume snapshots on Windows and macOS.** Both fall back to consistent
   database copies, which covers the common case; VSS and APFS snapshots are not
   wired up.
+
+---
+
+## Packaging
+
+Recipes for Debian, Fedora and openSUSE, Arch, Alpine, Void, Gentoo, NixOS,
+Flatpak, a Windows installer and a macOS disk image are in `packaging/`. They
+all build from a normal `cmake --install`, so none of them duplicates build
+logic.
 
 ---
 

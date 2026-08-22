@@ -1,0 +1,36 @@
+Source: transmit
+Section: utils
+Priority: optional
+Maintainer: Transmit contributors <noreply@example.invalid>
+Build-Depends: debhelper-compat (= 13),
+               cmake (>= 3.21),
+               ninja-build,
+               qt6-base-dev,
+               qt6-declarative-dev,
+               libzstd-dev,
+               liblzma-dev,
+               libssl-dev,
+               libsqlite3-dev,
+               libsecret-1-dev
+Standards-Version: 4.6.2
+Homepage: https://github.com/neramc/transmit
+Rules-Requires-Root: no
+
+Package: transmit
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: qml6-module-qtquick-controls,
+            qml6-module-qtquick-layouts,
+            qml6-module-qtquick-dialogs
+Suggests: network-manager, libsecret-tools
+Description: Move a computer's environment to one running another operating system
+ Transmit captures your files, the data and settings your programs keep, your
+ desktop preferences and the list of what you have installed; compresses all of
+ it onto removable media; and restores it on a machine running a different
+ operating system.
+ .
+ Locations are stored as meanings rather than paths, so a folder lands where it
+ belongs on the far side. Application state is moved to where that program
+ looks for it on the new system, and the paths recorded inside its settings are
+ corrected to match. Anything that cannot cross is reported rather than
+ silently dropped.

@@ -31,6 +31,13 @@ add_subdirectory("${CMAKE_SOURCE_DIR}/src/ui/qml" "${CMAKE_BINARY_DIR}/src/ui/qm
 
 qt_add_executable(transmit main.cpp)
 
+qt_add_resources(transmit "transmit_icons"
+    PREFIX "/icons"
+    BASE "${CMAKE_SOURCE_DIR}/resources/icons"
+    FILES
+        "${CMAKE_SOURCE_DIR}/resources/icons/transmit-256.png"
+        "${CMAKE_SOURCE_DIR}/resources/icons/transmit.svg")
+
 target_link_libraries(transmit PRIVATE
     Transmit::Core Transmit::Warnings
     Qt6::Quick Qt6::QuickControls2 Qt6::Gui
@@ -51,3 +58,28 @@ set_target_properties(transmit PROPERTIES
     MACOSX_BUNDLE_GUI_IDENTIFIER "com.transmit.app"
     MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
+
+# ------------------------------------------------------------------ install
+include(GNUInstallDirs)
+
+install(TARGETS transmit
+    BUNDLE  DESTINATION .
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+
+if(TARGET transmit-cli)
+    install(TARGETS transmit-cli RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+endif()
+
+if(UNIX AND NOT APPLE)
+    install(FILES "${CMAKE_SOURCE_DIR}/resources/transmit.desktop"
+        DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications")
+
+    install(FILES "${CMAKE_SOURCE_DIR}/resources/icons/transmit.svg"
+        DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/scalable/apps")
+
+    foreach(size 16 32 48 64 128 256)
+        install(FILES "${CMAKE_SOURCE_DIR}/resources/icons/transmit-${size}.png"
+            DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/${size}x${size}/apps"
+            RENAME transmit.png)
+    endforeach()
+endif()

@@ -1,0 +1,20 @@
+# Template file for 'transmit' (Void Linux)
+pkgname=transmit
+version=0.1.0
+revision=1
+build_style=cmake
+configure_args="-DTRANSMIT_BUILD_TESTS=ON"
+hostmakedepends="pkg-config qt6-base-devel qt6-declarative-devel"
+makedepends="qt6-base-devel qt6-declarative-devel libzstd-devel liblzma-devel
+             openssl-devel sqlite-devel libsecret-devel"
+depends="qt6-declarative"
+short_desc="Move a computer's environment to one running another operating system"
+maintainer="Transmit contributors <noreply@example.invalid>"
+license="AGPL-3.0-or-later"
+homepage="https://github.com/neramc/transmit"
+distfiles="https://github.com/neramc/transmit/archive/v${version}.tar.gz"
+checksum=@SHA256@
+
+do_check() {
+    ctest --test-dir build --output-on-failure
+}

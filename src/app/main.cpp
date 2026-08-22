@@ -14,7 +14,7 @@ int main(int argc, char** argv) {
     QGuiApplication::setApplicationVersion(QStringLiteral(TRANSMIT_VERSION));
     QGuiApplication::setOrganizationName(QStringLiteral("Transmit"));
     QGuiApplication::setOrganizationDomain(QStringLiteral("transmit.local"));
-    QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/qt/qml/Transmit/assets/icon.png")));
+    QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/icons/transmit-256.png")));
 
     // The Basic style is the one that honours a custom design system; the
     // native styles override colours and defeat the point of having one.

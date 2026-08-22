@@ -1,0 +1,37 @@
+# Flatpak manifest. Works on any distribution, which matters for the ones with
+# no Qt 6 packages of their own.
+app-id: io.github.neramc.Transmit
+runtime: org.kde.Platform
+runtime-version: '6.8'
+sdk: org.kde.Sdk
+command: transmit
+
+finish-args:
+  # Transmit reads what the user chose and writes to removable media. It has no
+  # business anywhere else, and no business on the network at all.
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=home
+  - --filesystem=/media
+  - --filesystem=/run/media
+  - --filesystem=/mnt
+  # Reading the desktop's own preferences, and the login keyring when the user
+  # opts in to carrying passwords.
+  - --talk-name=org.freedesktop.secrets
+  - --system-talk-name=org.freedesktop.NetworkManager
+  - --filesystem=xdg-config/dconf:ro
+  - --talk-name=ca.desrt.dconf
+  - --env=DCONF_USER_CONFIG_DIR=.config/dconf
+
+modules:
+  - name: transmit
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=RelWithDebInfo
+      - -DTRANSMIT_BUILD_TESTS=OFF
+    sources:
+      - type: git
+        url: https://github.com/neramc/transmit.git
+        tag: v0.1.0

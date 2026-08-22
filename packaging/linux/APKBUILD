@@ -1,0 +1,29 @@
+# Maintainer: Transmit contributors <noreply@example.invalid>
+pkgname=transmit
+pkgver=0.1.0
+pkgrel=0
+pkgdesc="Move a computer's environment to one running another operating system"
+url="https://github.com/neramc/transmit"
+arch="all"
+license="AGPL-3.0-or-later"
+depends="qt6-qtdeclarative"
+makedepends="cmake ninja samurai qt6-qtbase-dev qt6-qtdeclarative-dev
+             zstd-dev xz-dev openssl-dev sqlite-dev libsecret-dev"
+subpackages="$pkgname-doc"
+source="$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz"
+
+build() {
+    cmake -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DTRANSMIT_BUILD_TESTS=ON
+    cmake --build build
+}
+
+check() {
+    ctest --test-dir build --output-on-failure
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install build
+}
