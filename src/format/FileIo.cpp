@@ -21,6 +21,9 @@ Error errnoError(const std::filesystem::path& path, const char* what) {
     return makeError(mapped, what, " '", fromFsPath(path), "': ", std::strerror(code));
 }
 
+#if !defined(_WIN32)
+// Windows opens through _wfopen_s with a wide mode string, so this exists only
+// for the other branch - and a function defined for nobody is a warning.
 const char* modeString(FileStream::Mode mode) {
     switch (mode) {
         case FileStream::Mode::Read:
@@ -32,6 +35,7 @@ const char* modeString(FileStream::Mode mode) {
     }
     return "rb";
 }
+#endif
 
 }  // namespace
 

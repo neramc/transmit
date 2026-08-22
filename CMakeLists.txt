@@ -6,6 +6,14 @@ project(Transmit
     HOMEPAGE_URL "https://github.com/neramc/transmit"
     LANGUAGES CXX)
 
+# The macOS platform layer is Objective-C++. Without this CMake hands the .mm
+# files to the C++ compiler and calls them C++ - clang works out what they
+# really are from the extension, but CMake does not, so anything scoped to a
+# language lands on the wrong set of files.
+if(APPLE)
+    enable_language(OBJCXX)
+endif()
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(TransmitOptions)

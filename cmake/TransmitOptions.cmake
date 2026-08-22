@@ -2,6 +2,8 @@
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_OBJCXX_STANDARD 20)
+set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -37,7 +39,13 @@ if(MSVC)
 else()
     target_compile_options(transmit_warnings INTERFACE
         -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion
-        -Wnon-virtual-dtor -Wold-style-cast -Woverloaded-virtual -Wdouble-promotion)
+        -Wnon-virtual-dtor -Woverloaded-virtual -Wdouble-promotion)
+
+    # Not for Objective-C++: reaching a Core Foundation type from ARC is
+    # spelled `(__bridge CFTypeRef)object` and there is no C++-style form of
+    # it, so the rule would forbid the only way to write the call.
+    target_compile_options(transmit_warnings INTERFACE
+        "$<$<COMPILE_LANGUAGE:CXX>:-Wold-style-cast>")
     if(TRANSMIT_WERROR)
         target_compile_options(transmit_warnings INTERFACE -Werror)
     endif()

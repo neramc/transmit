@@ -11,7 +11,7 @@ using namespace transmit;
 /// usually does not have, so the whole suite skips rather than fails when
 /// there is none. Run it for real with:
 ///
-///     dbus-run-session -- scripts/with-keyring.sh \
+///     dbus-run-session -- scripts/with-keyring.sh
 ///         ./build/tests/integration/transmit_SecretStore_test
 class SecretStoreTest : public QObject {
     Q_OBJECT
@@ -70,7 +70,8 @@ void SecretStoreTest::initTestCase() {
 platform::SecretRecord SecretStoreTest::findByService(const QString& service) const {
     for (const platform::SecretRecord& record :
          store_->read(/*includeWifi=*/false, /*includeApplications=*/true)) {
-        if (record.service == service || record.attributes.value(QStringLiteral("service")) == service ||
+        if (record.service == service ||
+            record.attributes.value(QStringLiteral("service")) == service ||
             record.attributes.value(QStringLiteral("signon_realm")) == service) {
             return record;
         }

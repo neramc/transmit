@@ -1,5 +1,23 @@
 # Checks that catch real defects, with the noisy ones off. A warning nobody
 # acts on is worse than no warning at all.
+#
+# Note for anyone editing the list below: it is a YAML folded scalar, so a
+# line starting with # inside it is not a comment - it becomes part of the
+# check list and quietly breaks everything after it. Explanations go here.
+#
+# Two clang-analyzer checks are off, both because they cannot model something
+# this codebase relies on:
+#
+#   core.uninitialized.Assign - Result<T> holds a std::variant, and the
+#   analyser cannot tell which alternative is engaged. After a success check
+#   it takes the value branch without having modelled the value being put
+#   there, then reports every field of what came out as garbage. It fires on
+#   function after function and never once on anything real; every struct it
+#   named has default member initialisers on all its fields.
+#
+#   optin.core.EnumCastOutOfRange - flags enums, Qt's and GLib's alike, are
+#   combined with | into values that are deliberately not enumerators, and
+#   casting back is the only way to pass them to the API that defined them.
 Checks: >
   -*,
   bugprone-*,
@@ -25,7 +43,9 @@ Checks: >
   -readability-magic-numbers,
   -readability-function-cognitive-complexity,
   -readability-braces-around-statements,
-  -readability-implicit-bool-conversion
+  -readability-implicit-bool-conversion,
+  -clang-analyzer-core.uninitialized.Assign,
+  -clang-analyzer-optin.core.EnumCastOutOfRange
 
 WarningsAsErrors: 'bugprone-use-after-move,bugprone-dangling-handle,clang-analyzer-*'
 HeaderFilterRegex: '.*/src/(core|format|platform|app)/.*'
@@ -37,7 +57,31 @@ CheckOptions:
     value: camelBack
   - key: readability-identifier-naming.PrivateMemberSuffix
     value: '_'
-  - key: readability-identifier-naming.ConstantCase
+  # Constants are split by scope, because the codebase spells them
+  # differently on purpose: a file-scope constant is kLikeThis so it is
+  # obvious it is not a local, a local constant is an ordinary name, and an
+  # enumerator is a name in its own right - Mode::Read, not Mode::kRead.
+  - key: readability-identifier-naming.GlobalConstantCase
     value: CamelCase
-  - key: readability-identifier-naming.ConstantPrefix
+  - key: readability-identifier-naming.GlobalConstantPrefix
     value: 'k'
+  - key: readability-identifier-naming.StaticConstantCase
+    value: CamelCase
+  - key: readability-identifier-naming.StaticConstantPrefix
+    value: 'k'
+  - key: readability-identifier-naming.ClassConstantCase
+    value: CamelCase
+  - key: readability-identifier-naming.ClassConstantPrefix
+    value: 'k'
+  - key: readability-identifier-naming.LocalConstantCase
+    value: camelBack
+  - key: readability-identifier-naming.LocalConstantPointerCase
+    value: camelBack
+  - key: readability-identifier-naming.ConstantParameterCase
+    value: camelBack
+  - key: readability-identifier-naming.ConstantPointerParameterCase
+    value: camelBack
+  - key: readability-identifier-naming.ConstantMemberCase
+    value: camelBack
+  - key: readability-identifier-naming.EnumConstantCase
+    value: CamelCase

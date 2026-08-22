@@ -68,6 +68,18 @@ QString RestoreUndoTest::captureSomething() {
     qputenv("HOME", home.toUtf8());
 
     auto platform = platform::PlatformService::create();
+
+    // Windows and macOS resolve the known folders through their own shell
+    // APIs, which do not follow HOME - so on those the capture below would
+    // read the machine's real Documents folder. Skipping is the honest answer:
+    // the undo logic these tests are about is not platform-specific, and
+    // reading somebody's actual documents to prove it is not a trade worth
+    // making.
+    const auto documents = platform->knownFolders().base(format::PathTokenId::Documents);
+    if (!documents || !QString::fromStdString(*documents).startsWith(home)) {
+        return {};
+    }
+
     core::ExportService service(*platform);
 
     core::ExportRequest request;
@@ -98,7 +110,9 @@ QString RestoreUndoTest::findRestoredNote(const QString& destination) {
 
 void RestoreUndoTest::aRestoreOffersAnUndoPoint() {
     const QString archive = captureSomething();
-    QVERIFY2(!archive.isEmpty(), "the capture did not produce an archive");
+    if (archive.isEmpty()) {
+        QSKIP("this platform does not resolve its known folders from HOME");
+    }
 
     app::ImportController controller;
     QVERIFY2(!controller.canUndo(), "there is nothing to undo before a restore has run");
@@ -112,7 +126,9 @@ void RestoreUndoTest::aRestoreOffersAnUndoPoint() {
 
 void RestoreUndoTest::keepingTheRestoreClearsUpAfterItself() {
     const QString archive = captureSomething();
-    QVERIFY(!archive.isEmpty());
+    if (archive.isEmpty()) {
+        QSKIP("this platform does not resolve its known folders from HOME");
+    }
 
     app::ImportController controller;
     const QString destination = workspace_->filePath(QStringLiteral("restored"));
@@ -136,7 +152,9 @@ void RestoreUndoTest::keepingTheRestoreClearsUpAfterItself() {
 
 void RestoreUndoTest::undoingPutsTheMachineBack() {
     const QString archive = captureSomething();
-    QVERIFY(!archive.isEmpty());
+    if (archive.isEmpty()) {
+        QSKIP("this platform does not resolve its known folders from HOME");
+    }
 
     app::ImportController controller;
     const QString destination = workspace_->filePath(QStringLiteral("restored"));

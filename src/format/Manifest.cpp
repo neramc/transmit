@@ -92,10 +92,13 @@ void writeSource(ByteWriter& writer, const SourceEnvironment& source) {
     writer.putString(source_field::kHome, source.homeDirectory);
     writer.putString(source_field::kAppVersion, source.appVersion);
     writer.putInt(source_field::kCapturedUnix, source.capturedUnix);
-    for (const auto& [token, path] : source.tokenBases) {
-        writer.putRecord(source_field::kTokenBase, [&](ByteWriter& nested) {
-            nested.putUInt(token_base_field::kToken, static_cast<std::uint64_t>(token));
-            nested.putString(token_base_field::kPath, path);
+    // Iterated as pairs rather than through a structured binding: capturing
+    // one in a lambda only became legal in C++20 and the tooling has not caught
+    // up, so this says plainly what the lambda holds.
+    for (const auto& base : source.tokenBases) {
+        writer.putRecord(source_field::kTokenBase, [&base](ByteWriter& nested) {
+            nested.putUInt(token_base_field::kToken, static_cast<std::uint64_t>(base.first));
+            nested.putString(token_base_field::kPath, base.second);
         });
     }
 }

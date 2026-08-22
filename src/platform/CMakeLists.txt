@@ -27,6 +27,13 @@ elseif(APPLE)
                                                 macos/MacOsSecretStore.mm)
     target_link_libraries(transmit_platform PRIVATE
         "-framework Foundation" "-framework AppKit" "-framework Security")
+
+    # The Objective-C++ here is written for automatic reference counting: it
+    # uses __bridge_transfer to take ownership of Core Foundation results and
+    # never releases anything by hand. Without this flag those casts do nothing
+    # and every object allocated in this file leaks.
+    target_compile_options(transmit_platform PRIVATE
+        "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>")
 else()
     target_sources(transmit_platform PRIVATE linux/LinuxPlatformService.cpp
                                                 linux/LinuxSettingsProvider.cpp

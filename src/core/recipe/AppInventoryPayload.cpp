@@ -332,7 +332,13 @@ QList<InventoryEntry> decodeAppInventory(format::ByteView data) {
             }
         }
 
-        if (!entry.recipeId.isEmpty()) {
+        // A half-parsed entry is worse than none: it would name an application
+        // with a blank version and package source, and the install script
+        // would then offer to reinstall something the archive never fully
+        // described. `damaged` is only ever set when a value the payload said
+        // was there could not be decoded - an unknown field is skipped, not
+        // treated as corruption - so this drops nothing a newer writer sent.
+        if (!damaged && !entry.recipeId.isEmpty()) {
             entries.push_back(std::move(entry));
         }
     }

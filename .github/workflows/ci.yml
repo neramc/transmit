@@ -51,6 +51,16 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ninja zstd xz openssl@3 sqlite
 
+      # Qt is installed for msvc2022_64 and vcpkg builds x64-windows, both of
+      # which are MSVC-ABI. Without this the Ninja generator picks up whatever
+      # g++ happens to be on PATH and produces objects that cannot link
+      # against either of them.
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
         run: |
