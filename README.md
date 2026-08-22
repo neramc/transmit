@@ -85,9 +85,11 @@ password.
 
 **Saved credentials** — opt-in, and off unless you turn it on. Wireless
 passphrases and credential-store entries are decrypted on the old machine, put
-into the encrypted archive, and re-stored on the new one. This is refused
-outright without a passphrase, and the report says plainly that the drive
-contains passwords.
+into the encrypted archive, and re-stored on the new one, with the attributes
+the program that saved them uses to find them again — a browser login without
+its realm is present in the keyring and invisible to the browser. This is
+refused outright without a passphrase, and the report says plainly that the
+drive contains passwords.
 
 ### What deliberately stays behind
 
@@ -161,9 +163,19 @@ dbus-run-session -- scripts/with-keyring.sh \
 
 ### The interface
 
-`transmit` opens a wizard in each direction. The restore side will show you
-exactly what it would do — where every folder lands, what gets renamed, which
-settings files would be rewritten and to what — before it touches anything.
+`transmit` opens a wizard in each direction.
+
+The capture side asks which programs to close before it starts, rather than
+telling you afterwards that one was open — a program holding its data while it
+is read gives you a half-written copy, and being told at the end costs you the
+whole wait.
+
+The restore side shows you exactly what it would do — where every folder lands,
+what gets renamed, which settings files would be rewritten and to what — before
+it touches anything. When it has finished it offers you the two answers worth
+having: undo it, which puts back what was replaced and removes what was added,
+or keep it, which deletes the undo point and the copies of the files whose
+paths were corrected. Either way nothing of Transmit's is left behind.
 
 ### The command line
 
@@ -216,7 +228,14 @@ src/cli/        The headless front end.
 
 The layering rule is that dependencies point one way: the interface knows about
 the backend, and the backend has never heard of the interface. Anything
-expensive happens off the interface thread.
+expensive happens off the interface thread — reading a drive that has spun
+down, enumerating what is mounted, unpacking an archive to undo a restore.
+
+Pages are built the first time they are opened rather than all at startup,
+which is the difference between a window in 68 ms and one in 107 ms. Set
+`TRANSMIT_STARTUP_BENCHMARK=1` with
+`QT_LOGGING_RULES=transmit.performance.debug=true` to measure it yourself: the
+application reports both numbers and quits once it has painted.
 
 ---
 
