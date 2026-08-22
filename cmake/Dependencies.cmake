@@ -70,6 +70,33 @@ if(TRANSMIT_WITH_OPENSSL)
     endif()
 endif()
 
+# ---------------------------------------------------------------- libsecret (optional, Linux)
+# secret-tool can look a secret up by attribute but cannot list the keyring, so
+# without this the login keyring can be written to and never read from - which
+# means application passwords silently stay behind on the old machine.
+set(TRANSMIT_LIBSECRET_ENABLED OFF)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(TRANSMIT_LIBSECRET_SOURCE "Linux only")
+elseif(NOT TRANSMIT_WITH_LIBSECRET)
+    set(TRANSMIT_LIBSECRET_SOURCE "disabled")
+else()
+    set(TRANSMIT_LIBSECRET_SOURCE "not found")
+endif()
+if(TRANSMIT_WITH_LIBSECRET AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(LIBSECRET QUIET IMPORTED_TARGET libsecret-1)
+    endif()
+    if(TARGET PkgConfig::LIBSECRET)
+        set(TRANSMIT_LIBSECRET_ENABLED ON)
+        set(TRANSMIT_LIBSECRET_SOURCE "system ${LIBSECRET_VERSION}")
+    else()
+        message(STATUS
+            "libsecret not found - application passwords in the login keyring "
+            "cannot be read (apt install libsecret-1-dev)")
+    endif()
+endif()
+
 # ---------------------------------------------------------------- SQLite3 (required)
 # Needed for the online-backup API (consistent capture of live app databases)
 # and for rewriting paths stored inside application databases.

@@ -44,7 +44,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build libzstd-dev liblzma-dev libssl-dev \
                                   libsqlite3-dev libsecret-1-dev \
-                                  libgl1-mesa-dev libxkbcommon-x11-0 xvfb
+                                  libgl1-mesa-dev libxkbcommon-x11-0 xvfb \
+                                  gnome-keyring dbus-x11
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
@@ -66,6 +67,15 @@ jobs:
 
       - name: Test
         run: ctest --preset default
+
+      # The credential tests skip themselves when there is no secret service,
+      # which on a build machine means they would always skip. Giving them a
+      # throwaway keyring is what makes them worth having.
+      - name: Test against a real keyring
+        if: runner.os == 'Linux'
+        run: |
+          dbus-run-session -- scripts/with-keyring.sh \
+              ./build/tests/integration/transmit_SecretStore_test
 
       # The interface has to start, not merely link. This catches a QML module
       # that failed to register, which no unit test would notice.

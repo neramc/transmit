@@ -2,7 +2,7 @@
 # the cross-OS translation that the unit tests cannot reach from the format
 # layer alone.
 
-foreach(suite ContinuityRoundTrip PathRewrite)
+foreach(suite ContinuityRoundTrip PathRewrite SecretStore)
     add_executable(transmit_${suite}_test ${suite}Test.cpp)
     target_link_libraries(transmit_${suite}_test
         PRIVATE Transmit::Core Transmit::Warnings Qt6::Test SQLite::SQLite3)

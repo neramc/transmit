@@ -20,6 +20,7 @@ option(TRANSMIT_BUILD_CLI     "Build the headless command line tool"   ON)
 option(TRANSMIT_BUILD_TESTS   "Build unit and integration tests"       OFF)
 option(TRANSMIT_WITH_LZMA     "Enable the xz/LZMA2 maximum codec"      ON)
 option(TRANSMIT_WITH_OPENSSL  "Enable archive encryption and secrets"  ON)
+option(TRANSMIT_WITH_LIBSECRET "Read the Linux login keyring directly"  ON)
 option(TRANSMIT_WERROR        "Treat compiler warnings as errors"      OFF)
 
 # Interface target carrying the warning set every Transmit target compiles with.

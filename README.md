@@ -128,8 +128,10 @@ splits for automatically.
 ## Building
 
 Needs a C++20 compiler, CMake 3.21, Qt 6.4 or later, zstd, zlib and SQLite3.
-liblzma and OpenSSL are optional; without OpenSSL the build cannot read or write
-encrypted archives and says so rather than falling back to plaintext.
+liblzma, OpenSSL and libsecret are optional. Without OpenSSL the build cannot
+read or write encrypted archives, and says so rather than falling back to
+plaintext. Without libsecret it can write to the Linux login keyring but not
+read it, so application passwords stay on the old machine.
 
 ```bash
 # Debian, Ubuntu and derivatives
@@ -143,6 +145,15 @@ ctest --preset default
 
 Other presets: `debug`, `release`, `cli-only` (skips the interface, for servers)
 and `asan` (address and undefined-behaviour sanitisers).
+
+The credential tests need a running secret service, which a build machine
+usually has not got, so they skip themselves when there is none. To run them for
+real against a throwaway keyring:
+
+```bash
+dbus-run-session -- scripts/with-keyring.sh \
+    ./build/tests/integration/transmit_SecretStore_test
+```
 
 ---
 
@@ -213,10 +224,6 @@ expensive happens off the interface thread.
 
 Honest list of what the design covers but the code does not:
 
-- **Enumerating the Linux login keyring.** Wireless passphrases work through
-  NetworkManager, but `secret-tool` can only look a secret up by attribute, not
-  list the keyring, so application passwords there stay behind. Linking
-  libsecret directly would fix this.
 - **Volume snapshots on Windows and macOS.** Both fall back to consistent
   database copies, which covers the common case; VSS and APFS snapshots are not
   wired up.

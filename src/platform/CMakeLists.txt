@@ -31,4 +31,11 @@ else()
     target_sources(transmit_platform PRIVATE linux/LinuxPlatformService.cpp
                                                 linux/LinuxSettingsProvider.cpp
                                                 linux/LinuxSecretStore.cpp)
+    if(TRANSMIT_LIBSECRET_ENABLED)
+        # SYSTEM, because the GLib headers are full of C casts and this project
+        # builds with -Wold-style-cast -Werror.
+        target_link_libraries(transmit_platform PRIVATE PkgConfig::LIBSECRET)
+        target_include_directories(transmit_platform SYSTEM PRIVATE ${LIBSECRET_INCLUDE_DIRS})
+        target_compile_definitions(transmit_platform PRIVATE TRANSMIT_HAVE_LIBSECRET=1)
+    endif()
 endif()

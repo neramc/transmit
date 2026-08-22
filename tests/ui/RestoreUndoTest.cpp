@@ -9,8 +9,8 @@
 
 #include "app/ImportController.h"
 #include "core/continuity/ContinuityTypes.h"
-#include "core/services/ExportService.h"
 #include "core/rewrite/RewritePlan.h"
+#include "core/services/ExportService.h"
 #include "platform/PlatformService.h"
 
 using namespace transmit;
@@ -72,9 +72,8 @@ QString RestoreUndoTest::captureSomething() {
 
     core::ExportRequest request;
     request.destinationPath = workspace_->filePath(QStringLiteral("capture.txa"));
-    request.selection.roots.push_back(
-        core::CaptureRoot{format::PathTokenId::Documents, {}, format::DomainId::UserData, {},
-                          true, {}});
+    request.selection.roots.push_back(core::CaptureRoot{
+        format::PathTokenId::Documents, {}, format::DomainId::UserData, {}, true, {}});
 
     core::CancelToken token;
     const core::ExportReport report = service.run(request, token, nullptr);
@@ -120,8 +119,8 @@ void RestoreUndoTest::keepingTheRestoreClearsUpAfterItself() {
     restoreInto(controller, archive, destination);
     QVERIFY(controller.canUndo());
 
-    const QString undoDirectory = destination + QLatin1Char('/') +
-                                  QLatin1String(core::RollbackWriter::kDirectoryName);
+    const QString undoDirectory =
+        destination + QLatin1Char('/') + QLatin1String(core::RollbackWriter::kDirectoryName);
     QVERIFY2(QFileInfo::exists(undoDirectory), "the restore should have left an undo point");
 
     controller.keepLastRestore();
