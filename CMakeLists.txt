@@ -13,9 +13,13 @@ include(Dependencies)
 
 add_subdirectory(src/format)
 
-if(TRANSMIT_BUILD_APP)
-    add_subdirectory(src/core)
+if(TRANSMIT_BUILD_APP OR TRANSMIT_BUILD_CLI)
+    add_subdirectory(src/core/utils)
     add_subdirectory(src/platform)
+    add_subdirectory(src/core)
+endif()
+
+if(TRANSMIT_BUILD_APP)
     add_subdirectory(src/app)
 endif()
 
