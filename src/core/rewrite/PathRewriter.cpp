@@ -36,7 +36,7 @@ QStringList matchFiles(const QString& stateRoot, const QString& pattern) {
                                      QRegularExpression::CaseInsensitiveOption);
 
     QDirIterator iterator(stateRoot, QDir::Files | QDir::Hidden, QDirIterator::Subdirectories);
-    const int prefix = stateRoot.size() + 1;
+    const qsizetype prefix = stateRoot.size() + 1;
     while (iterator.hasNext()) {
         const QString path = iterator.next();
         if (matcher.match(path.mid(prefix)).hasMatch()) {

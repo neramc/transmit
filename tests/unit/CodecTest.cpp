@@ -77,8 +77,8 @@ TEST_P(CodecRoundTrip, HandlesIncompressibleInput) {
 INSTANTIATE_TEST_SUITE_P(AllCodecs, CodecRoundTrip,
                          testing::Values(CodecId::Store, CodecId::Deflate, CodecId::Zstd,
                                          CodecId::Xz),
-                         [](const testing::TestParamInfo<CodecId>& info) {
-                             return std::string(codecName(info.param));
+                         [](const testing::TestParamInfo<CodecId>& parameter) {
+                             return std::string(codecName(parameter.param));
                          });
 
 TEST(Codec, MaximumPresetActuallyCompresses) {

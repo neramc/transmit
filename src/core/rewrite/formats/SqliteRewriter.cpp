@@ -123,7 +123,8 @@ QList<RewriteEdit> rewriteSqlite(const QString& path, const QString& table, cons
     for (const Update& row : updates) {
         const QByteArray value = row.newValue.toUtf8();
         sqlite3_reset(update.get());
-        sqlite3_bind_text(update.get(), 1, value.constData(), value.size(), SQLITE_TRANSIENT);
+        sqlite3_bind_text(update.get(), 1, value.constData(), static_cast<int>(value.size()),
+                          SQLITE_TRANSIENT);
         sqlite3_bind_int64(update.get(), 2, row.rowId);
 
         if (sqlite3_step(update.get()) != SQLITE_DONE) {

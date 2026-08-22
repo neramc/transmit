@@ -47,11 +47,11 @@ TEST(SanitizeComponent, StripsTrailingDotsAndSpacesForWindows) {
 TEST(SanitizeComponent, ReportsWhyItChangedTheName) {
     auto sanitizer = windowsSanitizer();
     RenameReason reason = RenameReason::None;
-    sanitizer.sanitizeComponent("a<b", &reason);
+    static_cast<void>(sanitizer.sanitizeComponent("a<b", &reason));
     EXPECT_EQ(reason, RenameReason::IllegalCharacter);
 
     reason = RenameReason::None;
-    sanitizer.sanitizeComponent("ordinary.txt", &reason);
+    static_cast<void>(sanitizer.sanitizeComponent("ordinary.txt", &reason));
     EXPECT_EQ(reason, RenameReason::None);
 }
 
@@ -109,8 +109,8 @@ TEST(SanitizeRelativePath, IsStableWhenCalledTwiceForTheSamePath) {
 
 TEST(SanitizeRelativePath, RecordsTheMappingForLaterPathRewriting) {
     auto sanitizer = windowsSanitizer();
-    sanitizer.sanitizeRelativePath("Documents/Notes.txt");
-    sanitizer.sanitizeRelativePath("Documents/notes.txt");
+    static_cast<void>(sanitizer.sanitizeRelativePath("Documents/Notes.txt"));
+    static_cast<void>(sanitizer.sanitizeRelativePath("Documents/notes.txt"));
 
     const std::string* applied = sanitizer.appliedFor("Documents/notes.txt");
     ASSERT_NE(applied, nullptr);
@@ -134,8 +134,8 @@ TEST(SanitizeComponent, TruncatesOnAUtf8BoundaryNotMidCharacter) {
 
 TEST(Reset, ClearsCollisionStateBetweenRuns) {
     auto sanitizer = windowsSanitizer();
-    sanitizer.sanitizeRelativePath("a/Notes.txt");
-    sanitizer.sanitizeRelativePath("a/notes.txt");
+    static_cast<void>(sanitizer.sanitizeRelativePath("a/Notes.txt"));
+    static_cast<void>(sanitizer.sanitizeRelativePath("a/notes.txt"));
     ASSERT_EQ(sanitizer.renames().size(), 1u);
 
     sanitizer.reset();
