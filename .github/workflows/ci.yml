@@ -76,7 +76,17 @@ jobs:
         run: cmake --build --preset default
 
       - name: Test
-        run: ctest --preset default
+        shell: bash
+        run: |
+          # A second, louder pass over whatever failed. ctest buffers a test's
+          # output and loses it if the process dies rather than reporting, and
+          # a failure nobody can read costs another full run to diagnose.
+          ctest --preset default || {
+              echo "::group::Re-running the failures verbosely"
+              ctest --test-dir build --rerun-failed --output-on-failure --verbose || true
+              echo "::endgroup::"
+              exit 1
+          }
 
       # The credential tests skip themselves when there is no secret service,
       # which on a build machine means they would always skip. Giving them a

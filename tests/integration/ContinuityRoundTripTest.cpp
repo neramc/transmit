@@ -100,6 +100,23 @@ void ContinuityRoundTripTest::initTestCase() {
     // Created after HOME is set, so its folder table describes the fake home.
     platform_ = platform::PlatformService::create();
 
+    // Only if the platform actually reads HOME, though. Windows resolves its
+    // known folders through the shell and has no notion of HOME at all, so
+    // everything below would run against the account's real profile: writing
+    // the fixture into their AppData, and capturing their documents. That is
+    // not a test failing, it is a test doing something it has no business
+    // doing, so it does not run there.
+    for (const format::PathTokenId token :
+         {format::PathTokenId::Documents, format::PathTokenId::AppConfig,
+          format::PathTokenId::AppData}) {
+        const QString base = baseFor(token);
+        if (!base.startsWith(sourceHome())) {
+            QSKIP(
+                "this platform does not resolve its known folders from HOME, so the "
+                "fixture would land in the real user profile");
+        }
+    }
+
     distinguishesCase_ = distinguishesCase(sourceHome());
     if (!distinguishesCase_) {
         qInfo("this filesystem folds case; the collision fixture is reduced to one file");
