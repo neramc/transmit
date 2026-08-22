@@ -146,17 +146,30 @@ jobs:
         shell: bash
         run: |
           set -e
-          mkdir -p sample/Documents
-          echo "hello" > sample/Documents/note.txt
+
+          # Asked for rather than assumed. Pointing HOME at a sample directory
+          # works on Linux and macOS and does nothing at all on Windows, which
+          # resolves its known folders through the shell - so the file went one
+          # place and the capture looked in another.
+          documents=$(./build/transmit-cli environment \
+                      | awk -F'} ' '/^  \{DOCUMENTS/ {print $2}')
+          if [ -z "$documents" ]; then
+              echo "::error::transmit-cli could not say where documents are kept"
+              exit 1
+          fi
+          echo "documents folder: $documents"
+
+          mkdir -p "$documents"
+          echo "hello" > "$documents/transmit-ci-note.txt"
           printf 'passphrase-for-ci\n' > pw.txt
 
-          HOME="$PWD/sample" ./build/transmit-cli export \
+          ./build/transmit-cli export \
               --out "$PWD/archive.txa" --profile documents --preset fast \
               --passphrase-file pw.txt
           ./build/transmit-cli verify "$PWD/archive.txa" --passphrase-file pw.txt
           ./build/transmit-cli import "$PWD/archive.txa" --into "$PWD/restored" \
               --passphrase-file pw.txt
-          diff sample/Documents/note.txt restored/DOCUMENTS/note.txt
+          diff "$documents/transmit-ci-note.txt" restored/DOCUMENTS/transmit-ci-note.txt
 
           # The cross-platform translation is the point of the project, so it is
           # exercised on every runner rather than only where it is native.
