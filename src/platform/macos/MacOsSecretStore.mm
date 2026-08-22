@@ -62,8 +62,8 @@ QList<SecretRecord> MacOsSecretStore::read(bool includeWifi, bool includeApplica
             }
 
             // macOS stores wireless passphrases under the AirPort service.
-            const bool wifi = record.service.startsWith(QLatin1String("AirPort"),
-                                                        Qt::CaseInsensitive);
+            const bool wifi =
+                record.service.startsWith(QLatin1String("AirPort"), Qt::CaseInsensitive);
             record.kind = wifi ? SecretKind::WifiNetwork : SecretKind::ApplicationPassword;
 
             if ((wifi && !includeWifi) || (!wifi && !includeApplications)) {
@@ -116,15 +116,16 @@ ApplyResult MacOsSecretStore::store(const SecretRecord& record) const {
             }
 
             NSDictionary* update = @{(__bridge id)kSecValueData : secret};
-            status = SecItemUpdate((__bridge CFDictionaryRef)query,
-                                   (__bridge CFDictionaryRef)update);
+            status =
+                SecItemUpdate((__bridge CFDictionaryRef)query, (__bridge CFDictionaryRef)update);
         }
 
         if (status == errSecSuccess) {
             return {ApplyOutcome::Applied, {}, {}};
         }
         return {ApplyOutcome::Failed,
-                QStringLiteral("the keychain refused it (status %1)").arg(status), {}};
+                QStringLiteral("the keychain refused it (status %1)").arg(status),
+                {}};
     }
 #else
     Q_UNUSED(record);

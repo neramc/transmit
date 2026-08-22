@@ -88,7 +88,8 @@ private:
                   const ExcludeMatcher& globalExcludes, ScanResult& result,
                   CancelToken& cancelToken, const ProgressCallback& progress) const;
 
-    const platform::PlatformService& platform_;
+    // Only the folder table is needed after construction; holding the whole
+    // service would tie every scan to the object that created it.
     format::PathTokenMap tokens_;
 };
 

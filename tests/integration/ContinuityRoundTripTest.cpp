@@ -1,6 +1,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QHash>
 #include <QSet>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -48,6 +49,7 @@ private:
 
     QTemporaryDir workspace_;
     QString originalHome_;
+    QHash<QString, QString> overriddenEnvironment_;
     std::unique_ptr<platform::PlatformService> platform_;
 };
 
@@ -56,7 +58,17 @@ void ContinuityRoundTripTest::initTestCase() {
 
     // QStandardPaths follows HOME, so pointing it at the workspace gives the
     // services a self-contained machine to work with.
+    //
+    // The XDG variables have to go too. They override the defaults under HOME,
+    // and a machine that sets them - a CI runner does - would otherwise have
+    // the test read and capture its real configuration directory.
     originalHome_ = qEnvironmentVariable("HOME");
+    for (const char* name : {"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME",
+                             "XDG_DESKTOP_DIR", "XDG_DOCUMENTS_DIR", "XDG_DOWNLOAD_DIR",
+                             "XDG_PICTURES_DIR", "XDG_MUSIC_DIR", "XDG_VIDEOS_DIR"}) {
+        overriddenEnvironment_.insert(QString::fromLatin1(name), qEnvironmentVariable(name));
+        qunsetenv(name);
+    }
     qputenv("HOME", sourceHome().toUtf8());
 
     buildSourceTree(sourceHome());
@@ -66,6 +78,12 @@ void ContinuityRoundTripTest::initTestCase() {
 void ContinuityRoundTripTest::cleanupTestCase() {
     if (!originalHome_.isEmpty()) {
         qputenv("HOME", originalHome_.toUtf8());
+    }
+    for (auto it = overriddenEnvironment_.constBegin(); it != overriddenEnvironment_.constEnd();
+         ++it) {
+        if (!it.value().isEmpty()) {
+            qputenv(it.key().toLatin1().constData(), it.value().toUtf8());
+        }
     }
 }
 

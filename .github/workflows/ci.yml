@@ -53,7 +53,8 @@ jobs:
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
         run: |
-          vcpkg install zstd:x64-windows liblzma:x64-windows openssl:x64-windows sqlite3:x64-windows
+          vcpkg install zlib:x64-windows zstd:x64-windows liblzma:x64-windows `
+                        openssl:x64-windows sqlite3:x64-windows
           echo "CMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" >> $env:GITHUB_ENV
         shell: pwsh
 
@@ -115,14 +116,12 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build clang-tidy clang-format \
+          sudo apt-get install -y ninja-build clang-tidy-18 clang-format-18 \
                                   libzstd-dev liblzma-dev libssl-dev libsqlite3-dev \
                                   libsecret-1-dev libgl1-mesa-dev
 
       - name: Check formatting
-        run: |
-          files=$(git ls-files '*.cpp' '*.h' '*.mm')
-          clang-format --dry-run --Werror $files
+        run: scripts/format.sh --check
 
       - name: Configure
         run: cmake --preset cli-only
@@ -130,4 +129,4 @@ jobs:
       - name: Static analysis
         run: |
           files=$(git ls-files 'src/format/*.cpp' 'src/core/*.cpp' 'src/platform/linux/*.cpp')
-          clang-tidy -p build-cli $files
+          clang-tidy-18 -p build-cli $files

@@ -13,11 +13,10 @@ namespace {
 constexpr std::array<Byte, 8> kVolumeMagic = {Byte{'T'}, Byte{'X'}, Byte{'A'}, Byte{'V'},
                                               Byte{'O'}, Byte{'L'}, Byte{0},   Byte{0}};
 
-constexpr std::size_t kMagicSize = 8;
 constexpr std::size_t kCrcOffset = 40;
 
-/// Copy chunk used when streaming; large enough to keep USB writes efficient
-/// without pinning much memory.
+/// Three digits of part suffix is the ceiling, which at the FAT32-safe part
+/// size is more than three terabytes in one archive.
 constexpr std::size_t kMaxPartIndex = 999;
 
 std::string formatPartSuffix(std::uint16_t partIndex) {

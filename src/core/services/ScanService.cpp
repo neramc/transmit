@@ -121,7 +121,7 @@ bool ExcludeMatcher::matches(const QString& relativePath) const {
 }
 
 ScanService::ScanService(const platform::PlatformService& platformService)
-    : platform_(platformService), tokens_(platformService.knownFolders()) {}
+    : tokens_(platformService.knownFolders()) {}
 
 ScanResult ScanService::scan(const CaptureSelection& selection, CancelToken& cancelToken,
                              const ProgressCallback& progress) const {
