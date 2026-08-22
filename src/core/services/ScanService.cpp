@@ -8,6 +8,8 @@
 #include <QSet>
 
 #include <filesystem>
+#include <string>
+#include <vector>
 
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
@@ -17,6 +19,7 @@
 #include <grp.h>
 #include <pwd.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 namespace transmit::core {
@@ -33,6 +36,35 @@ qint64 toUnixNs(const QDateTime& time) {
     return time.toMSecsSinceEpoch() * 1000000LL;
 }
 
+#ifndef Q_OS_WIN
+/// The account name for a uid, and the group name for a gid.
+///
+/// getpwuid and getgrgid return a pointer into storage shared by the whole
+/// process, so two scans running at once - or a scan and anything else that
+/// asks - can read each other's answer, and a file ends up recorded as owned
+/// by somebody else. The _r forms write into a buffer the caller owns.
+///
+/// A name that cannot be resolved is left empty rather than guessed at: the
+/// numeric uid is recorded either way, and a restore onto another machine maps
+/// by name only when it recognises one.
+template<typename Id, typename Record, typename Lookup>
+std::string resolveName(Id id, Lookup lookup, char* Record::*field) {
+    long suggested = ::sysconf(_SC_GETPW_R_SIZE_MAX);
+    if (suggested <= 0) {
+        suggested = 16384;
+    }
+
+    std::vector<char> buffer(static_cast<std::size_t>(suggested));
+    Record record{};
+    Record* found = nullptr;
+
+    if (lookup(id, &record, buffer.data(), buffer.size(), &found) != 0 || found == nullptr) {
+        return {};
+    }
+    return found->*field;
+}
+#endif
+
 /// Reads the ownership and permission bits the manifest records. They are kept
 /// even when capturing on Windows so a Linux-to-Linux move keeps its modes.
 void fillPosixMetadata(const QFileInfo& info, format::PosixMetadata& posix) {
@@ -46,12 +78,10 @@ void fillPosixMetadata(const QFileInfo& info, format::PosixMetadata& posix) {
     posix.uid = static_cast<quint32>(status.st_uid);
     posix.gid = static_cast<quint32>(status.st_gid);
 
-    if (const passwd* user = ::getpwuid(status.st_uid)) {
-        posix.userName = user->pw_name;
-    }
-    if (const group* grp = ::getgrgid(status.st_gid)) {
-        posix.groupName = grp->gr_name;
-    }
+    posix.userName =
+        resolveName<::uid_t, struct ::passwd>(status.st_uid, ::getpwuid_r, &::passwd::pw_name);
+    posix.groupName =
+        resolveName<::gid_t, struct ::group>(status.st_gid, ::getgrgid_r, &::group::gr_name);
 #else
     // Windows has no POSIX mode; the readable/writable pair is recorded so a
     // restore onto Linux produces something sensible rather than 0000.

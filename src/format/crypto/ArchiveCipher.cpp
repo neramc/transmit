@@ -180,7 +180,11 @@ Status ArchiveCipher::encrypt(std::uint32_t blockId, ByteView plain, ByteBuffer&
         return makeError(ErrorCode::Internal, "encryption could not be finalised");
     }
 
-    const auto cipherLength = static_cast<std::size_t>(produced + finalProduced);
+    // Widened before the addition, not after: adding two ints and then casting
+    // would overflow in int if it overflowed at all, and the cast would then be
+    // faithfully preserving a wrong number.
+    const auto cipherLength =
+        static_cast<std::size_t>(produced) + static_cast<std::size_t>(finalProduced);
     if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_GET_TAG, static_cast<int>(kTagSize),
                             out.data() + cipherLength) != 1) {
         return makeError(ErrorCode::Internal, "could not read the authentication tag");
@@ -251,7 +255,7 @@ Status ArchiveCipher::decrypt(std::uint32_t blockId, ByteView cipher, ByteBuffer
                          "the block failed authentication: the archive is damaged or was "
                          "modified after it was written");
     }
-    out.resize(static_cast<std::size_t>(produced + finalProduced));
+    out.resize(static_cast<std::size_t>(produced) + static_cast<std::size_t>(finalProduced));
     return ok();
 #else
     (void)blockId;
