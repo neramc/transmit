@@ -50,11 +50,20 @@ setting to click), or **Not portable** (physically cannot cross).
 | ChromeOS — inside the Linux (Crostini) container | Supported |
 | Windows 8.1, ReactOS | **Not supported** — Qt 6 requires Windows 10 1809 |
 
-> **On verification.** Transmit is developed on Linux, and the Linux paths are
-> exercised end to end. The Windows and macOS platform code is written against
-> those systems' documented interfaces but has not yet run on them; the CI
-> matrix in `.github/workflows/ci.yml` is what will establish that. Treat those
-> platforms as unproven until a run goes green.
+> **On verification.** Transmit is developed on Linux. All three platforms now
+> build and pass their tests in CI, which is what makes the Windows and macOS
+> code more than a reading of the documentation — it caught a folder table
+> built from two different homes, an Objective-C++ layer compiled without the
+> reference counting it was written for, and several pieces of shared state
+> that two worker threads could read at once.
+>
+> What each platform actually runs differs, and the suites say so rather than
+> pretending otherwise. The round-trip tests build an isolated home by
+> redirecting `HOME`; Windows resolves its known folders through the shell and
+> takes no notice, so those suites skip there with a reason instead of running
+> against the real user profile. Windows still covers the archive format, path
+> tokenisation, name rules, the codecs, the interface, and the cross-OS
+> translation through `--emulate-os`.
 
 ---
 

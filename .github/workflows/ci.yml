@@ -1,8 +1,10 @@
 name: build and test
 
 # Windows and macOS are built here because they cannot be built anywhere else
-# the project is developed. Until a job here goes green, those platforms are
-# unverified, and the README says so.
+# the project is developed. Every fault this matrix has found so far has been a
+# real one - a folder table assembled from two different homes, Objective-C++
+# compiled without the reference counting it was written for, shared buffers
+# read from more than one worker at a time - so it is worth keeping honest.
 on:
   push:
     branches: [main, 'claude/**']
