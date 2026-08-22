@@ -13,18 +13,18 @@ Rectangle {
     property string body: ""
 
     Layout.fillWidth: true
-    implicitHeight: layout.implicitHeight + Theme.spacingLg * 2
-    radius: Theme.radiusMd
+    implicitHeight: layout.implicitHeight + Spacing.lg * 2
+    radius: Radius.md
 
-    color: tone === "success" ? Theme.successSubtle
-         : tone === "warning" ? Theme.warningSubtle
-         : tone === "error"   ? Theme.errorSubtle
-                              : Theme.infoSubtle
+    color: tone === "success" ? Colors.successSubtle
+         : tone === "warning" ? Colors.warningSubtle
+         : tone === "error"   ? Colors.errorSubtle
+                              : Colors.infoSubtle
 
-    readonly property color accentColor: tone === "success" ? Theme.success
-                                       : tone === "warning" ? Theme.warning
-                                       : tone === "error"   ? Theme.error
-                                                            : Theme.info
+    readonly property color accentColor: tone === "success" ? Colors.success
+                                       : tone === "warning" ? Colors.warning
+                                       : tone === "error"   ? Colors.error
+                                                            : Colors.info
 
     Accessible.role: Accessible.StaticText
     Accessible.name: title
@@ -32,29 +32,29 @@ Rectangle {
 
     Rectangle {
         width: 3
-        height: parent.height - Theme.spacingMd * 2
+        height: parent.height - Spacing.md * 2
         anchors.left: parent.left
-        anchors.leftMargin: Theme.spacingSm
+        anchors.leftMargin: Spacing.sm
         anchors.verticalCenter: parent.verticalCenter
-        radius: Theme.radiusPill
+        radius: Radius.pill
         color: message.accentColor
     }
 
     ColumnLayout {
         id: layout
         anchors.fill: parent
-        anchors.margins: Theme.spacingLg
-        anchors.leftMargin: Theme.spacingXl
-        spacing: Theme.spacingXs
+        anchors.margins: Spacing.lg
+        anchors.leftMargin: Spacing.xl
+        spacing: Spacing.xs
 
         Text {
             text: message.title
             visible: message.title !== ""
             Layout.fillWidth: true
-            color: Theme.textPrimary
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSizeBody
-            font.weight: Theme.weightSemiBold
+            color: Colors.textPrimary
+            font.family: Typography.family
+            font.pixelSize: Typography.body
+            font.weight: Typography.semiBold
             wrapMode: Text.WordWrap
         }
 
@@ -62,9 +62,9 @@ Rectangle {
             text: message.body
             visible: message.body !== ""
             Layout.fillWidth: true
-            color: Theme.textSecondary
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSizeSmall
+            color: Colors.textSecondary
+            font.family: Typography.family
+            font.pixelSize: Typography.small
             wrapMode: Text.WordWrap
             lineHeight: 1.3
         }

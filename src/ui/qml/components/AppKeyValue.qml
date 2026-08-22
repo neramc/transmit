@@ -12,7 +12,7 @@ RowLayout {
     property int labelWidth: 150
 
     Layout.fillWidth: true
-    spacing: Theme.spacingMd
+    spacing: Spacing.md
 
     Accessible.role: Accessible.StaticText
     Accessible.name: pair.label
@@ -22,18 +22,18 @@ RowLayout {
         text: pair.label
         Layout.preferredWidth: pair.labelWidth
         Layout.alignment: Qt.AlignTop
-        color: Theme.textSecondary
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSizeSmall
+        color: Colors.textSecondary
+        font.family: Typography.family
+        font.pixelSize: Typography.small
         wrapMode: Text.WordWrap
     }
 
     Text {
         text: pair.value
         Layout.fillWidth: true
-        color: Theme.textPrimary
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSizeSmall
+        color: Colors.textPrimary
+        font.family: Typography.family
+        font.pixelSize: Typography.small
         elide: Text.ElideMiddle
     }
 }

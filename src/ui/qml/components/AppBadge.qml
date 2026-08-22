@@ -10,27 +10,27 @@ Rectangle {
     property string tone: "neutral"
     property string text: ""
 
-    implicitWidth: label.implicitWidth + Theme.spacingMd * 2
+    implicitWidth: label.implicitWidth + Spacing.md * 2
     implicitHeight: 22
-    radius: Theme.radiusPill
+    radius: Radius.pill
 
-    color: tone === "success" ? Theme.successSubtle
-         : tone === "warning" ? Theme.warningSubtle
-         : tone === "error"   ? Theme.errorSubtle
-         : tone === "info"    ? Theme.infoSubtle
-                              : Theme.surfaceSunken
+    color: tone === "success" ? Colors.successSubtle
+         : tone === "warning" ? Colors.warningSubtle
+         : tone === "error"   ? Colors.errorSubtle
+         : tone === "info"    ? Colors.infoSubtle
+                              : Colors.surfaceSunken
 
     Text {
         id: label
         anchors.centerIn: parent
         text: badge.text
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSizeCaption
-        font.weight: Theme.weightMedium
-        color: badge.tone === "success" ? Theme.success
-             : badge.tone === "warning" ? Theme.warning
-             : badge.tone === "error"   ? Theme.error
-             : badge.tone === "info"    ? Theme.info
-                                        : Theme.textSecondary
+        font.family: Typography.family
+        font.pixelSize: Typography.caption
+        font.weight: Typography.medium
+        color: badge.tone === "success" ? Colors.success
+             : badge.tone === "warning" ? Colors.warning
+             : badge.tone === "error"   ? Colors.error
+             : badge.tone === "info"    ? Colors.info
+                                        : Colors.textSecondary
     }
 }

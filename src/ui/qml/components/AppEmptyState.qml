@@ -10,16 +10,16 @@ ColumnLayout {
     property string title: ""
     property string body: ""
 
-    spacing: Theme.spacingSm
+    spacing: Spacing.sm
 
     Text {
         text: empty.title
         Layout.fillWidth: true
         horizontalAlignment: Text.AlignHCenter
-        color: Theme.textPrimary
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSizeHeading
-        font.weight: Theme.weightMedium
+        color: Colors.textPrimary
+        font.family: Typography.family
+        font.pixelSize: Typography.heading
+        font.weight: Typography.medium
         wrapMode: Text.WordWrap
     }
 
@@ -30,9 +30,9 @@ ColumnLayout {
         Layout.maximumWidth: 420
         Layout.alignment: Qt.AlignHCenter
         horizontalAlignment: Text.AlignHCenter
-        color: Theme.textSecondary
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSizeBody
+        color: Colors.textSecondary
+        font.family: Typography.family
+        font.pixelSize: Typography.body
         wrapMode: Text.WordWrap
         lineHeight: 1.35
     }

@@ -10,16 +10,24 @@ qt_add_qml_module(transmit_qml_components
         AppButton.qml
         AppCard.qml
         AppCheckRow.qml
+        AppComboBox.qml
         AppEmptyState.qml
+        AppIcon.qml
+        AppIconButton.qml
         AppInlineMessage.qml
         AppKeyValue.qml
         AppLabelledField.qml
         AppProgressBar.qml
+        AppScrollBar.qml
+        AppScrollView.qml
         AppSectionHeader.qml
         AppSelectableCard.qml
+        AppSeparator.qml
         AppSidebar.qml
+        AppSpinner.qml
         AppStepper.qml
         AppTextField.qml
+        AppToolTip.qml
     RESOURCE_PREFIX /qt/qml)
 
 target_link_libraries(transmit_qml_components PRIVATE transmit_qml_themeplugin)

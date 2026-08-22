@@ -8,15 +8,15 @@ ColumnLayout {
     property string title: ""
     property string subtitle: ""
 
-    spacing: Theme.spacingXs
+    spacing: Spacing.xs
 
     Text {
         text: header.title
         Layout.fillWidth: true
-        color: Theme.textPrimary
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSizeTitle
-        font.weight: Theme.weightSemiBold
+        color: Colors.textPrimary
+        font.family: Typography.family
+        font.pixelSize: Typography.title
+        font.weight: Typography.semiBold
         wrapMode: Text.WordWrap
         Accessible.role: Accessible.Heading
         Accessible.name: header.title
@@ -26,9 +26,9 @@ ColumnLayout {
         text: header.subtitle
         visible: header.subtitle !== ""
         Layout.fillWidth: true
-        color: Theme.textSecondary
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSizeBody
+        color: Colors.textSecondary
+        font.family: Typography.family
+        font.pixelSize: Typography.body
         wrapMode: Text.WordWrap
         lineHeight: 1.35
     }

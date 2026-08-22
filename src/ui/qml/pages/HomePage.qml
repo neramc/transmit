@@ -7,14 +7,12 @@ import Transmit.Theme
 
 /// The starting point: what this machine is, and the two things the user can
 /// do from here.
-ScrollView {
+AppScrollView {
     id: page
-    contentWidth: availableWidth
-    clip: true
 
     ColumnLayout {
         width: page.availableWidth
-        spacing: Theme.spacingXl
+        spacing: Spacing.xl
 
         AppSectionHeader {
             title: qsTr("Move this computer's setup to another one")
@@ -25,7 +23,7 @@ ScrollView {
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: Theme.spacingLg
+            spacing: Spacing.lg
 
             AppCard {
                 Layout.fillWidth: true
@@ -35,24 +33,24 @@ ScrollView {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: Theme.spacingXl
-                    spacing: Theme.spacingSm
+                    anchors.margins: Spacing.xl
+                    spacing: Spacing.sm
 
                     Text {
                         text: qsTr("Save this computer")
-                        color: Theme.textPrimary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSizeHeading
-                        font.weight: Theme.weightSemiBold
+                        color: Colors.textPrimary
+                        font.family: Typography.family
+                        font.pixelSize: Typography.heading
+                        font.weight: Typography.semiBold
                     }
 
                     Text {
                         text: qsTr("Pick what to take, choose a drive, and Transmit writes a "
                                  + "single compressed archive you can carry away.")
                         Layout.fillWidth: true
-                        color: Theme.textSecondary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSizeSmall
+                        color: Colors.textSecondary
+                        font.family: Typography.family
+                        font.pixelSize: Typography.small
                         wrapMode: Text.WordWrap
                         lineHeight: 1.35
                     }
@@ -75,24 +73,24 @@ ScrollView {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: Theme.spacingXl
-                    spacing: Theme.spacingSm
+                    anchors.margins: Spacing.xl
+                    spacing: Spacing.sm
 
                     Text {
                         text: qsTr("Bring a computer here")
-                        color: Theme.textPrimary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSizeHeading
-                        font.weight: Theme.weightSemiBold
+                        color: Colors.textPrimary
+                        font.family: Typography.family
+                        font.pixelSize: Typography.heading
+                        font.weight: Typography.semiBold
                     }
 
                     Text {
                         text: qsTr("Open an archive from a drive. Transmit shows you exactly "
                                  + "what it would do before it touches anything.")
                         Layout.fillWidth: true
-                        color: Theme.textSecondary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSizeSmall
+                        color: Colors.textSecondary
+                        font.family: Typography.family
+                        font.pixelSize: Typography.small
                         wrapMode: Text.WordWrap
                         lineHeight: 1.35
                     }
@@ -109,20 +107,20 @@ ScrollView {
 
         AppCard {
             Layout.fillWidth: true
-            implicitHeight: machineFacts.implicitHeight + Theme.spacingXl * 2
+            implicitHeight: machineFacts.implicitHeight + Spacing.xl * 2
 
             ColumnLayout {
                 id: machineFacts
                 anchors.fill: parent
-                anchors.margins: Theme.spacingXl
-                spacing: Theme.spacingSm
+                anchors.margins: Spacing.xl
+                spacing: Spacing.sm
 
                 Text {
                     text: qsTr("This computer")
-                    color: Theme.textPrimary
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSizeHeading
-                    font.weight: Theme.weightSemiBold
+                    color: Colors.textPrimary
+                    font.family: Typography.family
+                    font.pixelSize: Typography.heading
+                    font.weight: Typography.semiBold
                 }
 
                 AppKeyValue { label: qsTr("System");  value: AppController.osName }

@@ -1,11 +1,13 @@
+import QtQml
 import QtQuick
 import QtQuick.Controls.Basic
-import QtQuick.Layouts
 import Transmit.Backend
-import Transmit.Components
-import Transmit.Pages
+import Transmit.Layouts
 import Transmit.Theme
 
+/// The window itself: its size, the keyboard shortcuts, and the two pieces of
+/// theme state the design system reads. Everything inside the frame is
+/// arranged by AppShell.
 ApplicationWindow {
     id: window
 
@@ -15,7 +17,7 @@ ApplicationWindow {
     minimumHeight: 560
     visible: true
     title: qsTr("Transmit")
-    color: Theme.background
+    color: Colors.background
 
     /// The report is filled by whichever run finished last, so both wizards
     /// hand off to the same view.
@@ -23,17 +25,23 @@ ApplicationWindow {
 
     ContinuityReportModel { id: report }
 
-    Component.onCompleted: Theme.mode = AppController.themeMode
+    // ThemeState is written from exactly one place - here - so no component
+    // has to know how the preference is stored.
+    Component.onCompleted: {
+        ThemeState.mode = AppController.themeMode
+        Motion.reduced = AppController.reduceMotion
+    }
 
     Connections {
         target: AppController
-        function onThemeModeChanged() { Theme.mode = AppController.themeMode }
+        function onThemeModeChanged() { ThemeState.mode = AppController.themeMode }
+        function onReduceMotionChanged() { Motion.reduced = AppController.reduceMotion }
     }
 
     // Qt's palette follows the desktop's colour scheme, which is the most
     // portable way to tell whether the user is in dark mode.
     Binding {
-        target: Theme
+        target: ThemeState
         property: "systemPrefersDark"
         value: window.palette.window.hslLightness < 0.5
     }
@@ -59,56 +67,23 @@ ApplicationWindow {
     }
     Shortcut {
         sequence: "F6"
-        onActivated: contentArea.forceActiveFocus()
+        onActivated: shell.forceActiveFocus()
+    }
+    // Ctrl+1..5 jumps straight to a destination, the way a tabbed application
+    // does - navigation should never need the mouse.
+    Instantiator {
+        model: shell.navigation
+        delegate: Shortcut {
+            required property var modelData
+            required property int index
+            sequence: "Ctrl+" + (index + 1)
+            onActivated: AppController.currentPage = modelData.page
+        }
     }
 
-    RowLayout {
+    AppShell {
+        id: shell
         anchors.fill: parent
-        spacing: 0
-
-        AppSidebar {
-            Layout.fillHeight: true
-            currentPage: AppController.currentPage
-            entries: [
-                { page: "home",     label: qsTr("Start") },
-                { page: "export",   label: qsTr("Save this computer") },
-                { page: "import",   label: qsTr("Bring one here") },
-                { page: "report",   label: qsTr("Report") },
-                { page: "settings", label: qsTr("Settings") }
-            ]
-            onNavigate: (page) => AppController.currentPage = page
-        }
-
-        Item {
-            id: contentArea
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-
-            StackLayout {
-                anchors.fill: parent
-                anchors.margins: Theme.spacing2xl
-                currentIndex: {
-                    switch (AppController.currentPage) {
-                    case "export":   return 1
-                    case "import":   return 2
-                    case "report":   return 3
-                    case "settings": return 4
-                    default:         return 0
-                    }
-                }
-
-                HomePage {}
-                ExportPage {}
-                ImportPage {}
-                ReportPage {}
-                SettingsPage {}
-            }
-
-            // A gentle cross-fade makes navigation feel deliberate without
-            // making the user wait for it.
-            Behavior on opacity {
-                NumberAnimation { duration: Theme.durationPanel; easing.type: Theme.easing }
-            }
-        }
+        reportModel: window.reportModel
     }
 }

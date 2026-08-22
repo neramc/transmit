@@ -11,6 +11,11 @@ import Transmit.Theme
 Item {
     id: page
 
+    /// Handed down by the shell rather than found through the scope chain, so
+    /// moving a page cannot quietly break its bindings.
+    required property var reportModel
+    required property var dialogs
+
     property int step: 0
     property string archivePath: ""
     property string passphrase: ""
@@ -24,7 +29,7 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: Theme.spacingXl
+        spacing: Spacing.xl
 
         AppStepper {
             steps: page.stepTitles
@@ -39,7 +44,7 @@ Item {
 
             // ---------------------------------------------------- step 1
             ColumnLayout {
-                spacing: Theme.spacingLg
+                spacing: Spacing.lg
 
                 AppSectionHeader {
                     title: qsTr("Which archive should be restored?")
@@ -52,7 +57,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    spacing: Theme.spacingSm
+                    spacing: Spacing.sm
                     model: DriveListModel { id: drives }
 
                     Component.onCompleted: drives.setWatching(true)
@@ -88,14 +93,12 @@ Item {
             }
 
             // ---------------------------------------------------- step 2
-            ScrollView {
+            AppScrollView {
                 id: overviewScroller
-                contentWidth: availableWidth
-                clip: true
 
                 ColumnLayout {
                     width: overviewScroller.availableWidth
-                    spacing: Theme.spacingLg
+                    spacing: Spacing.lg
 
                     AppSectionHeader {
                         title: qsTr("What is inside this archive")
@@ -137,13 +140,13 @@ Item {
                     AppCard {
                         Layout.fillWidth: true
                         visible: ImportController.archiveUnlocked
-                        implicitHeight: facts.implicitHeight + Theme.spacingXl * 2
+                        implicitHeight: facts.implicitHeight + Spacing.xl * 2
 
                         ColumnLayout {
                             id: facts
                             anchors.fill: parent
-                            anchors.margins: Theme.spacingXl
-                            spacing: Theme.spacingSm
+                            anchors.margins: Spacing.xl
+                            spacing: Spacing.sm
 
                             AppKeyValue {
                                 label: qsTr("Captured from")
@@ -177,14 +180,12 @@ Item {
             }
 
             // ---------------------------------------------------- step 3
-            ScrollView {
+            AppScrollView {
                 id: optionScroller
-                contentWidth: availableWidth
-                clip: true
 
                 ColumnLayout {
                     width: optionScroller.availableWidth
-                    spacing: Theme.spacingLg
+                    spacing: Spacing.lg
 
                     AppSectionHeader {
                         title: qsTr("How should it be restored?")
@@ -196,7 +197,7 @@ Item {
                         Layout.fillWidth: true
                         label: qsTr("If a file is already there")
 
-                        ComboBox {
+                        AppComboBox {
                             model: [
                                 { value: "keep-both",  label: qsTr("Keep both - recommended") },
                                 { value: "skip",       label: qsTr("Leave the existing file alone") },
@@ -206,8 +207,6 @@ Item {
                             textRole: "label"
                             valueRole: "value"
                             currentIndex: 0
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSizeBody
                             onActivated: page.conflictPolicy = currentValue
                             Accessible.name: qsTr("What to do when a file already exists")
                         }
@@ -233,7 +232,7 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         visible: page.restoreToFolder
-                        spacing: Theme.spacingMd
+                        spacing: Spacing.md
 
                         AppButton {
                             text: qsTr("Choose folder…")
@@ -244,9 +243,9 @@ Item {
                             Layout.fillWidth: true
                             text: page.destinationOverride === "" ? qsTr("Nothing chosen yet")
                                                                   : page.destinationOverride
-                            color: Theme.textSecondary
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSizeSmall
+                            color: Colors.textSecondary
+                            font.family: Typography.family
+                            font.pixelSize: Typography.small
                             elide: Text.ElideMiddle
                         }
                     }
@@ -255,7 +254,7 @@ Item {
 
             // ---------------------------------------------------- step 4
             ColumnLayout {
-                spacing: Theme.spacingLg
+                spacing: Spacing.lg
 
                 AppSectionHeader {
                     title: ImportController.finished
@@ -278,9 +277,9 @@ Item {
                     visible: ImportController.running
                     Layout.fillWidth: true
                     text: ImportController.currentItem
-                    color: Theme.textSecondary
-                    font.family: Theme.monoFamily
-                    font.pixelSize: Theme.fontSizeCaption
+                    color: Colors.textSecondary
+                    font.family: Typography.monoFamily
+                    font.pixelSize: Typography.caption
                     elide: Text.ElideMiddle
                 }
 
@@ -307,7 +306,7 @@ Item {
         // ------------------------------------------------------ footer
         RowLayout {
             Layout.fillWidth: true
-            spacing: Theme.spacingMd
+            spacing: Spacing.md
 
             AppButton {
                 text: qsTr("Back")
@@ -322,7 +321,15 @@ Item {
                 text: qsTr("Cancel")
                 variant: "danger"
                 visible: ImportController.running
-                onClicked: ImportController.cancel()
+                onClicked: page.dialogs.confirm({
+                    heading: qsTr("Stop the restore?"),
+                    body: qsTr("Whatever has already been written stays where it is. You can "
+                             + "start again, and files that are already back will be left "
+                             + "alone or renamed according to the choice you made."),
+                    confirmText: qsTr("Stop"),
+                    cancelText: qsTr("Keep going"),
+                    destructive: true
+                }, () => ImportController.cancel())
             }
 
             AppButton {
@@ -349,12 +356,30 @@ Item {
                 variant: "primary"
                 visible: page.step === 2
                 enabled: !page.restoreToFolder || page.destinationOverride !== ""
-                onClicked: {
+
+                // The one irreversible thing this application does, so it is
+                // the one thing it asks about first.
+                onClicked: page.dialogs.confirm({
+                    heading: page.restoreToFolder
+                             ? qsTr("Restore into the folder you chose?")
+                             : qsTr("Restore onto this computer?"),
+                    subheading: page.restoreToFolder
+                                ? page.destinationOverride
+                                : AppController.homeDirectory,
+                    body: page.conflictPolicy === "overwrite"
+                          ? qsTr("Files already there with the same name will be replaced, and "
+                               + "what they contained now cannot be recovered.")
+                          : qsTr("Transmit writes your files, program data and settings into "
+                               + "place. Anything already there is handled the way you chose "
+                               + "on the previous step."),
+                    confirmText: qsTr("Restore"),
+                    destructive: page.conflictPolicy === "overwrite"
+                }, function () {
                     page.step = 3
                     ImportController.start(page.passphrase, page.conflictPolicy, false,
                                            page.verifyFirst,
                                            page.restoreToFolder ? page.destinationOverride : "")
-                }
+                })
             }
 
             AppButton {
@@ -373,7 +398,7 @@ Item {
                 variant: ImportController.wasDryRun ? "secondary" : "primary"
                 visible: page.step === 3 && ImportController.finished
                 onClicked: {
-                    ImportController.populateReport(reportModel)
+                    ImportController.populateReport(page.reportModel)
                     AppController.currentPage = "report"
                 }
             }

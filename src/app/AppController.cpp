@@ -14,6 +14,7 @@ AppController::AppController(QObject* parent)
     platform_ = platform::PlatformService::create();
     environment_ = platform_->environment();
     themeMode_ = settings_.value(QStringLiteral("ui/theme"), QStringLiteral("system")).toString();
+    reduceMotion_ = settings_.value(QStringLiteral("ui/reduceMotion"), false).toBool();
 }
 
 void AppController::setCurrentPage(const QString& page) {
@@ -31,6 +32,15 @@ void AppController::setThemeMode(const QString& mode) {
     themeMode_ = mode;
     settings_.setValue(QStringLiteral("ui/theme"), mode);
     emit themeModeChanged();
+}
+
+void AppController::setReduceMotion(bool reduce) {
+    if (reduceMotion_ == reduce) {
+        return;
+    }
+    reduceMotion_ = reduce;
+    settings_.setValue(QStringLiteral("ui/reduceMotion"), reduce);
+    emit reduceMotionChanged();
 }
 
 QString AppController::osName() const {

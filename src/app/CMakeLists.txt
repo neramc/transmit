@@ -44,7 +44,9 @@ target_link_libraries(transmit PRIVATE
     transmit_qml_mainplugin
     transmit_qml_themeplugin
     transmit_qml_componentsplugin
+    transmit_qml_dialogsplugin
     transmit_qml_pagesplugin
+    transmit_qml_layoutsplugin
     transmit_backendplugin)
 
 # Static QML modules only register their types once their plugins are imported

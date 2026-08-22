@@ -5,14 +5,12 @@ import Transmit.Backend
 import Transmit.Components
 import Transmit.Theme
 
-ScrollView {
+AppScrollView {
     id: page
-    contentWidth: availableWidth
-    clip: true
 
     ColumnLayout {
         width: page.availableWidth
-        spacing: Theme.spacingXl
+        spacing: Spacing.xl
 
         AppSectionHeader { title: qsTr("Settings") }
 
@@ -21,7 +19,7 @@ ScrollView {
             label: qsTr("Appearance")
             helperText: qsTr("Following the system means Transmit changes with it.")
 
-            ComboBox {
+            AppComboBox {
                 model: [
                     { value: "system", label: qsTr("Follow the system") },
                     { value: "light",  label: qsTr("Light") },
@@ -31,8 +29,6 @@ ScrollView {
                 valueRole: "value"
                 currentIndex: AppController.themeMode === "light" ? 1
                             : AppController.themeMode === "dark"  ? 2 : 0
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSizeBody
                 onActivated: AppController.themeMode = currentValue
                 Accessible.name: qsTr("Appearance")
             }
@@ -40,20 +36,48 @@ ScrollView {
 
         AppCard {
             Layout.fillWidth: true
-            implicitHeight: about.implicitHeight + Theme.spacingXl * 2
+            implicitHeight: accessibility.implicitHeight + Spacing.xl * 2
+
+            ColumnLayout {
+                id: accessibility
+                anchors.fill: parent
+                anchors.margins: Spacing.xl
+                spacing: Spacing.md
+
+                Text {
+                    text: qsTr("Motion")
+                    color: Colors.textPrimary
+                    font.family: Typography.family
+                    font.pixelSize: Typography.heading
+                    font.weight: Typography.semiBold
+                }
+
+                AppCheckRow {
+                    label: qsTr("Reduce motion")
+                    description: qsTr("Turns off the fades and the sliding. Nothing changes "
+                                    + "about what the interface does - only how it gets there.")
+                    checked: AppController.reduceMotion
+                    onCheckedChanged: AppController.reduceMotion = checked
+                }
+            }
+        }
+
+        AppCard {
+            Layout.fillWidth: true
+            implicitHeight: about.implicitHeight + Spacing.xl * 2
 
             ColumnLayout {
                 id: about
                 anchors.fill: parent
-                anchors.margins: Theme.spacingXl
-                spacing: Theme.spacingSm
+                anchors.margins: Spacing.xl
+                spacing: Spacing.sm
 
                 Text {
                     text: qsTr("About Transmit")
-                    color: Theme.textPrimary
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSizeHeading
-                    font.weight: Theme.weightSemiBold
+                    color: Colors.textPrimary
+                    font.family: Typography.family
+                    font.pixelSize: Typography.heading
+                    font.weight: Typography.semiBold
                 }
 
                 AppKeyValue { label: qsTr("Version"); value: AppController.appVersion }
@@ -66,12 +90,12 @@ ScrollView {
 
                 Text {
                     Layout.fillWidth: true
-                    Layout.topMargin: Theme.spacingSm
+                    Layout.topMargin: Spacing.sm
                     text: qsTr("Transmit does not send anything anywhere. Everything it reads "
                              + "goes onto the drive you choose and nowhere else.")
-                    color: Theme.textSecondary
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSizeSmall
+                    color: Colors.textSecondary
+                    font.family: Typography.family
+                    font.pixelSize: Typography.small
                     wrapMode: Text.WordWrap
                     lineHeight: 1.35
                 }

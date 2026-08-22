@@ -9,30 +9,30 @@ TextField {
     property string helperText: ""
     property bool hasError: false
 
-    implicitHeight: Theme.controlHeightLarge
-    leftPadding: Theme.spacingMd
-    rightPadding: Theme.spacingMd
-    font.family: Theme.fontFamily
-    font.pixelSize: Theme.fontSizeBody
-    color: Theme.textPrimary
-    placeholderTextColor: Theme.textDisabled
-    selectionColor: Theme.accent
-    selectedTextColor: Theme.textOnAccent
+    implicitHeight: Sizing.controlHeightLarge
+    leftPadding: Spacing.md
+    rightPadding: Spacing.md
+    font.family: Typography.family
+    font.pixelSize: Typography.body
+    color: Colors.textPrimary
+    placeholderTextColor: Colors.textDisabled
+    selectionColor: Colors.accent
+    selectedTextColor: Colors.textOnAccent
 
     Accessible.role: Accessible.EditableText
     Accessible.name: label !== "" ? label : placeholderText
     Accessible.description: helperText
 
     background: Rectangle {
-        radius: Theme.radiusMd
-        color: control.enabled ? Theme.surface : Theme.surfaceSunken
-        border.width: control.activeFocus ? Theme.focusRingWidth : Theme.borderWidth
-        border.color: control.hasError ? Theme.error
-                    : control.activeFocus ? Theme.accent
-                                          : Theme.border
+        radius: Radius.md
+        color: control.enabled ? Colors.surface : Colors.surfaceSunken
+        border.width: control.activeFocus ? Elevation.focusRingWidth : Elevation.borderWidth
+        border.color: control.hasError ? Colors.error
+                    : control.activeFocus ? Colors.accent
+                                          : Colors.border
 
         Behavior on border.color {
-            ColorAnimation { duration: Theme.durationHover; easing.type: Theme.easing }
+            ColorAnimation { duration: Motion.hover; easing.type: Motion.easing }
         }
     }
 }

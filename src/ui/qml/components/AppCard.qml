@@ -12,15 +12,15 @@ Rectangle {
 
     signal clicked()
 
-    radius: Theme.radiusLg
-    color: Theme.surface
-    border.width: Theme.borderWidth
-    border.color: selected ? Theme.accent
-                : (interactive && hovered) ? Theme.borderStrong
-                                           : Theme.border
+    radius: Radius.lg
+    color: Colors.surface
+    border.width: Elevation.borderWidth
+    border.color: selected ? Colors.accent
+                : (interactive && hovered) ? Colors.borderStrong
+                                           : Colors.border
 
     Behavior on border.color {
-        ColorAnimation { duration: Theme.durationHover; easing.type: Theme.easing }
+        ColorAnimation { duration: Motion.hover; easing.type: Motion.easing }
     }
 
     // A selected card gets a second inner ring so selection reads clearly
@@ -30,8 +30,8 @@ Rectangle {
         anchors.margins: 1
         radius: parent.radius - 1
         color: "transparent"
-        border.width: Theme.borderWidth
-        border.color: Theme.accent
+        border.width: Elevation.borderWidth
+        border.color: Colors.accent
         visible: card.selected
         opacity: 0.45
     }

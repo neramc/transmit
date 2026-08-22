@@ -14,7 +14,7 @@ AppCard {
     property string badgeTone: "neutral"
 
     interactive: true
-    implicitHeight: layout.implicitHeight + Theme.spacingLg * 2
+    implicitHeight: layout.implicitHeight + Spacing.lg * 2
     activeFocusOnTab: true
 
     Accessible.role: Accessible.RadioButton
@@ -26,19 +26,19 @@ AppCard {
 
     Rectangle {
         anchors.fill: parent
-        anchors.margins: -Theme.focusRingWidth - 1
-        radius: parent.radius + Theme.focusRingWidth
+        anchors.margins: -Elevation.focusRingWidth - 1
+        radius: parent.radius + Elevation.focusRingWidth
         color: "transparent"
-        border.width: Theme.focusRingWidth
-        border.color: Theme.accent
+        border.width: Elevation.focusRingWidth
+        border.color: Colors.accent
         visible: option.activeFocus
     }
 
     RowLayout {
         id: layout
         anchors.fill: parent
-        anchors.margins: Theme.spacingLg
-        spacing: Theme.spacingMd
+        anchors.margins: Spacing.lg
+        spacing: Spacing.md
 
         // A ring rather than a tick: this is a choice, not a checklist.
         Rectangle {
@@ -48,32 +48,32 @@ AppCard {
             radius: 9
             color: "transparent"
             border.width: 2
-            border.color: option.selected ? Theme.accent : Theme.borderStrong
+            border.color: option.selected ? Colors.accent : Colors.borderStrong
 
             Rectangle {
                 anchors.centerIn: parent
                 width: 8
                 height: 8
                 radius: 4
-                color: Theme.accent
+                color: Colors.accent
                 visible: option.selected
             }
         }
 
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: Theme.spacingXs
+            spacing: Spacing.xs
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: Theme.spacingSm
+                spacing: Spacing.sm
 
                 Text {
                     text: option.title
-                    color: Theme.textPrimary
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSizeBody
-                    font.weight: Theme.weightSemiBold
+                    color: Colors.textPrimary
+                    font.family: Typography.family
+                    font.pixelSize: Typography.body
+                    font.weight: Typography.semiBold
                     elide: Text.ElideRight
                     Layout.fillWidth: true
                 }
@@ -89,9 +89,9 @@ AppCard {
                 text: option.description
                 visible: option.description !== ""
                 Layout.fillWidth: true
-                color: Theme.textSecondary
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSizeSmall
+                color: Colors.textSecondary
+                font.family: Typography.family
+                font.pixelSize: Typography.small
                 wrapMode: Text.WordWrap
                 lineHeight: 1.3
             }
@@ -101,9 +101,9 @@ AppCard {
             text: option.trailingText
             visible: option.trailingText !== ""
             Layout.alignment: Qt.AlignVCenter
-            color: Theme.textSecondary
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSizeSmall
+            color: Colors.textSecondary
+            font.family: Typography.family
+            font.pixelSize: Typography.small
         }
     }
 }

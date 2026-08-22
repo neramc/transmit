@@ -1,6 +1,8 @@
 add_subdirectory(theme)
 add_subdirectory(components)
+add_subdirectory(dialogs)
 add_subdirectory(pages)
+add_subdirectory(layouts)
 
 # The application shell. Kept as its own module so the window can be replaced
 # without disturbing the pages it hosts.
@@ -12,5 +14,5 @@ qt_add_qml_module(transmit_qml_main
     RESOURCE_PREFIX /qt/qml)
 
 target_link_libraries(transmit_qml_main
-    PRIVATE transmit_qml_themeplugin transmit_qml_componentsplugin
-            transmit_qml_pagesplugin transmit_backendplugin)
+    PRIVATE transmit_qml_themeplugin transmit_qml_layoutsplugin
+            transmit_backendplugin)

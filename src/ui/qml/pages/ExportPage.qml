@@ -11,6 +11,11 @@ import Transmit.Theme
 Item {
     id: page
 
+    /// Handed down by the shell rather than found through the scope chain, so
+    /// moving a page cannot quietly break its bindings.
+    required property var reportModel
+    required property var dialogs
+
     property int step: 0
     property string profileId: "full"
     property string destinationFolder: ""
@@ -63,7 +68,7 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: Theme.spacingXl
+        spacing: Spacing.xl
 
         AppStepper {
             steps: page.stepTitles
@@ -77,14 +82,12 @@ Item {
             currentIndex: page.step
 
             // ---------------------------------------------------- step 1
-            ScrollView {
+            AppScrollView {
                 id: profileScroller
-                contentWidth: availableWidth
-                clip: true
 
                 ColumnLayout {
                     width: profileScroller.availableWidth
-                    spacing: Theme.spacingLg
+                    spacing: Spacing.lg
 
                     AppSectionHeader {
                         title: qsTr("What should travel with you?")
@@ -116,21 +119,21 @@ Item {
                     }
                     AppCard {
                         Layout.fillWidth: true
-                        Layout.topMargin: Theme.spacingSm
-                        implicitHeight: domainList.implicitHeight + Theme.spacingXl * 2
+                        Layout.topMargin: Spacing.sm
+                        implicitHeight: domainList.implicitHeight + Spacing.xl * 2
 
                         ColumnLayout {
                             id: domainList
                             anchors.fill: parent
-                            anchors.margins: Theme.spacingXl
-                            spacing: Theme.spacingMd
+                            anchors.margins: Spacing.xl
+                            spacing: Spacing.md
 
                             Text {
                                 text: qsTr("Adjust what that includes")
-                                color: Theme.textPrimary
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontSizeBody
-                                font.weight: Theme.weightSemiBold
+                                color: Colors.textPrimary
+                                font.family: Typography.family
+                                font.pixelSize: Typography.body
+                                font.weight: Typography.semiBold
                             }
 
                             AppCheckRow {
@@ -196,7 +199,7 @@ Item {
 
             // ---------------------------------------------------- step 2
             ColumnLayout {
-                spacing: Theme.spacingLg
+                spacing: Spacing.lg
 
                 AppSectionHeader {
                     title: qsTr("Where should the archive go?")
@@ -209,7 +212,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    spacing: Theme.spacingSm
+                    spacing: Spacing.sm
                     model: DriveListModel { id: drives }
 
                     Component.onCompleted: drives.setWatching(true)
@@ -242,7 +245,7 @@ Item {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: Theme.spacingMd
+                    spacing: Spacing.md
 
                     AppButton {
                         text: qsTr("Choose a folder instead…")
@@ -254,9 +257,9 @@ Item {
                         text: page.destinationFolder === ""
                               ? qsTr("Nothing chosen yet")
                               : qsTr("Writing to %1").arg(page.destinationFolder)
-                        color: Theme.textSecondary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSizeSmall
+                        color: Colors.textSecondary
+                        font.family: Typography.family
+                        font.pixelSize: Typography.small
                         elide: Text.ElideMiddle
                     }
                 }
@@ -272,14 +275,12 @@ Item {
             }
 
             // ---------------------------------------------------- step 3
-            ScrollView {
+            AppScrollView {
                 id: optionScroller
-                contentWidth: availableWidth
-                clip: true
 
                 ColumnLayout {
                     width: optionScroller.availableWidth
-                    spacing: Theme.spacingLg
+                    spacing: Spacing.lg
 
                     AppSectionHeader {
                         title: qsTr("How should it be packed?")
@@ -304,7 +305,7 @@ Item {
                                        + "size, and still quick to restore. Extreme squeezes out "
                                        + "a few percent more but takes considerably longer.")
 
-                        ComboBox {
+                        AppComboBox {
                             id: presetBox
                             model: [
                                 { value: "fast",     label: qsTr("Fast - largest file, quickest to write") },
@@ -315,8 +316,6 @@ Item {
                             textRole: "label"
                             valueRole: "value"
                             currentIndex: 2
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSizeBody
                             onActivated: page.preset = currentValue
                             Accessible.name: qsTr("Compression level")
                         }
@@ -373,7 +372,7 @@ Item {
 
             // ---------------------------------------------------- step 4
             ColumnLayout {
-                spacing: Theme.spacingLg
+                spacing: Spacing.lg
 
                 AppSectionHeader {
                     title: ExportController.finished
@@ -393,16 +392,16 @@ Item {
                     visible: ExportController.running
                     Layout.fillWidth: true
                     text: ExportController.currentItem
-                    color: Theme.textSecondary
-                    font.family: Theme.monoFamily
-                    font.pixelSize: Theme.fontSizeCaption
+                    color: Colors.textSecondary
+                    font.family: Typography.monoFamily
+                    font.pixelSize: Typography.caption
                     elide: Text.ElideMiddle
                 }
 
                 GridLayout {
                     visible: ExportController.running
                     columns: 2
-                    columnSpacing: Theme.spacingXl
+                    columnSpacing: Spacing.xl
                     Layout.fillWidth: true
 
                     AppKeyValue { label: qsTr("Read");    value: ExportController.bytesReadText }
@@ -436,14 +435,14 @@ Item {
                 ColumnLayout {
                     visible: ExportController.finished && ExportController.succeeded
                     Layout.fillWidth: true
-                    spacing: Theme.spacingXs
+                    spacing: Spacing.xs
 
                     Text {
                         text: qsTr("Files written")
-                        color: Theme.textSecondary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSizeSmall
-                        font.weight: Theme.weightMedium
+                        color: Colors.textSecondary
+                        font.family: Typography.family
+                        font.pixelSize: Typography.small
+                        font.weight: Typography.medium
                     }
 
                     Repeater {
@@ -452,9 +451,9 @@ Item {
                         Text {
                             text: modelData
                             Layout.fillWidth: true
-                            color: Theme.textPrimary
-                            font.family: Theme.monoFamily
-                            font.pixelSize: Theme.fontSizeCaption
+                            color: Colors.textPrimary
+                            font.family: Typography.monoFamily
+                            font.pixelSize: Typography.caption
                             elide: Text.ElideMiddle
                         }
                     }
@@ -467,7 +466,7 @@ Item {
         // ------------------------------------------------------ footer
         RowLayout {
             Layout.fillWidth: true
-            spacing: Theme.spacingMd
+            spacing: Spacing.md
 
             AppButton {
                 text: qsTr("Back")
@@ -483,7 +482,15 @@ Item {
                 text: qsTr("Cancel")
                 variant: "danger"
                 visible: ExportController.running
-                onClicked: ExportController.cancel()
+                onClicked: page.dialogs.confirm({
+                    heading: qsTr("Stop the capture?"),
+                    body: qsTr("The partly written archive is removed - an archive that stops "
+                             + "half way through cannot be restored from, so leaving it behind "
+                             + "would only be misleading."),
+                    confirmText: qsTr("Stop"),
+                    cancelText: qsTr("Keep going"),
+                    destructive: true
+                }, () => ExportController.cancel())
             }
 
             AppButton {
@@ -520,7 +527,7 @@ Item {
                 variant: "primary"
                 visible: page.step === 3 && ExportController.finished
                 onClicked: {
-                    ExportController.populateReport(reportModel)
+                    ExportController.populateReport(page.reportModel)
                     AppController.currentPage = "report"
                 }
             }

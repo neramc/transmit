@@ -14,7 +14,7 @@ RowLayout {
     property alias enabledControl: toggle.enabled
 
     Layout.fillWidth: true
-    spacing: Theme.spacingMd
+    spacing: Spacing.md
 
     ColumnLayout {
         Layout.fillWidth: true
@@ -23,9 +23,9 @@ RowLayout {
         Text {
             text: row.label
             Layout.fillWidth: true
-            color: toggle.enabled ? Theme.textPrimary : Theme.textDisabled
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSizeBody
+            color: toggle.enabled ? Colors.textPrimary : Colors.textDisabled
+            font.family: Typography.family
+            font.pixelSize: Typography.body
             wrapMode: Text.WordWrap
         }
 
@@ -33,9 +33,9 @@ RowLayout {
             text: row.description
             visible: row.description !== ""
             Layout.fillWidth: true
-            color: Theme.textSecondary
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSizeCaption
+            color: Colors.textSecondary
+            font.family: Typography.family
+            font.pixelSize: Typography.caption
             wrapMode: Text.WordWrap
             lineHeight: 1.3
         }
@@ -53,12 +53,12 @@ RowLayout {
             implicitHeight: 22
             x: toggle.leftPadding
             y: parent.height / 2 - height / 2
-            radius: Theme.radiusPill
-            color: toggle.checked ? Theme.accent : Theme.borderStrong
+            radius: Radius.pill
+            color: toggle.checked ? Colors.accent : Colors.borderStrong
             opacity: toggle.enabled ? 1.0 : 0.5
 
             Behavior on color {
-                ColorAnimation { duration: Theme.durationHover; easing.type: Theme.easing }
+                ColorAnimation { duration: Motion.hover; easing.type: Motion.easing }
             }
 
             Rectangle {
@@ -70,7 +70,7 @@ RowLayout {
                 color: "#ffffff"
 
                 Behavior on x {
-                    NumberAnimation { duration: Theme.durationHover; easing.type: Theme.easing }
+                    NumberAnimation { duration: Motion.hover; easing.type: Motion.easing }
                 }
             }
         }

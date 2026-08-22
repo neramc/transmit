@@ -20,6 +20,7 @@ class AppController : public QObject {
 
     Q_PROPERTY(QString currentPage READ currentPage WRITE setCurrentPage NOTIFY currentPageChanged)
     Q_PROPERTY(QString themeMode READ themeMode WRITE setThemeMode NOTIFY themeModeChanged)
+    Q_PROPERTY(bool reduceMotion READ reduceMotion WRITE setReduceMotion NOTIFY reduceMotionChanged)
     Q_PROPERTY(QString osName READ osName CONSTANT)
     Q_PROPERTY(QString osFamily READ osFamily CONSTANT)
     Q_PROPERTY(QString hostName READ hostName CONSTANT)
@@ -40,6 +41,12 @@ public:
     /// "light", "dark" or "system".
     [[nodiscard]] QString themeMode() const { return themeMode_; }
     void setThemeMode(const QString& mode);
+
+    /// When set, the interface stops animating. Qt has no portable way to ask
+    /// the desktop whether the user has requested reduced motion, so this is
+    /// offered as a setting rather than guessed at.
+    [[nodiscard]] bool reduceMotion() const { return reduceMotion_; }
+    void setReduceMotion(bool reduce);
 
     [[nodiscard]] QString osName() const;
     [[nodiscard]] QString osFamily() const;
@@ -66,6 +73,7 @@ public slots:
 signals:
     void currentPageChanged();
     void themeModeChanged();
+    void reduceMotionChanged();
 
 private:
     std::unique_ptr<platform::PlatformService> platform_;
@@ -73,6 +81,7 @@ private:
     QSettings settings_;
     QString currentPage_ = QStringLiteral("home");
     QString themeMode_;
+    bool reduceMotion_ = false;
 };
 
 }  // namespace transmit::app

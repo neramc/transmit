@@ -10,7 +10,12 @@ import Transmit.Theme
 /// actually made it, and what is left for the user to do.
 ColumnLayout {
     id: page
-    spacing: Theme.spacingLg
+
+    /// Handed down by the shell rather than found through the scope chain, so
+    /// moving a page cannot quietly break its bindings.
+    required property var reportModel
+
+    spacing: Spacing.lg
 
     AppSectionHeader {
         title: qsTr("How much came across")
@@ -23,25 +28,25 @@ ColumnLayout {
     // do I still have to do" is one click away from exactly that list.
     RowLayout {
         Layout.fillWidth: true
-        spacing: Theme.spacingSm
+        spacing: Spacing.sm
 
         Repeater {
             model: [
                 { grade: -1, label: qsTr("Everything"), tone: "neutral",
-                  count: reportModel.fullCount + reportModel.adaptedCount
-                         + reportModel.manualCount + reportModel.impossibleCount },
-                { grade: 0, label: qsTr("Full"), tone: "success", count: reportModel.fullCount },
-                { grade: 1, label: qsTr("Adapted"), tone: "info", count: reportModel.adaptedCount },
-                { grade: 2, label: qsTr("Needs you"), tone: "warning", count: reportModel.manualCount },
-                { grade: 3, label: qsTr("Not portable"), tone: "error", count: reportModel.impossibleCount }
+                  count: page.reportModel.fullCount + page.reportModel.adaptedCount
+                         + page.reportModel.manualCount + page.reportModel.impossibleCount },
+                { grade: 0, label: qsTr("Full"), tone: "success", count: page.reportModel.fullCount },
+                { grade: 1, label: qsTr("Adapted"), tone: "info", count: page.reportModel.adaptedCount },
+                { grade: 2, label: qsTr("Needs you"), tone: "warning", count: page.reportModel.manualCount },
+                { grade: 3, label: qsTr("Not portable"), tone: "error", count: page.reportModel.impossibleCount }
             ]
 
             AppCard {
                 Layout.fillWidth: true
                 implicitHeight: 66
                 interactive: true
-                selected: reportModel.gradeFilter === modelData.grade
-                onClicked: reportModel.gradeFilter = modelData.grade
+                selected: page.reportModel.gradeFilter === modelData.grade
+                onClicked: page.reportModel.gradeFilter = modelData.grade
 
                 Accessible.role: Accessible.Button
                 Accessible.name: qsTr("%1: %2 items").arg(modelData.label).arg(modelData.count)
@@ -53,18 +58,18 @@ ColumnLayout {
                     Text {
                         Layout.alignment: Qt.AlignHCenter
                         text: modelData.count
-                        color: Theme.textPrimary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSizeTitle
-                        font.weight: Theme.weightSemiBold
+                        color: Colors.textPrimary
+                        font.family: Typography.family
+                        font.pixelSize: Typography.title
+                        font.weight: Typography.semiBold
                     }
 
                     Text {
                         Layout.alignment: Qt.AlignHCenter
                         text: modelData.label
-                        color: Theme.textSecondary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSizeCaption
+                        color: Colors.textSecondary
+                        font.family: Typography.family
+                        font.pixelSize: Typography.caption
                     }
                 }
             }
@@ -76,22 +81,22 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
         clip: true
-        spacing: Theme.spacingSm
-        model: reportModel
+        spacing: Spacing.sm
+        model: page.reportModel
 
         delegate: AppCard {
             width: noteList.width
-            implicitHeight: noteLayout.implicitHeight + Theme.spacingLg * 2
+            implicitHeight: noteLayout.implicitHeight + Spacing.lg * 2
 
             ColumnLayout {
                 id: noteLayout
                 anchors.fill: parent
-                anchors.margins: Theme.spacingLg
-                spacing: Theme.spacingXs
+                anchors.margins: Spacing.lg
+                spacing: Spacing.xs
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: Theme.spacingSm
+                    spacing: Spacing.sm
 
                     AppBadge {
                         text: gradeName
@@ -103,10 +108,10 @@ ColumnLayout {
                     Text {
                         Layout.fillWidth: true
                         text: subject
-                        color: Theme.textPrimary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSizeBody
-                        font.weight: Theme.weightMedium
+                        color: Colors.textPrimary
+                        font.family: Typography.family
+                        font.pixelSize: Typography.body
+                        font.weight: Typography.medium
                         elide: Text.ElideMiddle
                     }
                 }
@@ -114,9 +119,9 @@ ColumnLayout {
                 Text {
                     Layout.fillWidth: true
                     text: detail
-                    color: Theme.textSecondary
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSizeSmall
+                    color: Colors.textSecondary
+                    font.family: Typography.family
+                    font.pixelSize: Typography.small
                     wrapMode: Text.WordWrap
                     lineHeight: 1.3
                 }
@@ -135,7 +140,7 @@ ColumnLayout {
 
     RowLayout {
         Layout.fillWidth: true
-        spacing: Theme.spacingMd
+        spacing: Spacing.md
 
         AppButton {
             text: qsTr("Back to start")
@@ -157,6 +162,6 @@ ColumnLayout {
         fileMode: FileDialog.SaveFile
         defaultSuffix: "json"
         nameFilters: [qsTr("Report files (*.json)")]
-        onAccepted: reportModel.saveTo(AppController.fromFileUrl(selectedFile.toString()))
+        onAccepted: page.reportModel.saveTo(AppController.fromFileUrl(selectedFile.toString()))
     }
 }

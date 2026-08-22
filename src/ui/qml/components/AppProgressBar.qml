@@ -14,8 +14,8 @@ ProgressBar {
 
     background: Rectangle {
         implicitHeight: control.implicitHeight
-        radius: Theme.radiusPill
-        color: Theme.surfaceSunken
+        radius: Radius.pill
+        color: Colors.surfaceSunken
     }
 
     contentItem: Item {
@@ -25,12 +25,12 @@ ProgressBar {
             width: control.indeterminate ? parent.width * 0.3
                                          : control.visualPosition * parent.width
             height: parent.height
-            radius: Theme.radiusPill
-            color: Theme.accent
+            radius: Radius.pill
+            color: Colors.accent
 
             Behavior on width {
                 enabled: !control.indeterminate
-                NumberAnimation { duration: Theme.durationPanel; easing.type: Theme.easing }
+                NumberAnimation { duration: Motion.panel; easing.type: Motion.easing }
             }
 
             SequentialAnimation on x {

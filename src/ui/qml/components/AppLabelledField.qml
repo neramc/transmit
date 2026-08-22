@@ -12,15 +12,15 @@ ColumnLayout {
     property bool error: false
     default property alias content: holder.data
 
-    spacing: Theme.spacingXs
+    spacing: Spacing.xs
 
     Text {
         text: field.label
         visible: field.label !== ""
-        color: Theme.textSecondary
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSizeSmall
-        font.weight: Theme.weightMedium
+        color: Colors.textSecondary
+        font.family: Typography.family
+        font.pixelSize: Typography.small
+        font.weight: Typography.medium
     }
 
     Item {
@@ -39,9 +39,9 @@ ColumnLayout {
     Text {
         text: field.helperText
         visible: field.helperText !== ""
-        color: field.error ? Theme.error : Theme.textSecondary
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSizeCaption
+        color: field.error ? Colors.error : Colors.textSecondary
+        font.family: Typography.family
+        font.pixelSize: Typography.caption
         wrapMode: Text.WordWrap
         Layout.fillWidth: true
     }
