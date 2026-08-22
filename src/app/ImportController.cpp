@@ -13,9 +13,12 @@ namespace {
 using core::formatBytes;
 
 core::ConflictPolicy policyFromName(const QString& name) {
-    if (name == QLatin1String("skip")) return core::ConflictPolicy::Skip;
-    if (name == QLatin1String("overwrite")) return core::ConflictPolicy::Overwrite;
-    if (name == QLatin1String("newer")) return core::ConflictPolicy::NewerWins;
+    if (name == QLatin1String("skip"))
+        return core::ConflictPolicy::Skip;
+    if (name == QLatin1String("overwrite"))
+        return core::ConflictPolicy::Overwrite;
+    if (name == QLatin1String("newer"))
+        return core::ConflictPolicy::NewerWins;
     return core::ConflictPolicy::KeepBoth;
 }
 
@@ -97,9 +100,8 @@ QStringList ImportController::findArchives(const QString& folder) const {
     // A split archive is offered by its first part only; opening that one finds
     // the rest of the set.
     const QDir directory(folder);
-    for (const QString& name :
-         directory.entryList({QStringLiteral("*.txa"), QStringLiteral("*.txa.001")},
-                             QDir::Files, QDir::Name)) {
+    for (const QString& name : directory.entryList(
+             {QStringLiteral("*.txa"), QStringLiteral("*.txa.001")}, QDir::Files, QDir::Name)) {
         found.push_back(directory.absoluteFilePath(name));
     }
     return found;

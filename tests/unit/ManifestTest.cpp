@@ -85,7 +85,8 @@ TEST(Manifest, RoundTripsEveryField) {
     EXPECT_EQ(decoded->source.osName, "Windows 11 Pro");
     EXPECT_EQ(decoded->source.hostName, "BOB-PC");
     EXPECT_EQ(decoded->source.capturedUnix, 1710000000);
-    EXPECT_EQ(decoded->source.tokenBases.at(PathTokenId::AppConfig), "C:/Users/Bob/AppData/Roaming");
+    EXPECT_EQ(decoded->source.tokenBases.at(PathTokenId::AppConfig),
+              "C:/Users/Bob/AppData/Roaming");
 
     ASSERT_EQ(decoded->entries.size(), 3u);
     const ManifestEntry& file = decoded->entries[0];

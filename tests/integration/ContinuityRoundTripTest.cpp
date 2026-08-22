@@ -158,8 +158,7 @@ void ContinuityRoundTripTest::splitsAcrossVolumesAndReadsThemBack() {
 
     const core::ExportReport report = exporter.run(request, token);
     QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
-    QVERIFY2(report.archiveParts.size() > 1,
-             "the payload should not fit in a single 8 KiB volume");
+    QVERIFY2(report.archiveParts.size() > 1, "the payload should not fit in a single 8 KiB volume");
 
     core::ImportService importer(*platform_);
     core::ImportRequest restore;

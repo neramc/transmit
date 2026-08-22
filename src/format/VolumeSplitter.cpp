@@ -30,8 +30,8 @@ std::string formatPartSuffix(std::uint16_t partIndex) {
 
 ArchiveUuid generateArchiveUuid() {
     std::random_device device;
-    std::mt19937_64 engine(
-        (static_cast<std::uint64_t>(device()) << 32) ^ static_cast<std::uint64_t>(device()));
+    std::mt19937_64 engine((static_cast<std::uint64_t>(device()) << 32) ^
+                           static_cast<std::uint64_t>(device()));
     std::uniform_int_distribution<std::uint64_t> distribution;
 
     ArchiveUuid uuid{};
@@ -65,9 +65,12 @@ Result<ArchiveUuid> uuidFromString(std::string_view text) {
     }
 
     const auto nibble = [](char c) -> int {
-        if (c >= '0' && c <= '9') return c - '0';
-        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        if (c >= '0' && c <= '9')
+            return c - '0';
+        if (c >= 'a' && c <= 'f')
+            return c - 'a' + 10;
+        if (c >= 'A' && c <= 'F')
+            return c - 'A' + 10;
         return -1;
     };
 
@@ -103,8 +106,7 @@ Result<VolumeHeader> VolumeHeader::decode(ByteView data) {
         return makeError(ErrorCode::CorruptArchive, "volume header is truncated");
     }
     if (!std::equal(kVolumeMagic.begin(), kVolumeMagic.end(), data.begin())) {
-        return makeError(ErrorCode::CorruptArchive,
-                         "this file is not a Transmit archive volume");
+        return makeError(ErrorCode::CorruptArchive, "this file is not a Transmit archive volume");
     }
     const std::uint32_t stored = readLe<std::uint32_t>(data.subspan(kCrcOffset));
     const std::uint32_t computed = crc32(data.subspan(0, kCrcOffset));
@@ -266,8 +268,8 @@ Result<std::unique_ptr<VolumeSource>> VolumeSource::open(const std::filesystem::
     }
 
     if (candidates.empty()) {
-        return makeError(ErrorCode::NotFound, "no archive volume found at '",
-                         fromFsPath(anyPart), "'");
+        return makeError(ErrorCode::NotFound, "no archive volume found at '", fromFsPath(anyPart),
+                         "'");
     }
 
     std::uint16_t declaredCount = 0;
@@ -313,8 +315,8 @@ Result<std::unique_ptr<VolumeSource>> VolumeSource::open(const std::filesystem::
     if (declaredCount != 0 && declaredCount != static_cast<std::uint16_t>(candidates.size())) {
         return makeError(ErrorCode::VolumeMissing, "this archive has ",
                          std::to_string(declaredCount), " parts but only ",
-                         std::to_string(candidates.size()),
-                         " were found next to '", fromFsPath(candidates.front()), "'");
+                         std::to_string(candidates.size()), " were found next to '",
+                         fromFsPath(candidates.front()), "'");
     }
 
     source->logicalSize_ = logicalStart;

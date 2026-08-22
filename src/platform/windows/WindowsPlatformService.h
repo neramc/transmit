@@ -14,8 +14,7 @@ public:
     [[nodiscard]] QList<InstalledApp> installedApplications() const override;
     [[nodiscard]] QList<RunningApp> runningApplications(
         const QStringList& processNames) const override;
-    [[nodiscard]] std::unique_ptr<Snapshot> createSnapshot(
-        const QStringList& paths) const override;
+    [[nodiscard]] std::unique_ptr<Snapshot> createSnapshot(const QStringList& paths) const override;
     [[nodiscard]] QString packageInstallCommand() const override;
     [[nodiscard]] PackageSource nativePackageSource() const override;
     [[nodiscard]] std::unique_ptr<SettingsProvider> settingsProvider() const override;

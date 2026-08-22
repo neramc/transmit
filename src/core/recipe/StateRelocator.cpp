@@ -85,8 +85,8 @@ format::TokenizedPath StateRelocator::relocate(const format::TokenizedPath& capt
         return captured;
     }
 
-    std::string below = captured.relative.substr(
-        std::min(rule->from.relative.size(), captured.relative.size()));
+    std::string below =
+        captured.relative.substr(std::min(rule->from.relative.size(), captured.relative.size()));
     while (!below.empty() && below.front() == '/') {
         below.erase(0, 1);
     }

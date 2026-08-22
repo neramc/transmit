@@ -47,7 +47,7 @@ struct Error {
 
 /// Minimal expected-like type. `Result<void>` is supported through a dedicated
 /// specialisation so functions that only report failure share the same shape.
-template <typename T>
+template<typename T>
 class [[nodiscard]] Result {
 public:
     using value_type = T;
@@ -78,7 +78,7 @@ private:
     std::variant<T, Error> storage_;
 };
 
-template <>
+template<>
 class [[nodiscard]] Result<void> {
 public:
     using value_type = void;
@@ -100,9 +100,11 @@ private:
 
 using Status = Result<void>;
 
-inline Status ok() { return {}; }
+inline Status ok() {
+    return {};
+}
 
-template <typename... Args>
+template<typename... Args>
 Error makeError(ErrorCode code, Args&&... parts) {
     std::string message;
     (message.append(std::forward<Args>(parts)), ...);
@@ -113,19 +115,19 @@ Error makeError(ErrorCode code, Args&&... parts) {
 }
 
 /// Propagates a failure from an inner Result, converting the value type.
-#define TRANSMIT_TRY(target, expr)                       \
-    auto&& target##_result_ = (expr);                    \
-    if (!target##_result_) {                             \
-        return std::move(target##_result_).error();      \
-    }                                                    \
+#define TRANSMIT_TRY(target, expr)                  \
+    auto&& target##_result_ = (expr);               \
+    if (!target##_result_) {                        \
+        return std::move(target##_result_).error(); \
+    }                                               \
     auto target = std::move(target##_result_).value()
 
-#define TRANSMIT_CHECK(expr)                             \
-    do {                                                 \
-        auto&& check_result_ = (expr);                   \
-        if (!check_result_) {                            \
-            return std::move(check_result_).error();     \
-        }                                                \
+#define TRANSMIT_CHECK(expr)                         \
+    do {                                             \
+        auto&& check_result_ = (expr);               \
+        if (!check_result_) {                        \
+            return std::move(check_result_).error(); \
+        }                                            \
     } while (false)
 
 }  // namespace transmit::format

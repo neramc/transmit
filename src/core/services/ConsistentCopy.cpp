@@ -68,8 +68,7 @@ format::Result<QByteArray> readSqliteDatabase(const QString& path) {
     }
     const SqliteHandle destination(rawDestination);
 
-    sqlite3_backup* backup =
-        sqlite3_backup_init(destination.get(), "main", source.get(), "main");
+    sqlite3_backup* backup = sqlite3_backup_init(destination.get(), "main", source.get(), "main");
     if (backup == nullptr) {
         return sqliteError(destination.get(), "could not start the database copy");
     }
@@ -114,9 +113,8 @@ format::Result<QByteArray> readFile(const QString& path, quint64 expectedSize) {
 
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
-        return format::makeError(format::ErrorCode::PermissionDenied,
-                                 "could not open '", toUtf8(path), "': ",
-                                 toUtf8(file.errorString()));
+        return format::makeError(format::ErrorCode::PermissionDenied, "could not open '",
+                                 toUtf8(path), "': ", toUtf8(file.errorString()));
     }
 
     QByteArray content = file.readAll();

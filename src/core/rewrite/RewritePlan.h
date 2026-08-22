@@ -9,11 +9,11 @@ namespace transmit::core {
 
 /// One value inside one file that a restore would change.
 struct RewriteEdit {
-    QString filePath;     ///< the restored file on this machine
-    QString location;     ///< which key, section or line - human readable
+    QString filePath;  ///< the restored file on this machine
+    QString location;  ///< which key, section or line - human readable
     QString oldValue;
     QString newValue;
-    QString appId;        ///< the recipe that asked for this
+    QString appId;  ///< the recipe that asked for this
 };
 
 /// Everything a restore intends to change inside restored files, gathered

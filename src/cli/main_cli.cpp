@@ -80,9 +80,9 @@ void printNotes(const QList<core::ContinuityNote>& notes) {
     }
     out() << Qt::endl << QStringLiteral("Notes:") << Qt::endl;
     for (const core::ContinuityNote& note : notes) {
-        out() << QStringLiteral("  [%1] %2")
-                     .arg(core::continuityGradeName(note.grade), note.subject)
-              << Qt::endl;
+        out()
+            << QStringLiteral("  [%1] %2").arg(core::continuityGradeName(note.grade), note.subject)
+            << Qt::endl;
         out() << QStringLiteral("      ") << note.detail << Qt::endl;
     }
 }
@@ -128,9 +128,16 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
         const QString text = parser.value(splitOption).trimmed().toUpper();
         quint64 multiplier = 1;
         QString digits = text;
-        if (text.endsWith(u'K')) { multiplier = 1024ULL; digits.chop(1); }
-        else if (text.endsWith(u'M')) { multiplier = 1024ULL * 1024; digits.chop(1); }
-        else if (text.endsWith(u'G')) { multiplier = 1024ULL * 1024 * 1024; digits.chop(1); }
+        if (text.endsWith(u'K')) {
+            multiplier = 1024ULL;
+            digits.chop(1);
+        } else if (text.endsWith(u'M')) {
+            multiplier = 1024ULL * 1024;
+            digits.chop(1);
+        } else if (text.endsWith(u'G')) {
+            multiplier = 1024ULL * 1024 * 1024;
+            digits.chop(1);
+        }
 
         bool valid = false;
         const quint64 value = digits.toULongLong(&valid);
@@ -144,8 +151,8 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
     request.passphrase = readPassphrase(parser, passphraseFileOption, passphraseOption);
     if (request.selection.domains.contains(static_cast<int>(format::DomainId::Secrets)) &&
         request.passphrase.isEmpty()) {
-        return reportError(QStringLiteral(
-            "capturing credentials requires a passphrase; pass --passphrase-file"));
+        return reportError(
+            QStringLiteral("capturing credentials requires a passphrase; pass --passphrase-file"));
     }
 
     CancelToken cancelToken;
@@ -193,8 +200,7 @@ int runInspect(const QString& archivePath, const QString& passphrase) {
     if (!summary.label.isEmpty()) {
         out() << QStringLiteral("Label:     %1").arg(summary.label) << Qt::endl;
     }
-    out() << QStringLiteral("Captured:  %1")
-                 .arg(summary.capturedAt.toString(Qt::ISODate))
+    out() << QStringLiteral("Captured:  %1").arg(summary.capturedAt.toString(Qt::ISODate))
           << Qt::endl;
     out() << QStringLiteral("Parts:     %1").arg(summary.partCount) << Qt::endl;
     out() << QStringLiteral("Encrypted: %1")
@@ -203,8 +209,9 @@ int runInspect(const QString& archivePath, const QString& passphrase) {
 
     if (!summary.unlocked) {
         out() << Qt::endl
-              << QStringLiteral("This archive is locked. Pass --passphrase-file to see what is "
-                                "inside it.")
+              << QStringLiteral(
+                     "This archive is locked. Pass --passphrase-file to see what is "
+                     "inside it.")
               << Qt::endl;
         return 0;
     }
@@ -349,7 +356,8 @@ int runVerify(const QString& archivePath, const QString& passphrase) {
 int runProfiles() {
     for (const core::CaptureProfile& profile : core::ProfileService::builtInProfiles()) {
         out() << QStringLiteral("%1  %2").arg(profile.id, -12).arg(profile.displayName) << Qt::endl;
-        out() << QStringLiteral("              %1").arg(profile.description) << Qt::endl << Qt::endl;
+        out() << QStringLiteral("              %1").arg(profile.description) << Qt::endl
+              << Qt::endl;
     }
     return 0;
 }
@@ -394,8 +402,8 @@ int runEnvironment() {
           << Qt::endl;
     if (!info.distroId.isEmpty()) {
         out() << QStringLiteral("Distro:    %1 (like: %2)")
-                     .arg(info.distroId, info.distroLike.isEmpty() ? QStringLiteral("-")
-                                                                   : info.distroLike)
+                     .arg(info.distroId,
+                          info.distroLike.isEmpty() ? QStringLiteral("-") : info.distroLike)
               << Qt::endl;
     }
     if (!info.desktopEnvironment.isEmpty()) {
@@ -450,19 +458,18 @@ int main(int argc, char** argv) {
                                            QStringLiteral("id"), QStringLiteral("full"));
     const QCommandLineOption presetOption(
         QStringLiteral("preset"),
-        QStringLiteral("Compression: fast, balanced, maximum or extreme."),
-        QStringLiteral("name"), QStringLiteral("maximum"));
+        QStringLiteral("Compression: fast, balanced, maximum or extreme."), QStringLiteral("name"),
+        QStringLiteral("maximum"));
     const QCommandLineOption splitOption(
         QStringLiteral("split"),
         QStringLiteral("Split into parts of this size, for example 3584M for a FAT32 stick."),
         QStringLiteral("size"));
     const QCommandLineOption passphraseOption(
         QStringLiteral("passphrase"),
-        QStringLiteral("Encryption passphrase. Prefer --passphrase-file."),
-        QStringLiteral("text"));
+        QStringLiteral("Encryption passphrase. Prefer --passphrase-file."), QStringLiteral("text"));
     const QCommandLineOption passphraseFileOption(
-        QStringLiteral("passphrase-file"),
-        QStringLiteral("Read the passphrase from this file."), QStringLiteral("path"));
+        QStringLiteral("passphrase-file"), QStringLiteral("Read the passphrase from this file."),
+        QStringLiteral("path"));
     const QCommandLineOption domainsOption(
         QStringLiteral("domains"),
         QStringLiteral("Comma-separated: userdata, appstate, settings, secrets, apps."),
@@ -484,8 +491,8 @@ int main(int argc, char** argv) {
         QStringLiteral("conflict"),
         QStringLiteral("When a file already exists: skip, overwrite, newer or keep-both."),
         QStringLiteral("policy"), QStringLiteral("keep-both"));
-    const QCommandLineOption verifyOption(
-        QStringLiteral("verify"), QStringLiteral("Check every block before restoring."));
+    const QCommandLineOption verifyOption(QStringLiteral("verify"),
+                                          QStringLiteral("Check every block before restoring."));
     const QCommandLineOption verboseOption(QStringLiteral("verbose"),
                                            QStringLiteral("Log what is happening in detail."));
 

@@ -62,7 +62,9 @@ void PathRewriteTest::init() {
     QVERIFY(workspace_->isValid());
 }
 
-void PathRewriteTest::cleanup() { workspace_.reset(); }
+void PathRewriteTest::cleanup() {
+    workspace_.reset();
+}
 
 void PathRewriteTest::write(const QString& relative, const QByteArray& content) {
     const QString full = path(relative);
@@ -86,7 +88,8 @@ core::PathTranslator PathRewriteTest::windowsToLinux() const {
     source.os = format::OsFamily::Windows;
     source.homeDirectory = "C:/Users/Bob";
 
-    const auto windows = format::PathTokenMap::defaultsFor(format::OsFamily::Windows, "C:/Users/Bob");
+    const auto windows =
+        format::PathTokenMap::defaultsFor(format::OsFamily::Windows, "C:/Users/Bob");
     for (const format::PathTokenId token : format::allTokens()) {
         if (const auto base = windows.base(token)) {
             source.tokenBases[token] = *base;
@@ -146,8 +149,8 @@ void PathRewriteTest::rewritesPathsEmbeddedInLongerText() {
     QVERIFY2(result.startsWith(QStringLiteral("open ")), "surrounding text must survive");
 
     // A file:// URI keeps its scheme and gains the right separators.
-    const QString uri = translator.translateWithin(
-        QStringLiteral("file:///C:/Users/Bob/Documents/notes.txt"));
+    const QString uri =
+        translator.translateWithin(QStringLiteral("file:///C:/Users/Bob/Documents/notes.txt"));
     QCOMPARE(uri, QStringLiteral("file:///home/bob/Documents/notes.txt"));
 }
 
@@ -166,9 +169,13 @@ void PathRewriteTest::iniRewritePreservesCommentsAndOrdering() {
 
     core::AppRecipe recipe;
     recipe.id = QStringLiteral("test.firefox");
-    recipe.rewrites.push_back(
-        core::RecipeRewriteRule{QStringLiteral("profiles.ini"), QStringLiteral("ini"),
-                                {QStringLiteral("Path")}, {}, 1, {}, {}});
+    recipe.rewrites.push_back(core::RecipeRewriteRule{QStringLiteral("profiles.ini"),
+                                                      QStringLiteral("ini"),
+                                                      {QStringLiteral("Path")},
+                                                      {},
+                                                      1,
+                                                      {},
+                                                      {}});
 
     const core::PathTranslator translator = windowsToLinux();
     core::RewritePlan plan;
@@ -202,9 +209,14 @@ void PathRewriteTest::jsonRewriteTouchesOnlyTheNamedKeys() {
 
     core::AppRecipe recipe;
     recipe.id = QStringLiteral("test.chrome");
-    recipe.rewrites.push_back(core::RecipeRewriteRule{
-        QStringLiteral("Preferences"), QStringLiteral("json"),
-        {QStringLiteral("download.default_directory")}, {}, 1, {}, {}});
+    recipe.rewrites.push_back(
+        core::RecipeRewriteRule{QStringLiteral("Preferences"),
+                                QStringLiteral("json"),
+                                {QStringLiteral("download.default_directory")},
+                                {},
+                                1,
+                                {},
+                                {}});
 
     core::RewritePlan plan;
     core::PathRewriter(windowsToLinux()).planFor(recipe, workspace_->path(), plan);
@@ -226,9 +238,9 @@ void PathRewriteTest::jsonRewriteTouchesOnlyTheNamedKeys() {
 void PathRewriteTest::textRewriteKeepsUtf16Encoding() {
     // Windows applications commonly write UTF-16 with a byte order mark; a
     // rewrite that silently converted it to UTF-8 would break the reader.
-    const QString source =
-        QStringLiteral("user_pref(\"browser.download.dir\", \"C:\\\\Users\\\\Bob\\\\Downloads\");\n"
-                       "user_pref(\"intl.locale\", \"ko-KR\");\n");
+    const QString source = QStringLiteral(
+        "user_pref(\"browser.download.dir\", \"C:\\\\Users\\\\Bob\\\\Downloads\");\n"
+        "user_pref(\"intl.locale\", \"ko-KR\");\n");
     QByteArray utf16;
     utf16.append("\xFF\xFE", 2);
     for (const QChar c : source) {
@@ -241,8 +253,13 @@ void PathRewriteTest::textRewriteKeepsUtf16Encoding() {
     core::AppRecipe recipe;
     recipe.id = QStringLiteral("test.firefox");
     recipe.rewrites.push_back(core::RecipeRewriteRule{
-        QStringLiteral("prefs.js"), QStringLiteral("text"), {},
-        QStringLiteral(R"re(user_pref\("browser\.download\.dir", "([^"]*)"\))re"), 1, {}, {}});
+        QStringLiteral("prefs.js"),
+        QStringLiteral("text"),
+        {},
+        QStringLiteral(R"re(user_pref\("browser\.download\.dir", "([^"]*)"\))re"),
+        1,
+        {},
+        {}});
 
     core::RewritePlan plan;
     core::PathRewriter(windowsToLinux()).planFor(recipe, workspace_->path(), plan);
@@ -273,9 +290,13 @@ void PathRewriteTest::sqliteRewriteUpdatesOnlyTheNamedColumn() {
 
     core::AppRecipe recipe;
     recipe.id = QStringLiteral("test.places");
-    recipe.rewrites.push_back(core::RecipeRewriteRule{
-        QStringLiteral("places.sqlite"), QStringLiteral("sqlite"), {}, {}, 1,
-        QStringLiteral("recent"), QStringLiteral("location")});
+    recipe.rewrites.push_back(core::RecipeRewriteRule{QStringLiteral("places.sqlite"),
+                                                      QStringLiteral("sqlite"),
+                                                      {},
+                                                      {},
+                                                      1,
+                                                      QStringLiteral("recent"),
+                                                      QStringLiteral("location")});
 
     core::RewritePlan plan;
     core::PathRewriter(windowsToLinux()).planFor(recipe, workspace_->path(), plan);
@@ -314,7 +335,11 @@ void PathRewriteTest::planCanBeAppliedAndReverted() {
     recipe.id = QStringLiteral("test.app");
     recipe.rewrites.push_back(core::RecipeRewriteRule{QStringLiteral("settings.ini"),
                                                       QStringLiteral("ini"),
-                                                      {QStringLiteral("Path")}, {}, 1, {}, {}});
+                                                      {QStringLiteral("Path")},
+                                                      {},
+                                                      1,
+                                                      {},
+                                                      {}});
 
     core::RewritePlan plan;
     core::PathRewriter(windowsToLinux()).planFor(recipe, workspace_->path(), plan);
@@ -351,8 +376,8 @@ void PathRewriteTest::firefoxProfileIsRepointedEndToEnd() {
     core::PathRewriter(windowsToLinux())
         .planFor(firefox, workspace_->path() + QStringLiteral("/Firefox"), plan);
 
-    QVERIFY2(plan.edits().size() >= 2, qPrintable(QStringLiteral("only %1 edits planned")
-                                                      .arg(plan.edits().size())));
+    QVERIFY2(plan.edits().size() >= 2,
+             qPrintable(QStringLiteral("only %1 edits planned").arg(plan.edits().size())));
     QCOMPARE(plan.apply(), 2);
 
     QVERIFY(read(QStringLiteral("Firefox/profiles.ini"))
@@ -368,12 +393,24 @@ void PathRewriteTest::catalogLoadsAndMatches() {
     QVERIFY(catalog.loadFromFile(QStringLiteral(":/catalog/app-catalog.json")) >= 70);
 
     QList<platform::InstalledApp> installed;
-    installed.push_back({QStringLiteral("firefox"), QStringLiteral("firefox"), QStringLiteral("128.0"),
-                         {}, platform::PackageSource::Apt, {}});
-    installed.push_back({QStringLiteral("code"), QStringLiteral("code"), QStringLiteral("1.90"), {},
-                         platform::PackageSource::Apt, {}});
-    installed.push_back({QStringLiteral("some-unknown-thing"), QStringLiteral("Unknown"), {}, {},
-                         platform::PackageSource::Apt, {}});
+    installed.push_back({QStringLiteral("firefox"),
+                         QStringLiteral("firefox"),
+                         QStringLiteral("128.0"),
+                         {},
+                         platform::PackageSource::Apt,
+                         {}});
+    installed.push_back({QStringLiteral("code"),
+                         QStringLiteral("code"),
+                         QStringLiteral("1.90"),
+                         {},
+                         platform::PackageSource::Apt,
+                         {}});
+    installed.push_back({QStringLiteral("some-unknown-thing"),
+                         QStringLiteral("Unknown"),
+                         {},
+                         {},
+                         platform::PackageSource::Apt,
+                         {}});
 
     const QList<core::MatchedApp> matched = catalog.match(installed, format::OsFamily::Linux);
     QStringList ids;
@@ -411,11 +448,11 @@ void PathRewriteTest::relocatesApplicationStateToWhereTheTargetKeepsIt() {
     QVERIFY(toWindows.hasRelocations());
 
     // ~/.mozilla/firefox on Linux is %APPDATA%\Mozilla\Firefox on Windows.
-    const format::TokenizedPath profile{format::PathTokenId::Home,
-                                        ".mozilla/firefox/profiles.ini"};
+    const format::TokenizedPath profile{format::PathTokenId::Home, ".mozilla/firefox/profiles.ini"};
     const format::TokenizedPath moved = toWindows.relocate(profile);
     QCOMPARE(moved.token, format::PathTokenId::AppConfig);
-    QCOMPARE(QString::fromStdString(moved.relative), QStringLiteral("Mozilla/Firefox/profiles.ini"));
+    QCOMPARE(QString::fromStdString(moved.relative),
+             QStringLiteral("Mozilla/Firefox/profiles.ini"));
 
     // And on to macOS, from the same capture.
     const core::StateRelocator toMac(inventory, format::OsFamily::Linux, format::OsFamily::MacOs);

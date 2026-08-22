@@ -18,7 +18,7 @@ struct InventoryEntry {
     QString recipeId;
     QString displayName;
     QString installedVersion;
-    QString packageSource;      ///< how it was installed on the source machine
+    QString packageSource;  ///< how it was installed on the source machine
     QHash<QString, QString> installIds;
     QList<RecipeStatePath> state;
     QList<RecipeRewriteRule> rewrites;

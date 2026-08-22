@@ -10,7 +10,8 @@ namespace transmit::format {
 class ZstdCodec final : public ICodec {
 public:
     [[nodiscard]] CodecId id() const noexcept override { return CodecId::Zstd; }
-    Status compress(ByteView input, const CompressionProfile& profile, ByteBuffer& output) const override;
+    Status compress(ByteView input, const CompressionProfile& profile,
+                    ByteBuffer& output) const override;
     Status decompress(ByteView input, std::size_t rawSize, ByteBuffer& output) const override;
 
     /// Highest level the linked zstd build accepts.

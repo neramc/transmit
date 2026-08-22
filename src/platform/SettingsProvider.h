@@ -2,6 +2,7 @@
 
 #include <QList>
 #include <QString>
+
 #include <memory>
 
 namespace transmit::platform {
@@ -14,19 +15,19 @@ namespace transmit::platform {
 /// enum, macOS as the presence or absence of a defaults string - and all three
 /// are "light" or "dark" here.
 enum class SettingKey {
-    AppearanceTheme,      ///< "light", "dark" or "auto"
-    AppearanceAccent,     ///< "#rrggbb"
-    DesktopWallpaper,     ///< absolute path to the image
-    LocaleLanguage,       ///< BCP-47, e.g. "ko-KR"
-    LocaleFormats,        ///< BCP-47 used for dates, numbers and currency
-    LocaleTimezone,       ///< IANA, e.g. "Asia/Seoul"
-    KeyboardLayouts,      ///< comma-separated layout codes, most preferred first
-    DefaultBrowser,       ///< the browser's own identifier on that system
+    AppearanceTheme,   ///< "light", "dark" or "auto"
+    AppearanceAccent,  ///< "#rrggbb"
+    DesktopWallpaper,  ///< absolute path to the image
+    LocaleLanguage,    ///< BCP-47, e.g. "ko-KR"
+    LocaleFormats,     ///< BCP-47 used for dates, numbers and currency
+    LocaleTimezone,    ///< IANA, e.g. "Asia/Seoul"
+    KeyboardLayouts,   ///< comma-separated layout codes, most preferred first
+    DefaultBrowser,    ///< the browser's own identifier on that system
     DefaultMailClient,
-    PowerSleepMinutes,    ///< "0" means never
+    PowerSleepMinutes,  ///< "0" means never
     PowerScreenOffMinutes,
-    AccessibilityTextScale,   ///< a multiplier, e.g. "1.25"
-    AccessibilityHighContrast,///< "true" or "false"
+    AccessibilityTextScale,     ///< a multiplier, e.g. "1.25"
+    AccessibilityHighContrast,  ///< "true" or "false"
     AccessibilityReduceMotion,
     MouseNaturalScroll,
     ClockUses24Hour,
@@ -48,10 +49,10 @@ struct SettingValue {
 
 /// What happened when a setting was applied.
 enum class ApplyOutcome {
-    Applied,          ///< set exactly
-    Approximated,     ///< the nearest thing this system offers
-    NeedsPrivilege,   ///< possible, but not without elevation - a script is written instead
-    Unsupported,      ///< this system has no equivalent
+    Applied,         ///< set exactly
+    Approximated,    ///< the nearest thing this system offers
+    NeedsPrivilege,  ///< possible, but not without elevation - a script is written instead
+    Unsupported,     ///< this system has no equivalent
     Failed,
 };
 

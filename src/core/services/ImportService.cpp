@@ -7,15 +7,16 @@
 #include <QFileInfo>
 #include <QSaveFile>
 #include <QTemporaryDir>
+
 #include <optional>
 
 #include "core/recipe/AppInventoryPayload.h"
 #include "core/recipe/InstallScriptWriter.h"
-#include "core/settings/SettingsDomain.h"
 #include "core/recipe/RecipeCatalog.h"
 #include "core/recipe/StateRelocator.h"
 #include "core/rewrite/PathRewriter.h"
 #include "core/rewrite/PathTranslator.h"
+#include "core/settings/SettingsDomain.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
 #include "format/NameSanitizer.h"
@@ -90,8 +91,7 @@ QString uniqueSibling(const QString& path) {
 ImportService::ImportService(platform::PlatformService& platformService)
     : platform_(platformService) {}
 
-ArchiveSummary ImportService::inspect(const QString& archivePath,
-                                      const QString& passphrase) const {
+ArchiveSummary ImportService::inspect(const QString& archivePath, const QString& passphrase) const {
     ArchiveSummary summary;
 
     auto readerResult = format::ArchiveReader::open(format::toFsPath(toUtf8(archivePath)));
@@ -161,25 +161,23 @@ format::PathTokenMap ImportService::targetTokens(const ImportRequest& request) c
             if (token == format::PathTokenId::Absolute) {
                 continue;
             }
-            map.setBase(token, format::joinPath(toUtf8(root),
-                                                std::string(format::tokenName(token))));
+            map.setBase(token,
+                        format::joinPath(toUtf8(root), std::string(format::tokenName(token))));
         }
         return map;
     }
 
-    if (request.emulateOs != OsFamily::Unknown &&
-        request.emulateOs != platform_.environment().os) {
+    if (request.emulateOs != OsFamily::Unknown && request.emulateOs != platform_.environment().os) {
         // A dry run against another OS: model that OS's layout from this
         // machine's home directory so the report shows real translated paths.
-        return format::PathTokenMap::defaultsFor(
-            request.emulateOs, toUtf8(platform_.environment().homeDirectory));
+        return format::PathTokenMap::defaultsFor(request.emulateOs,
+                                                 toUtf8(platform_.environment().homeDirectory));
     }
 
     return platform_.knownFolders();
 }
 
-void ImportService::previewRewrites(format::ArchiveReader& reader,
-                                    const format::Manifest& manifest,
+void ImportService::previewRewrites(format::ArchiveReader& reader, const format::Manifest& manifest,
                                     const ImportRequest& request,
                                     const format::PathTokenMap& targetFolders, OsFamily targetOs,
                                     ImportReport& report) const {
@@ -200,8 +198,8 @@ void ImportService::previewRewrites(format::ArchiveReader& reader,
         if (token == format::PathTokenId::Absolute) {
             continue;
         }
-        scratchFolders.setBase(token, format::joinPath(toUtf8(scratch.path()),
-                                                       std::string(format::tokenName(token))));
+        scratchFolders.setBase(
+            token, format::joinPath(toUtf8(scratch.path()), std::string(format::tokenName(token))));
     }
 
     format::NameSanitizer sanitizer(format::SanitizeOptions::forTarget(targetOs));
@@ -339,14 +337,15 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
     }
 
     if (manifest.source.os != targetOs && manifest.source.os != OsFamily::Unknown) {
-        report.notes.push_back(ContinuityNote{
-            ContinuityGrade::Adapted, DomainId::Unknown,
-            QCoreApplication::translate("Import", "Operating system"),
-            QCoreApplication::translate(
-                "Import", "This archive was captured on %1 and is being restored onto %2. "
-                          "Locations and file names are translated to match.")
-                .arg(fromUtf8(format::osFamilyName(manifest.source.os)),
-                     fromUtf8(format::osFamilyName(targetOs)))});
+        report.notes.push_back(
+            ContinuityNote{ContinuityGrade::Adapted, DomainId::Unknown,
+                           QCoreApplication::translate("Import", "Operating system"),
+                           QCoreApplication::translate(
+                               "Import",
+                               "This archive was captured on %1 and is being restored onto %2. "
+                               "Locations and file names are translated to match.")
+                               .arg(fromUtf8(format::osFamilyName(manifest.source.os)),
+                                    fromUtf8(format::osFamilyName(targetOs)))});
     }
 
     // An application looks for its settings in a different place on each
@@ -404,9 +403,8 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
         }
         const format::ManifestEntry& entry = *entryPtr;
 
-        const format::TokenizedPath placed = entry.domain == DomainId::AppState
-                                                 ? relocator.relocate(entry.path)
-                                                 : entry.path;
+        const format::TokenizedPath placed =
+            entry.domain == DomainId::AppState ? relocator.relocate(entry.path) : entry.path;
 
         // Sanitising the relative part only: the known-folder base is already
         // valid on this machine.
@@ -415,9 +413,9 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
 
         const auto resolved = tokens.resolve(safePath);
         if (!resolved) {
-            report.notes.push_back(ContinuityNote{
-                ContinuityGrade::Manual, entry.domain, fromUtf8(entry.path.toDisplayString()),
-                describeError(resolved.error())});
+            report.notes.push_back(ContinuityNote{ContinuityGrade::Manual, entry.domain,
+                                                  fromUtf8(entry.path.toDisplayString()),
+                                                  describeError(resolved.error())});
             ++report.filesSkipped;
             continue;
         }
@@ -429,8 +427,8 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
 
         if (safeRelative != placed.relative) {
             item.grade = ContinuityGrade::Adapted;
-            item.note = QCoreApplication::translate(
-                "Import", "Renamed so the name is valid on this system.");
+            item.note = QCoreApplication::translate("Import",
+                                                    "Renamed so the name is valid on this system.");
         }
 
         // ------------------------------------------------ conflicts
@@ -453,7 +451,8 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                     break;
                 case ConflictPolicy::NewerWins: {
                     const QFileInfo existing(targetPath);
-                    const qint64 existingNs = existing.lastModified().toMSecsSinceEpoch() * 1000000LL;
+                    const qint64 existingNs =
+                        existing.lastModified().toMSecsSinceEpoch() * 1000000LL;
                     if (existingNs >= entry.modifiedUnixNs) {
                         item.skipped = true;
                         item.note = QCoreApplication::translate(
@@ -479,9 +478,10 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
         switch (entry.type) {
             case format::EntryType::Directory: {
                 if (!QDir().mkpath(targetPath)) {
-                    report.notes.push_back(ContinuityNote{
-                        ContinuityGrade::Manual, entry.domain, targetPath,
-                        QCoreApplication::translate("Import", "This folder could not be created.")});
+                    report.notes.push_back(
+                        ContinuityNote{ContinuityGrade::Manual, entry.domain, targetPath,
+                                       QCoreApplication::translate(
+                                           "Import", "This folder could not be created.")});
                     ++report.filesSkipped;
                     continue;
                 }
@@ -527,10 +527,10 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                     QFile::remove(targetPath);
                 }
                 if (!QFile::link(linkTarget, targetPath)) {
-                    report.notes.push_back(ContinuityNote{
-                        ContinuityGrade::Manual, entry.domain, targetPath,
-                        QCoreApplication::translate("Import",
-                                                    "This symbolic link could not be created.")});
+                    report.notes.push_back(
+                        ContinuityNote{ContinuityGrade::Manual, entry.domain, targetPath,
+                                       QCoreApplication::translate(
+                                           "Import", "This symbolic link could not be created.")});
                     ++report.filesSkipped;
                     continue;
                 }
@@ -575,9 +575,9 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
             update.bytesDone = report.bytesWritten;
             update.bytesTotal = totalBytes;
             update.currentItem = targetPath;
-            update.stage = request.dryRun
-                               ? QCoreApplication::translate("Import", "Working out what would happen")
-                               : QCoreApplication::translate("Import", "Restoring");
+            update.stage = request.dryRun ? QCoreApplication::translate(
+                                                "Import", "Working out what would happen")
+                                          : QCoreApplication::translate("Import", "Restoring");
             progress(update);
         }
     }

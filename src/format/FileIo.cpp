@@ -23,9 +23,12 @@ Error errnoError(const std::filesystem::path& path, const char* what) {
 
 const char* modeString(FileStream::Mode mode) {
     switch (mode) {
-        case FileStream::Mode::Read:      return "rb";
-        case FileStream::Mode::Write:     return "wb";
-        case FileStream::Mode::ReadWrite: return "r+b";
+        case FileStream::Mode::Read:
+            return "rb";
+        case FileStream::Mode::Write:
+            return "wb";
+        case FileStream::Mode::ReadWrite:
+            return "r+b";
     }
     return "rb";
 }
@@ -42,7 +45,9 @@ std::string fromFsPath(const std::filesystem::path& path) {
     return std::string(reinterpret_cast<const char*>(text.data()), text.size());
 }
 
-FileStream::~FileStream() { close(); }
+FileStream::~FileStream() {
+    close();
+}
 
 FileStream::FileStream(FileStream&& other) noexcept
     : handle_(std::exchange(other.handle_, nullptr)), path_(std::move(other.path_)) {}
@@ -62,9 +67,12 @@ Result<FileStream> FileStream::open(const std::filesystem::path& path, Mode mode
     std::FILE* handle = nullptr;
     const std::wstring wideMode = [mode] {
         switch (mode) {
-            case Mode::Read:      return std::wstring(L"rb");
-            case Mode::Write:     return std::wstring(L"wb");
-            case Mode::ReadWrite: return std::wstring(L"r+b");
+            case Mode::Read:
+                return std::wstring(L"rb");
+            case Mode::Write:
+                return std::wstring(L"wb");
+            case Mode::ReadWrite:
+                return std::wstring(L"r+b");
         }
         return std::wstring(L"rb");
     }();

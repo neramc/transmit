@@ -13,20 +13,13 @@ struct TokenName {
 };
 
 constexpr std::array kTokenNames = {
-    TokenName{PathTokenId::Absolute, "ABS"},
-    TokenName{PathTokenId::Home, "HOME"},
-    TokenName{PathTokenId::Desktop, "DESKTOP"},
-    TokenName{PathTokenId::Documents, "DOCUMENTS"},
-    TokenName{PathTokenId::Downloads, "DOWNLOADS"},
-    TokenName{PathTokenId::Pictures, "PICTURES"},
-    TokenName{PathTokenId::Music, "MUSIC"},
-    TokenName{PathTokenId::Videos, "VIDEOS"},
-    TokenName{PathTokenId::AppConfig, "APPCONFIG"},
-    TokenName{PathTokenId::AppData, "APPDATA"},
-    TokenName{PathTokenId::AppState, "APPSTATE"},
-    TokenName{PathTokenId::Fonts, "FONTS"},
-    TokenName{PathTokenId::PublicShare, "PUBLIC"},
-    TokenName{PathTokenId::Templates, "TEMPLATES"},
+    TokenName{PathTokenId::Absolute, "ABS"},        TokenName{PathTokenId::Home, "HOME"},
+    TokenName{PathTokenId::Desktop, "DESKTOP"},     TokenName{PathTokenId::Documents, "DOCUMENTS"},
+    TokenName{PathTokenId::Downloads, "DOWNLOADS"}, TokenName{PathTokenId::Pictures, "PICTURES"},
+    TokenName{PathTokenId::Music, "MUSIC"},         TokenName{PathTokenId::Videos, "VIDEOS"},
+    TokenName{PathTokenId::AppConfig, "APPCONFIG"}, TokenName{PathTokenId::AppData, "APPDATA"},
+    TokenName{PathTokenId::AppState, "APPSTATE"},   TokenName{PathTokenId::Fonts, "FONTS"},
+    TokenName{PathTokenId::PublicShare, "PUBLIC"},  TokenName{PathTokenId::Templates, "TEMPLATES"},
 };
 
 char lowerAscii(char c) noexcept {
@@ -34,9 +27,9 @@ char lowerAscii(char c) noexcept {
 }
 
 bool equalsIgnoreCase(std::string_view a, std::string_view b) noexcept {
-    return a.size() == b.size() &&
-           std::equal(a.begin(), a.end(), b.begin(),
-                      [](char x, char y) { return lowerAscii(x) == lowerAscii(y); });
+    return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
+               return lowerAscii(x) == lowerAscii(y);
+           });
 }
 
 /// True when `prefix` covers whole components of `path` under the OS's
@@ -46,8 +39,7 @@ bool isPathPrefix(std::string_view path, std::string_view prefix, bool caseInsen
         return false;
     }
     const std::string_view head = path.substr(0, prefix.size());
-    const bool headMatches =
-        caseInsensitive ? equalsIgnoreCase(head, prefix) : head == prefix;
+    const bool headMatches = caseInsensitive ? equalsIgnoreCase(head, prefix) : head == prefix;
     if (!headMatches) {
         return false;
     }
@@ -58,20 +50,26 @@ bool isPathPrefix(std::string_view path, std::string_view prefix, bool caseInsen
 
 std::string_view osFamilyName(OsFamily family) noexcept {
     switch (family) {
-        case OsFamily::Windows: return "windows";
-        case OsFamily::MacOs:   return "macos";
-        case OsFamily::Linux:   return "linux";
-        case OsFamily::Unknown: return "unknown";
+        case OsFamily::Windows:
+            return "windows";
+        case OsFamily::MacOs:
+            return "macos";
+        case OsFamily::Linux:
+            return "linux";
+        case OsFamily::Unknown:
+            return "unknown";
     }
     return "unknown";
 }
 
 Result<OsFamily> osFamilyFromName(std::string_view name) {
-    if (name == "windows" || name == "win")   return OsFamily::Windows;
-    if (name == "macos" || name == "mac" || name == "darwin") return OsFamily::MacOs;
-    if (name == "linux")                       return OsFamily::Linux;
-    return makeError(ErrorCode::InvalidArgument,
-                     "unknown operating system '", std::string(name),
+    if (name == "windows" || name == "win")
+        return OsFamily::Windows;
+    if (name == "macos" || name == "mac" || name == "darwin")
+        return OsFamily::MacOs;
+    if (name == "linux")
+        return OsFamily::Linux;
+    return makeError(ErrorCode::InvalidArgument, "unknown operating system '", std::string(name),
                      "' (expected windows, macos or linux)");
 }
 
@@ -85,7 +83,9 @@ OsFamily hostOsFamily() noexcept {
 #endif
 }
 
-bool usesWindowsPathStyle(OsFamily family) noexcept { return family == OsFamily::Windows; }
+bool usesWindowsPathStyle(OsFamily family) noexcept {
+    return family == OsFamily::Windows;
+}
 
 std::string_view tokenName(PathTokenId token) noexcept {
     for (const auto& entry : kTokenNames) {
@@ -303,9 +303,11 @@ PathTokenMap PathTokenMap::defaultsFor(OsFamily family, std::string_view homeDir
             map.setBase(PathTokenId::AppConfig, joinPath(home, "AppData/Roaming"));
             map.setBase(PathTokenId::AppData, joinPath(home, "AppData/Local"));
             map.setBase(PathTokenId::AppState, joinPath(home, "AppData/Local"));
-            map.setBase(PathTokenId::Fonts, joinPath(home, "AppData/Local/Microsoft/Windows/Fonts"));
+            map.setBase(PathTokenId::Fonts,
+                        joinPath(home, "AppData/Local/Microsoft/Windows/Fonts"));
             map.setBase(PathTokenId::PublicShare, "C:/Users/Public");
-            map.setBase(PathTokenId::Templates, joinPath(home, "AppData/Roaming/Microsoft/Windows/Templates"));
+            map.setBase(PathTokenId::Templates,
+                        joinPath(home, "AppData/Roaming/Microsoft/Windows/Templates"));
             break;
         case OsFamily::MacOs:
             map.setBase(PathTokenId::AppConfig, joinPath(home, "Library/Application Support"));

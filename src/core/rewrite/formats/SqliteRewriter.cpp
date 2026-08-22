@@ -1,4 +1,5 @@
 #include <QFile>
+
 #include <memory>
 
 #include <sqlite3.h>
@@ -106,8 +107,9 @@ QList<RewriteEdit> rewriteSqlite(const QString& path, const QString& table, cons
         return edits;
     }
 
-    const QByteArray updateSql =
-        QStringLiteral("UPDATE \"%1\" SET \"%2\" = ?1 WHERE rowid = ?2").arg(table, column).toUtf8();
+    const QByteArray updateSql = QStringLiteral("UPDATE \"%1\" SET \"%2\" = ?1 WHERE rowid = ?2")
+                                     .arg(table, column)
+                                     .toUtf8();
 
     sqlite3_stmt* rawUpdate = nullptr;
     if (sqlite3_prepare_v2(handle.get(), updateSql.constData(), -1, &rawUpdate, nullptr) !=
@@ -129,7 +131,8 @@ QList<RewriteEdit> rewriteSqlite(const QString& path, const QString& table, cons
             QFile::remove(stagedPath);
             return {};
         }
-        edits.append(RewriteEdit{path, QStringLiteral("%1.%2 row %3").arg(table, column).arg(row.rowId),
+        edits.append(RewriteEdit{path,
+                                 QStringLiteral("%1.%2 row %3").arg(table, column).arg(row.rowId),
                                  row.oldValue, row.newValue, appId});
     }
     sqlite3_exec(handle.get(), "COMMIT", nullptr, nullptr, nullptr);

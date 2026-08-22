@@ -4,6 +4,7 @@
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QFileInfo>
+
 #include <algorithm>
 
 #include "core/recipe/AppInventoryPayload.h"
@@ -144,8 +145,7 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         for (const MatchedApp& match : matchedApps) {
             if (!match.recipe.note.isEmpty()) {
                 report.notes.push_back(ContinuityNote{match.recipe.expectedGrade,
-                                                      DomainId::AppState,
-                                                      match.recipe.displayName,
+                                                      DomainId::AppState, match.recipe.displayName,
                                                       match.recipe.note});
             }
         }
@@ -209,10 +209,10 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     }
     const std::unique_ptr<platform::Snapshot> snapshot = platform_.createSnapshot(snapshotPaths);
     if (!snapshot->isRealSnapshot() && !snapshot->unavailableReason().isEmpty()) {
-        report.notes.push_back(ContinuityNote{
-            ContinuityGrade::Adapted, DomainId::Unknown,
-            QCoreApplication::translate("Export", "Filesystem snapshot"),
-            snapshot->unavailableReason()});
+        report.notes.push_back(
+            ContinuityNote{ContinuityGrade::Adapted, DomainId::Unknown,
+                           QCoreApplication::translate("Export", "Filesystem snapshot"),
+                           snapshot->unavailableReason()});
     }
 
     sortForCompression(scan.items);
@@ -262,13 +262,13 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     }
 
     if (!capturedSettings.isEmpty()) {
-        manifest.payloads.push_back(format::DomainPayload{DomainId::SystemSettings, "settings.v1",
-                                                          SettingsDomain::encode(capturedSettings)});
+        manifest.payloads.push_back(format::DomainPayload{
+            DomainId::SystemSettings, "settings.v1", SettingsDomain::encode(capturedSettings)});
     }
 
     if (!matchedApps.isEmpty()) {
-        manifest.payloads.push_back(
-            format::DomainPayload{DomainId::AppInventory, "apps.v1", encodeAppInventory(matchedApps)});
+        manifest.payloads.push_back(format::DomainPayload{DomainId::AppInventory, "apps.v1",
+                                                          encodeAppInventory(matchedApps)});
     }
 
     QList<format::BlockPacker::PlacementId> placements;
@@ -381,9 +381,9 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
                 "can read them, so keep the drive and the passphrase apart.")});
     }
 
-    qCInfo(logCapture) << "captured" << report.fileCount << "files:"
-                       << formatBytes(report.rawBytes) << "->" << formatBytes(report.storedBytes)
-                       << "in" << report.elapsedMilliseconds << "ms";
+    qCInfo(logCapture) << "captured" << report.fileCount << "files:" << formatBytes(report.rawBytes)
+                       << "->" << formatBytes(report.storedBytes) << "in"
+                       << report.elapsedMilliseconds << "ms";
     return report;
 }
 

@@ -2,12 +2,13 @@
 
 #include <QHash>
 #include <QString>
+
 #include <optional>
 
 #include "core/continuity/ContinuityTypes.h"
+#include "core/recipe/StateRelocator.h"
 #include "format/Manifest.h"
 #include "format/NameSanitizer.h"
-#include "core/recipe/StateRelocator.h"
 #include "format/PathToken.h"
 
 namespace transmit::core {
@@ -67,7 +68,7 @@ private:
     OsFamily targetOs_ = OsFamily::Unknown;
     format::PathTokenMap sourceFolders_;
     format::PathTokenMap targetFolders_;
-    QHash<QString, QString> renames_;   ///< original token path -> applied token path
+    QHash<QString, QString> renames_;  ///< original token path -> applied token path
     const StateRelocator* relocator_ = nullptr;
 };
 

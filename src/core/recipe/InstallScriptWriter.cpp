@@ -96,8 +96,10 @@ QString InstallScriptWriter::buildShellScript(const InstallPlan& plan) const {
                   .arg(QDateTime::currentDateTime().toString(Qt::ISODate));
     script += QStringLiteral("# remove anything you do not want, then run it yourself.\n");
     script += QStringLiteral("#\n");
-    script += QStringLiteral("# Your files and settings are already restored. This only installs\n");
-    script += QStringLiteral("# the programs themselves, which cannot be copied between systems.\n\n");
+    script +=
+        QStringLiteral("# Your files and settings are already restored. This only installs\n");
+    script +=
+        QStringLiteral("# the programs themselves, which cannot be copied between systems.\n\n");
     script += QStringLiteral("set -e\n\n");
 
     if (nativeCommand.isEmpty()) {
@@ -136,7 +138,8 @@ QString InstallScriptWriter::buildShellScript(const InstallPlan& plan) const {
     }
 
     if (!flatpakPackages.isEmpty()) {
-        script += QStringLiteral("# Not in your distribution's repositories; available as Flatpaks\n");
+        script +=
+            QStringLiteral("# Not in your distribution's repositories; available as Flatpaks\n");
         script += QStringLiteral("if command -v flatpak >/dev/null 2>&1; then\n");
         script += QStringLiteral("    flatpak install -y flathub");
         for (const QString& package : flatpakPackages) {
@@ -178,8 +181,10 @@ QString InstallScriptWriter::buildPowerShellScript(const InstallPlan& plan) cons
                   .arg(QDateTime::currentDateTime().toString(Qt::ISODate));
     script += QStringLiteral("# remove anything you do not want, then run it yourself.\n");
     script += QStringLiteral("#\n");
-    script += QStringLiteral("# Your files and settings are already restored. This only installs\n");
-    script += QStringLiteral("# the programs themselves, which cannot be copied between systems.\n\n");
+    script +=
+        QStringLiteral("# Your files and settings are already restored. This only installs\n");
+    script +=
+        QStringLiteral("# the programs themselves, which cannot be copied between systems.\n\n");
     script += QStringLiteral("$ErrorActionPreference = 'Continue'\n\n");
 
     if (!plan.installable.isEmpty()) {

@@ -46,7 +46,7 @@ public:
 
     /// Writes a nested record: the callback fills a temporary buffer which is
     /// then emitted as a length-delimited field.
-    template <typename Fn>
+    template<typename Fn>
     void putRecord(std::uint32_t field, Fn&& fill) {
         ByteBuffer nested;
         ByteWriter writer(nested);

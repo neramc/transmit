@@ -1,0 +1,41 @@
+# Formatting is settled here so it never has to be discussed in review.
+Language: Cpp
+BasedOnStyle: Google
+
+ColumnLimit: 100
+IndentWidth: 4
+AccessModifierOffset: -4
+DerivePointerAlignment: false
+PointerAlignment: Left
+
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakTemplateDeclarations: Yes
+BreakBeforeBraces: Attach
+SpaceAfterTemplateKeyword: false
+
+# Qt headers first, then the standard library, then our own - so a missing
+# include in one of our headers surfaces rather than being masked.
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^<Q.*'
+    Priority: 1
+  - Regex: '^<.*\.h>'
+    Priority: 3
+  - Regex: '^<.*'
+    Priority: 2
+  - Regex: '^"(core|format|platform|app)/'
+    Priority: 4
+  - Regex: '.*'
+    Priority: 5
+---
+# The macOS platform files are Objective-C++; same rules, different language tag.
+Language: ObjC
+BasedOnStyle: Google
+ColumnLimit: 100
+IndentWidth: 4
+AccessModifierOffset: -4
+PointerAlignment: Left
+ObjCBlockIndentWidth: 4
+ObjCSpaceAfterProperty: true

@@ -18,11 +18,11 @@ namespace transmit::format {
 /// the manifest lets the restore side offer them as independent choices.
 enum class DomainId : std::uint8_t {
     Unknown = 0,
-    UserData = 1,       ///< documents, pictures, downloads, ...
-    AppState = 2,       ///< application settings, profiles and databases
-    SystemSettings = 3, ///< normalised OS preferences
-    Secrets = 4,        ///< opt-in credentials, always encrypted
-    AppInventory = 5,   ///< the list of installed applications
+    UserData = 1,        ///< documents, pictures, downloads, ...
+    AppState = 2,        ///< application settings, profiles and databases
+    SystemSettings = 3,  ///< normalised OS preferences
+    Secrets = 4,         ///< opt-in credentials, always encrypted
+    AppInventory = 5,    ///< the list of installed applications
 };
 
 std::string_view domainName(DomainId domain) noexcept;
@@ -99,14 +99,14 @@ struct ManifestEntry {
 /// this to translate paths and to explain what it is looking at.
 struct SourceEnvironment {
     OsFamily os = OsFamily::Unknown;
-    std::string osName;         ///< "Windows 11 Pro", "Ubuntu 24.04", "macOS 14.5"
+    std::string osName;  ///< "Windows 11 Pro", "Ubuntu 24.04", "macOS 14.5"
     std::string osVersion;
-    std::string distroId;       ///< /etc/os-release ID, empty off Linux
+    std::string distroId;            ///< /etc/os-release ID, empty off Linux
     std::string desktopEnvironment;  ///< GNOME, KDE, ... empty off Linux
     std::string hostName;
     std::string userName;
     std::string homeDirectory;
-    std::string appVersion;     ///< Transmit version that wrote the archive
+    std::string appVersion;  ///< Transmit version that wrote the archive
     std::int64_t capturedUnix = 0;
 
     /// The known-folder table as it was on the source machine, so an absolute
@@ -131,7 +131,7 @@ struct BlockRecord {
     std::uint32_t blockId = 0;
     std::uint64_t streamOffset = 0;  ///< offset of the block header in the logical stream
     std::uint64_t rawSize = 0;
-    std::uint64_t storedSize = 0;    ///< bytes on disk, after compression and encryption
+    std::uint64_t storedSize = 0;  ///< bytes on disk, after compression and encryption
     CodecId codec = CodecId::Zstd;
     bool encrypted = false;
 };

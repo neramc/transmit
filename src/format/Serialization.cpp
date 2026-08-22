@@ -18,9 +18,13 @@ void ByteWriter::putSignedVarint(std::int64_t value) {
     putVarint(encoded);
 }
 
-void ByteWriter::putFixed32(std::uint32_t value) { appendLe<std::uint32_t>(sink_, value); }
+void ByteWriter::putFixed32(std::uint32_t value) {
+    appendLe<std::uint32_t>(sink_, value);
+}
 
-void ByteWriter::putFixed64(std::uint64_t value) { appendLe<std::uint64_t>(sink_, value); }
+void ByteWriter::putFixed64(std::uint64_t value) {
+    appendLe<std::uint64_t>(sink_, value);
+}
 
 void ByteWriter::putDouble(double value) {
     std::uint64_t raw = 0;
@@ -28,7 +32,9 @@ void ByteWriter::putDouble(double value) {
     putFixed64(raw);
 }
 
-void ByteWriter::putRaw(ByteView data) { sink_.insert(sink_.end(), data.begin(), data.end()); }
+void ByteWriter::putRaw(ByteView data) {
+    sink_.insert(sink_.end(), data.begin(), data.end());
+}
 
 void ByteWriter::putTag(std::uint32_t field, WireType type) {
     putVarint((static_cast<std::uint64_t>(field) << 3) | static_cast<std::uint64_t>(type));

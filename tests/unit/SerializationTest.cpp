@@ -1,6 +1,6 @@
-#include <gtest/gtest.h>
-
 #include <limits>
+
+#include <gtest/gtest.h>
 
 #include "format/Serialization.h"
 
@@ -8,15 +8,10 @@ namespace transmit::format {
 namespace {
 
 TEST(Varint, RoundTripsAcrossTheWholeRange) {
-    const std::vector<std::uint64_t> values = {0u,
-                                               1u,
-                                               127u,
-                                               128u,
-                                               300u,
-                                               16383u,
-                                               16384u,
-                                               1u << 31,
-                                               std::numeric_limits<std::uint64_t>::max()};
+    const std::vector<std::uint64_t> values = {
+        0u,     1u,       127u,
+        128u,   300u,     16383u,
+        16384u, 1u << 31, std::numeric_limits<std::uint64_t>::max()};
     ByteBuffer buffer;
     ByteWriter writer(buffer);
     for (const std::uint64_t value : values) {
@@ -45,7 +40,11 @@ TEST(SignedVarint, KeepsNegativeValuesShort) {
 }
 
 TEST(SignedVarint, RoundTripsTimestamps) {
-    const std::vector<std::int64_t> values = {0, 1, -1, 1710000000000000000LL, -1710000000LL,
+    const std::vector<std::int64_t> values = {0,
+                                              1,
+                                              -1,
+                                              1710000000000000000LL,
+                                              -1710000000LL,
                                               std::numeric_limits<std::int64_t>::min(),
                                               std::numeric_limits<std::int64_t>::max()};
     ByteBuffer buffer;
@@ -102,9 +101,9 @@ TEST(TaggedFields, SkipsUnknownFieldsOfEveryWireType) {
     ByteBuffer buffer;
     ByteWriter writer(buffer);
     writer.putUInt(1, 7);
-    writer.putUInt(900, 12345);          // unknown varint
-    writer.putString(901, "future");     // unknown bytes
-    writer.putDoubleField(902, 2.25);    // unknown fixed64
+    writer.putUInt(900, 12345);        // unknown varint
+    writer.putString(901, "future");   // unknown bytes
+    writer.putDoubleField(902, 2.25);  // unknown fixed64
     writer.putString(2, "still here");
 
     ByteReader reader(buffer);

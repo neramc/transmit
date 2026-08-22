@@ -56,8 +56,7 @@ bool isPlausibleTextFile(const QFileInfo& info) {
         QStringLiteral("rc"),   QStringLiteral("js"),   QStringLiteral("lua")};
 
     constexpr qint64 kMaxScanBytes = 4 * 1024 * 1024;
-    return info.size() <= kMaxScanBytes &&
-           suffixes.contains(info.suffix().toLower());
+    return info.size() <= kMaxScanBytes && suffixes.contains(info.suffix().toLower());
 }
 
 }  // namespace
@@ -83,8 +82,8 @@ void PathRewriter::planForRule(const RecipeRewriteRule& rule, const QString& sta
         } else if (rule.format == QLatin1String("sqlite")) {
             edits = rewriters::rewriteSqlite(path, rule.table, rule.column, translator_, appId);
         } else if (rule.format == QLatin1String("text")) {
-            edits = rewriters::rewriteText(path, rule.pattern, rule.captureGroup, translator_,
-                                           appId);
+            edits =
+                rewriters::rewriteText(path, rule.pattern, rule.captureGroup, translator_, appId);
         } else {
             qCWarning(logRewrite) << "unknown rewrite format" << rule.format << "for" << appId;
             continue;

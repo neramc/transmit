@@ -88,8 +88,7 @@ std::optional<QString> PathTranslator::translate(const QString& sourcePath) cons
         tokenised = relocator_->relocate(tokenised);
     }
 
-    const QString relative =
-        applyRenames(tokenised.token, fromUtf8(tokenised.relative));
+    const QString relative = applyRenames(tokenised.token, fromUtf8(tokenised.relative));
 
     const auto resolved =
         targetFolders_.resolve(format::TokenizedPath{tokenised.token, toUtf8(relative)});

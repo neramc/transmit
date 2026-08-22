@@ -39,7 +39,8 @@ std::array<Byte, kBlockHeaderSize> encodeBlockHeader(const BlockHeaderFields& fi
     std::array<Byte, kBlockHeaderSize> raw{};
     std::copy(kBlockMagic.begin(), kBlockMagic.end(), raw.begin());
     writeLe<std::uint32_t>(MutableByteView(raw).subspan(4), fields.blockId);
-    writeLe<std::uint16_t>(MutableByteView(raw).subspan(8), static_cast<std::uint16_t>(fields.codec));
+    writeLe<std::uint16_t>(MutableByteView(raw).subspan(8),
+                           static_cast<std::uint16_t>(fields.codec));
     writeLe<std::uint16_t>(MutableByteView(raw).subspan(10), fields.flags);
     writeLe<std::uint64_t>(MutableByteView(raw).subspan(12), fields.rawSize);
     writeLe<std::uint64_t>(MutableByteView(raw).subspan(20), fields.storedSize);
@@ -83,8 +84,10 @@ std::array<Byte, ArchiveHeader::kSize> ArchiveHeader::encode() const {
     writeLe<std::int64_t>(MutableByteView(raw).subspan(24), createdUnix);
     std::copy(kdf.salt.begin(), kdf.salt.end(), raw.begin() + 32);
     writeLe<std::uint32_t>(MutableByteView(raw).subspan(48), kdf.logN);
-    writeLe<std::uint16_t>(MutableByteView(raw).subspan(52), static_cast<std::uint16_t>(kdf.blockFactor));
-    writeLe<std::uint16_t>(MutableByteView(raw).subspan(54), static_cast<std::uint16_t>(kdf.parallelism));
+    writeLe<std::uint16_t>(MutableByteView(raw).subspan(52),
+                           static_cast<std::uint16_t>(kdf.blockFactor));
+    writeLe<std::uint16_t>(MutableByteView(raw).subspan(54),
+                           static_cast<std::uint16_t>(kdf.parallelism));
     std::copy(keyCheck.begin(), keyCheck.end(), raw.begin() + 56);
     const std::uint32_t checksum = crc32(ByteView(raw).subspan(0, 88));
     writeLe<std::uint32_t>(MutableByteView(raw).subspan(88), checksum);
@@ -167,8 +170,8 @@ Result<std::unique_ptr<ArchiveWriter>> ArchiveWriter::create(const std::filesyst
 
     if (!isCodecAvailable(writer->profile_.codec)) {
         return makeError(ErrorCode::UnsupportedCodec, "the '",
-                         std::string(presetName(options.preset)),
-                         "' preset needs the ", std::string(codecName(writer->profile_.codec)),
+                         std::string(presetName(options.preset)), "' preset needs the ",
+                         std::string(codecName(writer->profile_.codec)),
                          " codec, which this build does not include");
     }
 
@@ -216,8 +219,8 @@ Result<PreparedBlock> ArchiveWriter::prepare(std::uint32_t blockId, ByteView raw
     // Storing beats compressing when the codec barely helped: it costs nothing
     // to decompress later and avoids inflating already-compressed payloads.
     const bool worthCompressing =
-        !raw.empty() &&
-        static_cast<double>(compressed.size()) < static_cast<double>(raw.size()) * kMinimumCompressionGain;
+        !raw.empty() && static_cast<double>(compressed.size()) <
+                            static_cast<double>(raw.size()) * kMinimumCompressionGain;
 
     if (worthCompressing) {
         block.codec = profile_.codec;
@@ -318,7 +321,9 @@ Status ArchiveWriter::finish(Manifest& manifest) {
     return ok();
 }
 
-const std::vector<std::filesystem::path>& ArchiveWriter::parts() const { return sink_->parts(); }
+const std::vector<std::filesystem::path>& ArchiveWriter::parts() const {
+    return sink_->parts();
+}
 
 // ----------------------------------------------------------------- reader
 
@@ -340,8 +345,8 @@ Result<std::unique_ptr<ArchiveReader>> ArchiveReader::open(const std::filesystem
     reader->header_ = header;
 
     std::array<Byte, ArchiveFooter::kSize> footerBytes{};
-    TRANSMIT_CHECK(reader->source_->readAt(
-        reader->source_->logicalSize() - ArchiveFooter::kSize, footerBytes));
+    TRANSMIT_CHECK(reader->source_->readAt(reader->source_->logicalSize() - ArchiveFooter::kSize,
+                                           footerBytes));
     TRANSMIT_TRY(footer, ArchiveFooter::decode(footerBytes));
     reader->footer_ = footer;
 
@@ -441,8 +446,7 @@ Result<ByteView> ArchiveReader::readBlock(std::uint32_t blockId) {
     TRANSMIT_TRY(loaded, manifest());
     const BlockRecord* record = loaded->findBlock(blockId);
     if (record == nullptr) {
-        return makeError(ErrorCode::NotFound, "the archive has no block ",
-                         std::to_string(blockId));
+        return makeError(ErrorCode::NotFound, "the archive has no block ", std::to_string(blockId));
     }
 
     TRANSMIT_TRY(raw, loadBlock(*record));
@@ -470,9 +474,8 @@ Result<ByteBuffer> ArchiveReader::readEntry(const ManifestEntry& entry) {
                          "' points outside its block");
     }
 
-    const ByteView slice =
-        block.subspan(static_cast<std::size_t>(entry.location.offset),
-                      static_cast<std::size_t>(entry.location.length));
+    const ByteView slice = block.subspan(static_cast<std::size_t>(entry.location.offset),
+                                         static_cast<std::size_t>(entry.location.length));
 
     const auto digest = Blake2b::hash256(slice);
     if (digest != entry.contentHash) {
@@ -501,8 +504,12 @@ void ArchiveReader::setBlockCacheLimit(std::size_t blocks) noexcept {
     cacheLimit_ = blocks == 0 ? 1 : blocks;
 }
 
-std::size_t ArchiveReader::partCount() const { return source_->partCount(); }
+std::size_t ArchiveReader::partCount() const {
+    return source_->partCount();
+}
 
-const std::vector<std::filesystem::path>& ArchiveReader::parts() const { return source_->parts(); }
+const std::vector<std::filesystem::path>& ArchiveReader::parts() const {
+    return source_->parts();
+}
 
 }  // namespace transmit::format

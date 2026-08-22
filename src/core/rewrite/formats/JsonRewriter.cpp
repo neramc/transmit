@@ -135,8 +135,8 @@ QList<RewriteEdit> rewriteJson(const QString& path, const QStringList& keys,
     if (!staged.open(QIODevice::WriteOnly)) {
         return {};
     }
-    staged.write(QJsonDocument(root).toJson(wasIndented ? QJsonDocument::Indented
-                                                        : QJsonDocument::Compact));
+    staged.write(
+        QJsonDocument(root).toJson(wasIndented ? QJsonDocument::Indented : QJsonDocument::Compact));
     return edits;
 }
 

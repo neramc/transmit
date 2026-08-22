@@ -37,8 +37,7 @@ bool runSucceeds(const QString& program, const QStringList& arguments) {
 }
 
 QString defaultsRead(const QString& domain, const QString& key) {
-    return run(QStringLiteral("defaults"),
-               {QStringLiteral("read"), domain, key});
+    return run(QStringLiteral("defaults"), {QStringLiteral("read"), domain, key});
 }
 
 bool defaultsWrite(const QString& domain, const QString& key, const QString& type,
@@ -49,9 +48,7 @@ bool defaultsWrite(const QString& domain, const QString& key, const QString& typ
 
 }  // namespace
 
-QString MacOsSettingsProvider::describeEnvironment() const {
-    return QSysInfo::prettyProductName();
-}
+QString MacOsSettingsProvider::describeEnvironment() const { return QSysInfo::prettyProductName(); }
 
 QList<SettingValue> MacOsSettingsProvider::readAll() const {
     QList<SettingValue> values;
@@ -81,8 +78,8 @@ QList<SettingValue> MacOsSettingsProvider::readAll() const {
                : QStringLiteral("false"));
 
     record(SettingKey::MouseNaturalScroll,
-           defaultsRead(QStringLiteral("-g"),
-                        QStringLiteral("com.apple.swipescrolldirection")) == QLatin1String("1")
+           defaultsRead(QStringLiteral("-g"), QStringLiteral("com.apple.swipescrolldirection")) ==
+                   QLatin1String("1")
                ? QStringLiteral("true")
                : QStringLiteral("false"));
     record(SettingKey::AccessibilityReduceMotion,
@@ -138,8 +135,8 @@ ApplyResult MacOsSettingsProvider::apply(const SettingValue& value) const {
 
         case SettingKey::DesktopWallpaper:
             if (!QFile::exists(value.value)) {
-                return {ApplyOutcome::Failed,
-                        QStringLiteral("the image is not on this computer"), {}};
+                return {
+                    ApplyOutcome::Failed, QStringLiteral("the image is not on this computer"), {}};
             }
             return runSucceeds(
                        QStringLiteral("osascript"),
@@ -151,8 +148,7 @@ ApplyResult MacOsSettingsProvider::apply(const SettingValue& value) const {
                        : refused();
 
         case SettingKey::ClockUses24Hour:
-            return defaultsWrite(QStringLiteral("-g"),
-                                 QStringLiteral("AppleICUForce24HourTime"),
+            return defaultsWrite(QStringLiteral("-g"), QStringLiteral("AppleICUForce24HourTime"),
                                  QStringLiteral("-bool"), value.value)
                        ? applied()
                        : refused();
@@ -192,15 +188,18 @@ ApplyResult MacOsSettingsProvider::apply(const SettingValue& value) const {
 
         case SettingKey::LocaleLanguage:
         case SettingKey::LocaleFormats:
-            return {ApplyOutcome::NeedsPrivilege,
-                    QStringLiteral("the display language is changed in System Settings"),
-                    QStringLiteral("open 'x-apple.systempreferences:com.apple.Localization-Settings.extension'")};
+            return {
+                ApplyOutcome::NeedsPrivilege,
+                QStringLiteral("the display language is changed in System Settings"),
+                QStringLiteral(
+                    "open 'x-apple.systempreferences:com.apple.Localization-Settings.extension'")};
 
         case SettingKey::DefaultBrowser:
         case SettingKey::DefaultMailClient:
             return {ApplyOutcome::NeedsPrivilege,
                     QStringLiteral("macOS asks you to confirm this change itself"),
-                    QStringLiteral("open 'x-apple.systempreferences:com.apple.Desktop-Settings.extension'")};
+                    QStringLiteral(
+                        "open 'x-apple.systempreferences:com.apple.Desktop-Settings.extension'")};
 
         case SettingKey::AppearanceAccent:
         case SettingKey::KeyboardLayouts:
@@ -210,7 +209,8 @@ ApplyResult MacOsSettingsProvider::apply(const SettingValue& value) const {
             break;
     }
     return {ApplyOutcome::Unsupported,
-            QStringLiteral("macOS has no equivalent that can be set from here"), {}};
+            QStringLiteral("macOS has no equivalent that can be set from here"),
+            {}};
 }
 
 }  // namespace transmit::platform

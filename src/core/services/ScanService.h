@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QRegularExpression>
 #include <QString>
+
 #include <atomic>
 #include <functional>
 

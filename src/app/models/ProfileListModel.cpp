@@ -21,10 +21,14 @@ QVariant ProfileListModel::data(const QModelIndex& index, int role) const {
     const core::CaptureProfile& profile = profiles_.at(index.row());
 
     switch (role) {
-        case IdRole:          return profile.id;
-        case DisplayNameRole: return profile.displayName;
-        case DescriptionRole: return profile.description;
-        case SizeHintRole:    return profile.sizeHint;
+        case IdRole:
+            return profile.id;
+        case DisplayNameRole:
+            return profile.displayName;
+        case DescriptionRole:
+            return profile.description;
+        case SizeHintRole:
+            return profile.sizeHint;
         case DomainSummaryRole: {
             // Names the user recognises, rather than the internal domain ids.
             QStringList parts;

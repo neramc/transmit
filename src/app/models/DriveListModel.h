@@ -3,6 +3,7 @@
 #include <QAbstractListModel>
 #include <QQmlEngine>
 #include <QTimer>
+
 #include <memory>
 
 #include "platform/PlatformService.h"

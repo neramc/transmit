@@ -173,7 +173,8 @@ public:
 
     /// Reads every block and checks its hash. Used by `transmit verify` and
     /// before a restore when the user asks for a full check.
-    Status verifyAllBlocks(const std::function<bool(std::size_t done, std::size_t total)>& progress);
+    Status verifyAllBlocks(
+        const std::function<bool(std::size_t done, std::size_t total)>& progress);
 
     void setBlockCacheLimit(std::size_t blocks) noexcept;
 

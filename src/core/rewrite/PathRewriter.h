@@ -31,8 +31,8 @@ public:
     [[nodiscard]] static QStringList supportedFormats();
 
 private:
-    void planForRule(const RecipeRewriteRule& rule, const QString& stateRoot,
-                     const QString& appId, RewritePlan& plan) const;
+    void planForRule(const RecipeRewriteRule& rule, const QString& stateRoot, const QString& appId,
+                     RewritePlan& plan) const;
 
     const PathTranslator& translator_;
 };

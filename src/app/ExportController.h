@@ -4,10 +4,11 @@
 #include <QObject>
 #include <QQmlEngine>
 #include <QString>
+
 #include <memory>
 
-#include "core/continuity/ContinuityTypes.h"
 #include "app/models/ContinuityReportModel.h"
+#include "core/continuity/ContinuityTypes.h"
 #include "core/services/ExportService.h"
 #include "core/services/ScanService.h"
 #include "platform/PlatformService.h"

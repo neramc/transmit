@@ -3,6 +3,7 @@
 #include <QList>
 #include <QString>
 #include <QStringList>
+
 #include <memory>
 
 #include "format/PathToken.h"
@@ -18,7 +19,7 @@ using format::PathTokenMap;
 /// side shows the user before touching anything.
 struct EnvironmentInfo {
     OsFamily os = OsFamily::Unknown;
-    QString osName;              ///< "Windows 11 Pro", "Ubuntu 24.04.1 LTS", "macOS 14.5"
+    QString osName;  ///< "Windows 11 Pro", "Ubuntu 24.04.1 LTS", "macOS 14.5"
     QString osVersion;
     QString distroId;            ///< /etc/os-release ID; empty off Linux
     QString distroLike;          ///< ID_LIKE, so derivatives map to their parent
@@ -34,7 +35,7 @@ struct EnvironmentInfo {
 struct StorageVolume {
     QString displayName;
     QString rootPath;
-    QString fileSystem;      ///< "vfat", "exfat", "NTFS", "apfs", ...
+    QString fileSystem;  ///< "vfat", "exfat", "NTFS", "apfs", ...
     quint64 totalBytes = 0;
     quint64 freeBytes = 0;
     bool removable = false;
@@ -75,7 +76,7 @@ enum class PackageSource {
 QString packageSourceName(PackageSource source);
 
 struct InstalledApp {
-    QString id;           ///< package name, bundle id or registry key
+    QString id;  ///< package name, bundle id or registry key
     QString displayName;
     QString version;
     QString publisher;

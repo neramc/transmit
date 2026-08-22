@@ -9,9 +9,8 @@ namespace {
 constexpr std::string_view kWindowsIllegal = "<>:\"/\\|?*";
 
 constexpr std::array<std::string_view, 22> kReservedNames = {
-    "con", "prn", "aux", "nul",
-    "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
-    "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9"};
+    "con",  "prn",  "aux",  "nul",  "com1", "com2", "com3", "com4", "com5", "com6", "com7",
+    "com8", "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9"};
 
 char lowerAscii(char c) noexcept {
     return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
@@ -42,14 +41,22 @@ std::size_t utf8SafeLength(std::string_view text, std::size_t limit) {
 
 std::string_view renameReasonName(RenameReason reason) noexcept {
     switch (reason) {
-        case RenameReason::None:               return "none";
-        case RenameReason::IllegalCharacter:   return "illegal-character";
-        case RenameReason::ReservedName:       return "reserved-name";
-        case RenameReason::TrailingDotOrSpace: return "trailing-dot-or-space";
-        case RenameReason::EmptyComponent:     return "empty-component";
-        case RenameReason::CaseCollision:      return "case-collision";
-        case RenameReason::ExactCollision:     return "exact-collision";
-        case RenameReason::PathTooLong:        return "path-too-long";
+        case RenameReason::None:
+            return "none";
+        case RenameReason::IllegalCharacter:
+            return "illegal-character";
+        case RenameReason::ReservedName:
+            return "reserved-name";
+        case RenameReason::TrailingDotOrSpace:
+            return "trailing-dot-or-space";
+        case RenameReason::EmptyComponent:
+            return "empty-component";
+        case RenameReason::CaseCollision:
+            return "case-collision";
+        case RenameReason::ExactCollision:
+            return "exact-collision";
+        case RenameReason::PathTooLong:
+            return "path-too-long";
     }
     return "none";
 }
@@ -112,9 +119,9 @@ std::string NameSanitizer::sanitizeComponent(std::string_view component,
     const bool windowsRules = usesWindowsPathStyle(options_.target);
     for (const char c : component) {
         const auto raw = static_cast<unsigned char>(c);
-        const bool illegal =
-            raw < 0x20 || (windowsRules && kWindowsIllegal.find(c) != std::string_view::npos) ||
-            (!windowsRules && c == '/');
+        const bool illegal = raw < 0x20 ||
+                             (windowsRules && kWindowsIllegal.find(c) != std::string_view::npos) ||
+                             (!windowsRules && c == '/');
         if (illegal) {
             note(RenameReason::IllegalCharacter);
             result += '_';
@@ -205,9 +212,8 @@ std::string NameSanitizer::sanitizeRelativePath(std::string_view relativePath) {
         const std::string_view component(original.data() + start, end - start);
 
         if (!component.empty() && component != ".") {
-            originalPrefix = originalPrefix.empty()
-                                 ? std::string(component)
-                                 : originalPrefix + "/" + std::string(component);
+            originalPrefix = originalPrefix.empty() ? std::string(component)
+                                                    : originalPrefix + "/" + std::string(component);
 
             if (const auto cached = mapping_.find(originalPrefix); cached != mapping_.end()) {
                 appliedPrefix = cached->second;

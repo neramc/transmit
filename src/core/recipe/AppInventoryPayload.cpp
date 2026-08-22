@@ -30,7 +30,7 @@ constexpr std::uint32_t kValue = 2;
 
 namespace state_field {
 constexpr std::uint32_t kRole = 1;
-constexpr std::uint32_t kOs = 2;      ///< repeated pair records
+constexpr std::uint32_t kOs = 2;  ///< repeated pair records
 constexpr std::uint32_t kExclude = 3;
 }  // namespace state_field
 
@@ -69,14 +69,20 @@ format::Result<QPair<QString, QString>> readPair(format::ByteView data) {
     return pair;
 }
 
-int gradeToInt(ContinuityGrade grade) { return static_cast<int>(grade); }
+int gradeToInt(ContinuityGrade grade) {
+    return static_cast<int>(grade);
+}
 
 ContinuityGrade gradeFromInt(std::uint64_t value) {
     switch (value) {
-        case 1: return ContinuityGrade::Adapted;
-        case 2: return ContinuityGrade::Manual;
-        case 3: return ContinuityGrade::Impossible;
-        default: return ContinuityGrade::Full;
+        case 1:
+            return ContinuityGrade::Adapted;
+        case 2:
+            return ContinuityGrade::Manual;
+        case 3:
+            return ContinuityGrade::Impossible;
+        default:
+            return ContinuityGrade::Full;
     }
 }
 
@@ -188,24 +194,35 @@ QList<InventoryEntry> decodeAppInventory(format::ByteView data) {
 
             switch (entryTag->field) {
                 case entry_field::kRecipeId:
-                    if (const auto v = entryReader.getString()) entry.recipeId = fromUtf8(*v);
-                    else damaged = true;
+                    if (const auto v = entryReader.getString())
+                        entry.recipeId = fromUtf8(*v);
+                    else
+                        damaged = true;
                     break;
                 case entry_field::kDisplayName:
-                    if (const auto v = entryReader.getString()) entry.displayName = fromUtf8(*v);
-                    else damaged = true;
+                    if (const auto v = entryReader.getString())
+                        entry.displayName = fromUtf8(*v);
+                    else
+                        damaged = true;
                     break;
                 case entry_field::kVersion:
-                    if (const auto v = entryReader.getString()) entry.installedVersion = fromUtf8(*v);
-                    else damaged = true;
+                    if (const auto v = entryReader.getString())
+                        entry.installedVersion = fromUtf8(*v);
+                    else
+                        damaged = true;
                     break;
                 case entry_field::kPackageSource:
-                    if (const auto v = entryReader.getString()) entry.packageSource = fromUtf8(*v);
-                    else damaged = true;
+                    if (const auto v = entryReader.getString())
+                        entry.packageSource = fromUtf8(*v);
+                    else
+                        damaged = true;
                     break;
                 case entry_field::kInstallId: {
                     const auto bytes = entryReader.getBytes();
-                    if (!bytes) { damaged = true; break; }
+                    if (!bytes) {
+                        damaged = true;
+                        break;
+                    }
                     if (const auto pair = readPair(*bytes)) {
                         entry.installIds.insert(pair->first, pair->second);
                     }
@@ -213,15 +230,20 @@ QList<InventoryEntry> decodeAppInventory(format::ByteView data) {
                 }
                 case entry_field::kState: {
                     const auto bytes = entryReader.getBytes();
-                    if (!bytes) { damaged = true; break; }
+                    if (!bytes) {
+                        damaged = true;
+                        break;
+                    }
 
                     RecipeStatePath state;
                     ByteReader stateReader(*bytes);
                     while (!stateReader.atEnd()) {
                         const auto stateTag = stateReader.getTag();
-                        if (!stateTag) break;
+                        if (!stateTag)
+                            break;
                         if (stateTag->field == state_field::kRole) {
-                            if (const auto v = stateReader.getString()) state.role = fromUtf8(*v);
+                            if (const auto v = stateReader.getString())
+                                state.role = fromUtf8(*v);
                         } else if (stateTag->field == state_field::kOs) {
                             if (const auto nested = stateReader.getBytes()) {
                                 if (const auto pair = readPair(*nested)) {
@@ -241,37 +263,49 @@ QList<InventoryEntry> decodeAppInventory(format::ByteView data) {
                 }
                 case entry_field::kRewrite: {
                     const auto bytes = entryReader.getBytes();
-                    if (!bytes) { damaged = true; break; }
+                    if (!bytes) {
+                        damaged = true;
+                        break;
+                    }
 
                     RecipeRewriteRule rule;
                     ByteReader ruleReader(*bytes);
                     while (!ruleReader.atEnd()) {
                         const auto ruleTag = ruleReader.getTag();
-                        if (!ruleTag) break;
+                        if (!ruleTag)
+                            break;
                         switch (ruleTag->field) {
                             case rewrite_field::kFile:
-                                if (const auto v = ruleReader.getString()) rule.filePattern = fromUtf8(*v);
+                                if (const auto v = ruleReader.getString())
+                                    rule.filePattern = fromUtf8(*v);
                                 break;
                             case rewrite_field::kFormat:
-                                if (const auto v = ruleReader.getString()) rule.format = fromUtf8(*v);
+                                if (const auto v = ruleReader.getString())
+                                    rule.format = fromUtf8(*v);
                                 break;
                             case rewrite_field::kKey:
-                                if (const auto v = ruleReader.getString()) rule.keys << fromUtf8(*v);
+                                if (const auto v = ruleReader.getString())
+                                    rule.keys << fromUtf8(*v);
                                 break;
                             case rewrite_field::kPattern:
-                                if (const auto v = ruleReader.getString()) rule.pattern = fromUtf8(*v);
+                                if (const auto v = ruleReader.getString())
+                                    rule.pattern = fromUtf8(*v);
                                 break;
                             case rewrite_field::kGroup:
-                                if (const auto v = ruleReader.getVarint()) rule.captureGroup = static_cast<int>(*v);
+                                if (const auto v = ruleReader.getVarint())
+                                    rule.captureGroup = static_cast<int>(*v);
                                 break;
                             case rewrite_field::kTable:
-                                if (const auto v = ruleReader.getString()) rule.table = fromUtf8(*v);
+                                if (const auto v = ruleReader.getString())
+                                    rule.table = fromUtf8(*v);
                                 break;
                             case rewrite_field::kColumn:
-                                if (const auto v = ruleReader.getString()) rule.column = fromUtf8(*v);
+                                if (const auto v = ruleReader.getString())
+                                    rule.column = fromUtf8(*v);
                                 break;
                             default:
-                                if (!ruleReader.skip(ruleTag->type)) return entries;
+                                if (!ruleReader.skip(ruleTag->type))
+                                    return entries;
                                 break;
                         }
                     }
@@ -279,12 +313,16 @@ QList<InventoryEntry> decodeAppInventory(format::ByteView data) {
                     break;
                 }
                 case entry_field::kGrade:
-                    if (const auto v = entryReader.getVarint()) entry.expectedGrade = gradeFromInt(*v);
-                    else damaged = true;
+                    if (const auto v = entryReader.getVarint())
+                        entry.expectedGrade = gradeFromInt(*v);
+                    else
+                        damaged = true;
                     break;
                 case entry_field::kNote:
-                    if (const auto v = entryReader.getString()) entry.note = fromUtf8(*v);
-                    else damaged = true;
+                    if (const auto v = entryReader.getString())
+                        entry.note = fromUtf8(*v);
+                    else
+                        damaged = true;
                     break;
                 default:
                     if (!entryReader.skip(entryTag->type)) {

@@ -22,10 +22,10 @@ using format::PathTokenId;
 /// report is built from these, so a user can see at a glance what came across
 /// untouched and what still needs their attention.
 enum class ContinuityGrade {
-    Full,       ///< byte-for-byte identical on the new machine
-    Adapted,    ///< carried across with a translation (paths rewritten, a setting approximated)
-    Manual,     ///< possible, but the user has to do something (run a script, click a setting)
-    Impossible, ///< cannot cross this OS boundary at all
+    Full,        ///< byte-for-byte identical on the new machine
+    Adapted,     ///< carried across with a translation (paths rewritten, a setting approximated)
+    Manual,      ///< possible, but the user has to do something (run a script, click a setting)
+    Impossible,  ///< cannot cross this OS boundary at all
 };
 
 QString continuityGradeName(ContinuityGrade grade);
@@ -43,11 +43,11 @@ struct ContinuityNote {
 /// of absolute paths, so the same profile means the right thing on every OS.
 struct CaptureRoot {
     PathTokenId token = PathTokenId::Home;
-    QString relative;              ///< empty captures the whole known folder
+    QString relative;  ///< empty captures the whole known folder
     DomainId domain = DomainId::UserData;
-    QString appId;                 ///< set for application state, so the report can group by app
+    QString appId;  ///< set for application state, so the report can group by app
     bool recursive = true;
-    QStringList excludePatterns;   ///< wildcard patterns matched against the relative path
+    QStringList excludePatterns;  ///< wildcard patterns matched against the relative path
 };
 
 /// What a capture should collect.
@@ -127,8 +127,8 @@ struct ExportReport {
 enum class ConflictPolicy {
     Skip,
     Overwrite,
-    KeepBoth,     ///< write alongside with a "~1" suffix
-    NewerWins,    ///< compare modification times
+    KeepBoth,   ///< write alongside with a "~1" suffix
+    NewerWins,  ///< compare modification times
 };
 
 QString conflictPolicyName(ConflictPolicy policy);
@@ -162,8 +162,8 @@ struct ImportRequest {
 };
 
 struct RestoredItem {
-    QString sourcePath;   ///< as recorded in the archive, e.g. {DOCUMENTS}/a.txt
-    QString targetPath;   ///< where it landed on this machine
+    QString sourcePath;  ///< as recorded in the archive, e.g. {DOCUMENTS}/a.txt
+    QString targetPath;  ///< where it landed on this machine
     ContinuityGrade grade = ContinuityGrade::Full;
     bool skipped = false;
     QString note;

@@ -1,7 +1,5 @@
 #include "platform/linux/LinuxPlatformService.h"
 
-#include "platform/linux/LinuxSettingsProvider.h"
-
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -16,6 +14,7 @@
 
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
+#include "platform/linux/LinuxSettingsProvider.h"
 
 namespace transmit::platform {
 namespace {
@@ -180,8 +179,9 @@ public:
         if (QStandardPaths::findExecutable(QStringLiteral("btrfs")).isEmpty()) {
             return nullptr;
         }
-        const QString target =
-            QStringLiteral("%1/.transmit-snapshot-%2").arg(subvolume).arg(QCoreApplication::applicationPid());
+        const QString target = QStringLiteral("%1/.transmit-snapshot-%2")
+                                   .arg(subvolume)
+                                   .arg(QCoreApplication::applicationPid());
 
         QProcess process;
         process.start(QStringLiteral("btrfs"),
@@ -300,8 +300,7 @@ EnvironmentInfo LinuxPlatformService::environment() const {
     info.os = OsFamily::Linux;
     info.distroId = osRelease.value(QStringLiteral("ID"));
     info.distroLike = osRelease.value(QStringLiteral("ID_LIKE"));
-    info.osName = osRelease.value(QStringLiteral("PRETTY_NAME"),
-                                  QSysInfo::prettyProductName());
+    info.osName = osRelease.value(QStringLiteral("PRETTY_NAME"), QSysInfo::prettyProductName());
     info.osVersion = osRelease.value(QStringLiteral("VERSION_ID"), QSysInfo::productVersion());
     info.hostName = QHostInfo::localHostName();
     info.userName = qEnvironmentVariable("USER", qEnvironmentVariable("LOGNAME"));
@@ -356,9 +355,8 @@ PathTokenMap LinuxPlatformService::knownFolders() const {
     map.setBase(PathTokenId::Pictures,
                 toUtf8(resolve(QStandardPaths::PicturesLocation, "XDG_PICTURES_DIR",
                                home + QStringLiteral("/Pictures"))));
-    map.setBase(PathTokenId::Music,
-                toUtf8(resolve(QStandardPaths::MusicLocation, "XDG_MUSIC_DIR",
-                               home + QStringLiteral("/Music"))));
+    map.setBase(PathTokenId::Music, toUtf8(resolve(QStandardPaths::MusicLocation, "XDG_MUSIC_DIR",
+                                                   home + QStringLiteral("/Music"))));
     map.setBase(PathTokenId::Videos,
                 toUtf8(resolve(QStandardPaths::MoviesLocation, "XDG_VIDEOS_DIR",
                                home + QStringLiteral("/Videos"))));
@@ -441,19 +439,18 @@ QList<InstalledApp> LinuxPlatformService::installedApplications() const {
 
     switch (native) {
         case PackageSource::Apt: {
-            const QString output = runCommand(
-                QStringLiteral("dpkg-query"),
-                {QStringLiteral("-W"), QStringLiteral("-f=${Package}\\t${Version}\\n")});
+            const QString output =
+                runCommand(QStringLiteral("dpkg-query"),
+                           {QStringLiteral("-W"), QStringLiteral("-f=${Package}\\t${Version}\\n")});
             appendPackages(apps, output, PackageSource::Apt,
                            QRegularExpression(QStringLiteral("^(\\S+)\\t(\\S*)$")));
             break;
         }
         case PackageSource::Dnf:
         case PackageSource::Zypper: {
-            const QString output =
-                runCommand(QStringLiteral("rpm"),
-                           {QStringLiteral("-qa"), QStringLiteral("--qf"),
-                            QStringLiteral("%{NAME}\\t%{VERSION}-%{RELEASE}\\n")});
+            const QString output = runCommand(
+                QStringLiteral("rpm"), {QStringLiteral("-qa"), QStringLiteral("--qf"),
+                                        QStringLiteral("%{NAME}\\t%{VERSION}-%{RELEASE}\\n")});
             appendPackages(apps, output, native,
                            QRegularExpression(QStringLiteral("^(\\S+)\\t(\\S*)$")));
             break;
@@ -465,15 +462,14 @@ QList<InstalledApp> LinuxPlatformService::installedApplications() const {
             break;
         }
         case PackageSource::Portage: {
-            const QString output =
-                runCommand(QStringLiteral("qlist"), {QStringLiteral("-ICv")});
+            const QString output = runCommand(QStringLiteral("qlist"), {QStringLiteral("-ICv")});
             appendPackages(apps, output, PackageSource::Portage,
                            QRegularExpression(QStringLiteral("^(\\S+)$")));
             break;
         }
         case PackageSource::Nix: {
-            const QString output =
-                runCommand(QStringLiteral("nix"), {QStringLiteral("profile"), QStringLiteral("list")});
+            const QString output = runCommand(QStringLiteral("nix"),
+                                              {QStringLiteral("profile"), QStringLiteral("list")});
             appendPackages(apps, output, PackageSource::Nix,
                            QRegularExpression(QStringLiteral("([^\\s#]+)$")));
             break;
@@ -485,8 +481,7 @@ QList<InstalledApp> LinuxPlatformService::installedApplications() const {
             break;
         }
         case PackageSource::Xbps: {
-            const QString output =
-                runCommand(QStringLiteral("xbps-query"), {QStringLiteral("-m")});
+            const QString output = runCommand(QStringLiteral("xbps-query"), {QStringLiteral("-m")});
             appendPackages(apps, output, PackageSource::Xbps,
                            QRegularExpression(QStringLiteral("^(\\S+?)-([^-]+)$")));
             break;
@@ -511,9 +506,8 @@ QList<InstalledApp> LinuxPlatformService::installedApplications() const {
 
     // Cross-distribution formats sit alongside whatever the system uses.
     const QString flatpak =
-        runCommand(QStringLiteral("flatpak"),
-                   {QStringLiteral("list"), QStringLiteral("--app"),
-                    QStringLiteral("--columns=application,version")});
+        runCommand(QStringLiteral("flatpak"), {QStringLiteral("list"), QStringLiteral("--app"),
+                                               QStringLiteral("--columns=application,version")});
     appendPackages(apps, flatpak, PackageSource::Flatpak,
                    QRegularExpression(QStringLiteral("^(\\S+)\\t?(\\S*)$")));
 
@@ -531,12 +525,11 @@ QList<InstalledApp> LinuxPlatformService::installedApplications() const {
         }
     }
 
-    for (const QString& directory :
-         {QDir::homePath() + QStringLiteral("/Applications"),
-          QDir::homePath() + QStringLiteral("/.local/bin")}) {
+    for (const QString& directory : {QDir::homePath() + QStringLiteral("/Applications"),
+                                     QDir::homePath() + QStringLiteral("/.local/bin")}) {
         const QDir dir(directory);
-        for (const QFileInfo& file : dir.entryInfoList(QStringList{QStringLiteral("*.AppImage")},
-                                                       QDir::Files)) {
+        for (const QFileInfo& file :
+             dir.entryInfoList(QStringList{QStringLiteral("*.AppImage")}, QDir::Files)) {
             InstalledApp app;
             app.id = file.completeBaseName();
             app.displayName = file.completeBaseName();
@@ -548,8 +541,7 @@ QList<InstalledApp> LinuxPlatformService::installedApplications() const {
     return apps;
 }
 
-QList<RunningApp> LinuxPlatformService::runningApplications(
-    const QStringList& processNames) const {
+QList<RunningApp> LinuxPlatformService::runningApplications(const QStringList& processNames) const {
     QList<RunningApp> running;
     if (processNames.isEmpty()) {
         return running;
@@ -610,16 +602,26 @@ std::unique_ptr<Snapshot> LinuxPlatformService::createSnapshot(const QStringList
 QString LinuxPlatformService::packageInstallCommand() const {
     const EnvironmentInfo info = environment();
     switch (packageSourceForDistro(info.distroId, info.distroLike)) {
-        case PackageSource::Apt:       return QStringLiteral("sudo apt install -y");
-        case PackageSource::Dnf:       return QStringLiteral("sudo dnf install -y");
-        case PackageSource::Zypper:    return QStringLiteral("sudo zypper install -y");
-        case PackageSource::Pacman:    return QStringLiteral("sudo pacman -S --needed --noconfirm");
-        case PackageSource::Portage:   return QStringLiteral("sudo emerge --ask=n");
-        case PackageSource::Nix:       return QStringLiteral("nix profile install nixpkgs#");
-        case PackageSource::Apk:       return QStringLiteral("sudo apk add");
-        case PackageSource::Xbps:      return QStringLiteral("sudo xbps-install -y");
-        case PackageSource::Slackware: return QStringLiteral("sudo slackpkg install");
-        default:                       return {};
+        case PackageSource::Apt:
+            return QStringLiteral("sudo apt install -y");
+        case PackageSource::Dnf:
+            return QStringLiteral("sudo dnf install -y");
+        case PackageSource::Zypper:
+            return QStringLiteral("sudo zypper install -y");
+        case PackageSource::Pacman:
+            return QStringLiteral("sudo pacman -S --needed --noconfirm");
+        case PackageSource::Portage:
+            return QStringLiteral("sudo emerge --ask=n");
+        case PackageSource::Nix:
+            return QStringLiteral("nix profile install nixpkgs#");
+        case PackageSource::Apk:
+            return QStringLiteral("sudo apk add");
+        case PackageSource::Xbps:
+            return QStringLiteral("sudo xbps-install -y");
+        case PackageSource::Slackware:
+            return QStringLiteral("sudo slackpkg install");
+        default:
+            return {};
     }
 }
 

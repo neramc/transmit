@@ -14,11 +14,11 @@ namespace transmit::format {
 
 enum class RenameReason : std::uint8_t {
     None = 0,
-    IllegalCharacter,   ///< < > : " / \ | ? * or a control character
-    ReservedName,       ///< CON, PRN, AUX, NUL, COM1-9, LPT1-9
-    TrailingDotOrSpace, ///< Windows silently strips these, so we rename first
+    IllegalCharacter,    ///< < > : " / \ | ? * or a control character
+    ReservedName,        ///< CON, PRN, AUX, NUL, COM1-9, LPT1-9
+    TrailingDotOrSpace,  ///< Windows silently strips these, so we rename first
     EmptyComponent,
-    CaseCollision,      ///< two names that differ only by case on a case-blind target
+    CaseCollision,  ///< two names that differ only by case on a case-blind target
     ExactCollision,
     PathTooLong,
 };

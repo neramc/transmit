@@ -33,16 +33,15 @@ TextEncoding detectEncoding(const QByteArray& raw) {
 }
 
 QString decode(const QByteArray& raw, const TextEncoding& form) {
-    QStringDecoder decoder(form.encoding,
-                           form.byteOrderMark ? QStringConverter::Flag::Default
+    QStringDecoder decoder(form.encoding, form.byteOrderMark
+                                              ? QStringConverter::Flag::Default
                                               : QStringConverter::Flag::ConvertInvalidToNull);
     return decoder.decode(raw);
 }
 
 QByteArray encode(const QString& text, const TextEncoding& form) {
-    QStringEncoder encoder(form.encoding,
-                           form.byteOrderMark ? QStringConverter::Flag::WriteBom
-                                              : QStringConverter::Flag::Default);
+    QStringEncoder encoder(form.encoding, form.byteOrderMark ? QStringConverter::Flag::WriteBom
+                                                             : QStringConverter::Flag::Default);
     return encoder.encode(text);
 }
 
@@ -96,8 +95,10 @@ QList<RewriteEdit> rewriteText(const QString& path, const QString& pattern, int 
         }
 
         replacements.append({match.capturedStart(group), match.capturedLength(group), rewritten});
-        edits.append(RewriteEdit{path, QStringLiteral("line %1").arg(text.left(match.capturedStart(group)).count(u'\n') + 1),
-                                 captured, rewritten, appId});
+        edits.append(RewriteEdit{
+            path,
+            QStringLiteral("line %1").arg(text.left(match.capturedStart(group)).count(u'\n') + 1),
+            captured, rewritten, appId});
     }
 
     if (replacements.isEmpty()) {

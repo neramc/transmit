@@ -112,8 +112,9 @@ QList<SettingValue> WindowsSettingsProvider::readAll() const {
     record(SettingKey::AccessibilityHighContrast, [] {
         const QString flags = registryString(kAccessibility, QStringLiteral("HighContrast"));
         Q_UNUSED(flags);
-        QSettings settings(QStringLiteral("HKEY_CURRENT_USER\\Control Panel\\Accessibility\\HighContrast"),
-                           QSettings::NativeFormat);
+        QSettings settings(
+            QStringLiteral("HKEY_CURRENT_USER\\Control Panel\\Accessibility\\HighContrast"),
+            QSettings::NativeFormat);
         const quint32 value = settings.value(QStringLiteral("Flags")).toUInt();
         return (value & 0x01u) != 0 ? QStringLiteral("true") : QStringLiteral("false");
     }());
@@ -139,22 +140,23 @@ ApplyResult WindowsSettingsProvider::apply(const SettingValue& value) const {
     switch (value.key) {
         case SettingKey::AppearanceTheme: {
             const quint32 light = value.value == QLatin1String("dark") ? 0u : 1u;
-            const bool apps = registrySetDword(kPersonalize, QStringLiteral("AppsUseLightTheme"), light);
+            const bool apps =
+                registrySetDword(kPersonalize, QStringLiteral("AppsUseLightTheme"), light);
             registrySetDword(kPersonalize, QStringLiteral("SystemUsesLightTheme"), light);
             return apps ? ApplyResult{ApplyOutcome::Applied, {}, {}}
                         : ApplyResult{ApplyOutcome::Failed,
-                                      QStringLiteral("the registry refused the value"), {}};
+                                      QStringLiteral("the registry refused the value"),
+                                      {}};
         }
 
         case SettingKey::DesktopWallpaper: {
             if (!QFile::exists(value.value)) {
-                return {ApplyOutcome::Failed,
-                        QStringLiteral("the image is not on this computer"), {}};
+                return {
+                    ApplyOutcome::Failed, QStringLiteral("the image is not on this computer"), {}};
             }
 #ifdef Q_OS_WIN
             const std::wstring native = QDir::toNativeSeparators(value.value).toStdWString();
-            if (SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0,
-                                      const_cast<wchar_t*>(native.c_str()),
+            if (SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, const_cast<wchar_t*>(native.c_str()),
                                       SPIF_UPDATEINIFILE | SPIF_SENDCHANGE) != 0) {
                 return {ApplyOutcome::Applied, {}, {}};
             }
@@ -214,7 +216,8 @@ ApplyResult WindowsSettingsProvider::apply(const SettingValue& value) const {
     // Everything else is either machine-wide or has no registry equivalent
     // that can be set without Windows noticing and reverting it.
     return {ApplyOutcome::Unsupported,
-            QStringLiteral("Windows does not let a program change this on your behalf"), {}};
+            QStringLiteral("Windows does not let a program change this on your behalf"),
+            {}};
 }
 
 }  // namespace transmit::platform

@@ -15,12 +15,17 @@
 namespace transmit::core {
 namespace {
 
-QString osKey(OsFamily os) { return fromUtf8(format::osFamilyName(os)); }
+QString osKey(OsFamily os) {
+    return fromUtf8(format::osFamilyName(os));
+}
 
 ContinuityGrade gradeFromName(const QString& name) {
-    if (name == QLatin1String("adapted"))    return ContinuityGrade::Adapted;
-    if (name == QLatin1String("manual"))     return ContinuityGrade::Manual;
-    if (name == QLatin1String("impossible")) return ContinuityGrade::Impossible;
+    if (name == QLatin1String("adapted"))
+        return ContinuityGrade::Adapted;
+    if (name == QLatin1String("manual"))
+        return ContinuityGrade::Manual;
+    if (name == QLatin1String("impossible"))
+        return ContinuityGrade::Impossible;
     return ContinuityGrade::Full;
 }
 
@@ -41,8 +46,8 @@ QStringList toStringList(const QJsonValue& value) {
 RecipeStatePath readStatePath(const QJsonObject& object) {
     RecipeStatePath state;
     state.role = object.value(QStringLiteral("role")).toString(QStringLiteral("config"));
-    for (const QString& os : {QStringLiteral("windows"), QStringLiteral("macos"),
-                              QStringLiteral("linux")}) {
+    for (const QString& os :
+         {QStringLiteral("windows"), QStringLiteral("macos"), QStringLiteral("linux")}) {
         const QString path = object.value(os).toString();
         if (!path.isEmpty()) {
             state.byOs.insert(os, path);
@@ -113,7 +118,9 @@ SplitStatePath splitStatePath(const QString& tokenised) {
 
 }  // namespace
 
-QString RecipeStatePath::forOs(OsFamily os) const { return byOs.value(osKey(os)); }
+QString RecipeStatePath::forOs(OsFamily os) const {
+    return byOs.value(osKey(os));
+}
 
 RecipeCatalog::RecipeCatalog() = default;
 
@@ -133,9 +140,8 @@ QString RecipeCatalog::resolveStatePath(const QString& tokenised,
     if (!base.has_value()) {
         return {};
     }
-    return split.relative.isEmpty()
-               ? fromUtf8(*base)
-               : fromUtf8(format::joinPath(*base, toUtf8(split.relative)));
+    return split.relative.isEmpty() ? fromUtf8(*base)
+                                    : fromUtf8(format::joinPath(*base, toUtf8(split.relative)));
 }
 
 void RecipeCatalog::loadDefaults() {
@@ -253,10 +259,9 @@ QList<MatchedApp> RecipeCatalog::match(const QList<platform::InstalledApp>& inst
         }
 
         for (const platform::InstalledApp& app : installed) {
-            const bool hit = std::any_of(names.begin(), names.end(),
-                                         [&app](const QString& name) {
-                                             return !name.isEmpty() && namesMatch(app, name);
-                                         });
+            const bool hit = std::any_of(names.begin(), names.end(), [&app](const QString& name) {
+                return !name.isEmpty() && namesMatch(app, name);
+            });
             if (!hit) {
                 continue;
             }
@@ -327,8 +332,8 @@ QList<CaptureRoot> RecipeCatalog::captureRootsFor(const QList<MatchedApp>& match
 
             const SplitStatePath split = splitStatePath(tokenised);
             if (!split.valid) {
-                qCWarning(logRecipe) << match.recipe.id << "has an unusable state path"
-                                     << tokenised;
+                qCWarning(logRecipe)
+                    << match.recipe.id << "has an unusable state path" << tokenised;
                 continue;
             }
 

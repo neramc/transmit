@@ -32,8 +32,8 @@ struct VolumeHeader {
     static constexpr std::uint16_t kVersion = 1;
 
     std::uint16_t version = kVersion;
-    std::uint16_t partIndex = 1;   ///< 1-based
-    std::uint16_t partCount = 0;   ///< 0 until the write finishes
+    std::uint16_t partIndex = 1;  ///< 1-based
+    std::uint16_t partCount = 0;  ///< 0 until the write finishes
     ArchiveUuid archiveUuid{};
     std::uint64_t payloadLength = 0;
 

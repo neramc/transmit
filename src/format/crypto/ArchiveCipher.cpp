@@ -65,7 +65,9 @@ KdfParams KdfParams::generate() {
 
 ArchiveCipher::ArchiveCipher() = default;
 
-ArchiveCipher::~ArchiveCipher() { secureZero(key_.data(), key_.size()); }
+ArchiveCipher::~ArchiveCipher() {
+    secureZero(key_.data(), key_.size());
+}
 
 ArchiveCipher::ArchiveCipher(ArchiveCipher&& other) noexcept
     : key_(other.key_), valid_(std::exchange(other.valid_, false)) {
@@ -173,8 +175,7 @@ Status ArchiveCipher::encrypt(std::uint32_t blockId, ByteView plain, ByteBuffer&
     }
 
     int finalProduced = 0;
-    if (EVP_EncryptFinal_ex(ctx.get(),
-                            reinterpret_cast<unsigned char*>(out.data()) + produced,
+    if (EVP_EncryptFinal_ex(ctx.get(), reinterpret_cast<unsigned char*>(out.data()) + produced,
                             &finalProduced) != 1) {
         return makeError(ErrorCode::Internal, "encryption could not be finalised");
     }
@@ -236,9 +237,10 @@ Status ArchiveCipher::decrypt(std::uint32_t blockId, ByteView cipher, ByteBuffer
         return makeError(ErrorCode::Internal, "decryption failed");
     }
 
-    auto* tag = const_cast<unsigned char*>(
-        reinterpret_cast<const unsigned char*>(cipher.data()) + bodyLength);
-    if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_TAG, static_cast<int>(kTagSize), tag) != 1) {
+    auto* tag = const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(cipher.data()) +
+                                           bodyLength);
+    if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_TAG, static_cast<int>(kTagSize), tag) !=
+        1) {
         return makeError(ErrorCode::Internal, "could not set the authentication tag");
     }
 

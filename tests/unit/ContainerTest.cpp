@@ -1,9 +1,9 @@
-#include <gtest/gtest.h>
-
 #include <filesystem>
 #include <fstream>
 #include <random>
 #include <string>
+
+#include <gtest/gtest.h>
 
 #include "format/BlockPacker.h"
 #include "format/Container.h"
@@ -17,11 +17,11 @@ namespace {
 class ContainerTest : public testing::Test {
 protected:
     void SetUp() override {
-        directory_ = std::filesystem::temp_directory_path() /
-                     ("transmit-test-" + std::to_string(::testing::UnitTest::GetInstance()
-                                                            ->current_test_info()
-                                                            ->line()) +
-                      "-" + std::to_string(counter_++));
+        directory_ =
+            std::filesystem::temp_directory_path() /
+            ("transmit-test-" +
+             std::to_string(::testing::UnitTest::GetInstance()->current_test_info()->line()) + "-" +
+             std::to_string(counter_++));
         std::filesystem::remove_all(directory_);
         std::filesystem::create_directories(directory_);
     }
@@ -195,7 +195,8 @@ TEST_F(ContainerTest, OpensASplitArchiveFromAnyPart) {
 
     std::vector<std::pair<std::string, ByteBuffer>> files;
     for (int i = 0; i < 6; ++i) {
-        files.emplace_back("f" + std::to_string(i), repeatedBytes(20000, static_cast<char>('a' + i)));
+        files.emplace_back("f" + std::to_string(i),
+                           repeatedBytes(20000, static_cast<char>('a' + i)));
     }
     writeArchive(path, options, files, 16384);
 
@@ -375,7 +376,8 @@ TEST_F(ContainerTest, VerifyAllBlocksWalksTheWholeArchive) {
     const auto path = archivePath();
     std::vector<std::pair<std::string, ByteBuffer>> files;
     for (int i = 0; i < 5; ++i) {
-        files.emplace_back("f" + std::to_string(i), repeatedBytes(3000, static_cast<char>('a' + i)));
+        files.emplace_back("f" + std::to_string(i),
+                           repeatedBytes(3000, static_cast<char>('a' + i)));
     }
     writeArchive(path, ArchiveOptions{}, files, 4096);
 
@@ -394,7 +396,8 @@ TEST_F(ContainerTest, VerificationCanBeCancelled) {
     const auto path = archivePath();
     std::vector<std::pair<std::string, ByteBuffer>> files;
     for (int i = 0; i < 5; ++i) {
-        files.emplace_back("f" + std::to_string(i), repeatedBytes(3000, static_cast<char>('a' + i)));
+        files.emplace_back("f" + std::to_string(i),
+                           repeatedBytes(3000, static_cast<char>('a' + i)));
     }
     writeArchive(path, ArchiveOptions{}, files, 1024);
 

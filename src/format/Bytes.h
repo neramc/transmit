@@ -3,11 +3,11 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <type_traits>
 #include <cstring>
 #include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 namespace transmit::format {
@@ -27,7 +27,7 @@ inline std::string_view asText(ByteView bytes) noexcept {
 
 /// Little-endian is the on-disk convention for every fixed-width field so that
 /// archives are byte-identical across platforms.
-template <typename T>
+template<typename T>
 void writeLe(MutableByteView out, T value) noexcept {
     static_assert(std::is_integral_v<T>, "writeLe expects an integral type");
     using U = std::make_unsigned_t<T>;
@@ -37,7 +37,7 @@ void writeLe(MutableByteView out, T value) noexcept {
     }
 }
 
-template <typename T>
+template<typename T>
 [[nodiscard]] T readLe(ByteView in) noexcept {
     static_assert(std::is_integral_v<T>, "readLe expects an integral type");
     using U = std::make_unsigned_t<T>;
@@ -48,7 +48,7 @@ template <typename T>
     return static_cast<T>(static_cast<U>(raw));
 }
 
-template <typename T>
+template<typename T>
 void appendLe(ByteBuffer& out, T value) {
     const std::size_t offset = out.size();
     out.resize(offset + sizeof(T));

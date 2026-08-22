@@ -4,6 +4,7 @@
 #include <QQmlEngine>
 #include <QSettings>
 #include <QString>
+
 #include <memory>
 
 #include "platform/PlatformService.h"

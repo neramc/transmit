@@ -1,7 +1,5 @@
 #include "platform/windows/WindowsPlatformService.h"
 
-#include "platform/windows/WindowsSettingsProvider.h"
-
 #include <QDir>
 #include <QFileInfo>
 #include <QHostInfo>
@@ -13,10 +11,11 @@
 
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
+#include "platform/windows/WindowsSettingsProvider.h"
 
 #ifdef Q_OS_WIN
-#include <windows.h>
 #include <tlhelp32.h>
+#include <windows.h>
 #endif
 
 namespace transmit::platform {
@@ -105,7 +104,8 @@ PathTokenMap WindowsPlatformService::knownFolders() const {
 
     set(PathTokenId::Home, QDir::homePath());
     set(PathTokenId::Desktop, QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
-    set(PathTokenId::Documents, QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));
+    set(PathTokenId::Documents,
+        QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));
     set(PathTokenId::Downloads, QStandardPaths::writableLocation(QStandardPaths::DownloadLocation));
     set(PathTokenId::Pictures, QStandardPaths::writableLocation(QStandardPaths::PicturesLocation));
     set(PathTokenId::Music, QStandardPaths::writableLocation(QStandardPaths::MusicLocation));
@@ -175,23 +175,21 @@ QList<InstalledApp> WindowsPlatformService::installedApplications() const {
     QList<InstalledApp> apps;
 
     collectUninstallEntries(
-        apps,
-        QStringLiteral(
-            "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall"));
+        apps, QStringLiteral(
+                  "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall"));
     collectUninstallEntries(
         apps, QStringLiteral("HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\"
                              "CurrentVersion\\Uninstall"));
     collectUninstallEntries(
-        apps,
-        QStringLiteral(
-            "HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall"));
+        apps, QStringLiteral(
+                  "HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall"));
 
     // winget gives stable package identifiers, which map far better onto other
     // platforms than a human-readable display name does.
-    const QString winget = runCommand(
-        QStringLiteral("winget"),
-        {QStringLiteral("list"), QStringLiteral("--disable-interactivity"),
-         QStringLiteral("--accept-source-agreements")});
+    const QString winget =
+        runCommand(QStringLiteral("winget"),
+                   {QStringLiteral("list"), QStringLiteral("--disable-interactivity"),
+                    QStringLiteral("--accept-source-agreements")});
     for (const QString& line : winget.split(u'\n', Qt::SkipEmptyParts)) {
         const QStringList columns = line.split(QStringLiteral("  "), Qt::SkipEmptyParts);
         if (columns.size() < 2) {
@@ -259,10 +257,13 @@ std::unique_ptr<Snapshot> WindowsPlatformService::createSnapshot(const QStringLi
 }
 
 QString WindowsPlatformService::packageInstallCommand() const {
-    return QStringLiteral("winget install --accept-package-agreements --accept-source-agreements -e --id");
+    return QStringLiteral(
+        "winget install --accept-package-agreements --accept-source-agreements -e --id");
 }
 
-PackageSource WindowsPlatformService::nativePackageSource() const { return PackageSource::Winget; }
+PackageSource WindowsPlatformService::nativePackageSource() const {
+    return PackageSource::Winget;
+}
 
 std::unique_ptr<SettingsProvider> WindowsPlatformService::settingsProvider() const {
     return std::make_unique<WindowsSettingsProvider>();

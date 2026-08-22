@@ -1,7 +1,7 @@
-#include <gtest/gtest.h>
-
 #include <string>
 #include <vector>
+
+#include <gtest/gtest.h>
 
 #include "format/hash/Blake2b.h"
 #include "format/hash/Crc32.h"
@@ -9,7 +9,9 @@
 namespace transmit::format {
 namespace {
 
-std::string hashOf(const std::string& text) { return Blake2b::hex256(asBytes(text)); }
+std::string hashOf(const std::string& text) {
+    return Blake2b::hex256(asBytes(text));
+}
 
 // Vectors cross-checked against Python's hashlib.blake2b(digest_size=32).
 TEST(Blake2b, MatchesKnownVectors) {

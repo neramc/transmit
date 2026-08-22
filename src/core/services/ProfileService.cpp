@@ -33,10 +33,9 @@ CaptureProfile ProfileService::fullContinuity() {
     profile.sizeHint = QCoreApplication::translate("Profile", "Usually the largest option");
 
     profile.selection = baseSelection();
-    profile.selection.domains = {static_cast<int>(DomainId::UserData),
-                                 static_cast<int>(DomainId::AppState),
-                                 static_cast<int>(DomainId::SystemSettings),
-                                 static_cast<int>(DomainId::AppInventory)};
+    profile.selection.domains = {
+        static_cast<int>(DomainId::UserData), static_cast<int>(DomainId::AppState),
+        static_cast<int>(DomainId::SystemSettings), static_cast<int>(DomainId::AppInventory)};
     for (const PathTokenId token :
          {PathTokenId::Documents, PathTokenId::Desktop, PathTokenId::Pictures, PathTokenId::Music,
           PathTokenId::Videos, PathTokenId::Downloads, PathTokenId::Templates}) {

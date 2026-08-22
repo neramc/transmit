@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+
 #include <functional>
 
 #include "core/continuity/ContinuityTypes.h"

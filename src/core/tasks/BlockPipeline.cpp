@@ -2,6 +2,7 @@
 
 #include <QThread>
 #include <QtConcurrent/QtConcurrentRun>
+
 #include <algorithm>
 
 #include "core/utils/Logging.h"
@@ -13,10 +14,14 @@ namespace {
 /// count. zstd level 22 with a 128 MiB window is the expensive case.
 quint64 workerMemoryCost(format::CompressionPreset preset) {
     switch (preset) {
-        case format::CompressionPreset::Fast:     return 32ULL * 1024 * 1024;
-        case format::CompressionPreset::Balanced: return 96ULL * 1024 * 1024;
-        case format::CompressionPreset::Maximum:  return 400ULL * 1024 * 1024;
-        case format::CompressionPreset::Extreme:  return 700ULL * 1024 * 1024;
+        case format::CompressionPreset::Fast:
+            return 32ULL * 1024 * 1024;
+        case format::CompressionPreset::Balanced:
+            return 96ULL * 1024 * 1024;
+        case format::CompressionPreset::Maximum:
+            return 400ULL * 1024 * 1024;
+        case format::CompressionPreset::Extreme:
+            return 700ULL * 1024 * 1024;
     }
     return 128ULL * 1024 * 1024;
 }
@@ -88,9 +93,8 @@ format::Result<quint32> BlockPipeline::submit(format::ByteView raw) {
 
     Pending entry;
     entry.blockId = blockId;
-    entry.future = QtConcurrent::run(pool_.get(), [writer, blockId, owned]() {
-        return writer->prepare(blockId, *owned);
-    });
+    entry.future = QtConcurrent::run(
+        pool_.get(), [writer, blockId, owned]() { return writer->prepare(blockId, *owned); });
     pending_.push_back(std::move(entry));
     return blockId;
 }

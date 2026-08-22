@@ -77,8 +77,7 @@ QString kdeRead(const QString& file, const QString& group, const QString& key) {
     return settings.value(key).toString();
 }
 
-bool kdeWrite(const QString& file, const QString& group, const QString& key,
-              const QString& value) {
+bool kdeWrite(const QString& file, const QString& group, const QString& key, const QString& value) {
     const QString path =
         QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + u'/' + file;
     QSettings settings(path, QSettings::IniFormat);
@@ -215,8 +214,9 @@ QList<SettingValue> LinuxSettingsProvider::readAll() const {
                sources.split(u',', Qt::SkipEmptyParts).join(u',').simplified().remove(u' '));
 
         record(SettingKey::PowerSleepMinutes, [] {
-            const QString seconds = gsettingsGet(QStringLiteral("org.gnome.settings-daemon.plugins.power"),
-                                                 QStringLiteral("sleep-inactive-ac-timeout"));
+            const QString seconds =
+                gsettingsGet(QStringLiteral("org.gnome.settings-daemon.plugins.power"),
+                             QStringLiteral("sleep-inactive-ac-timeout"));
             bool ok = false;
             const int value = seconds.toInt(&ok);
             return ok ? QString::number(value / 60) : QString();
@@ -248,12 +248,11 @@ QList<SettingValue> LinuxSettingsProvider::readAll() const {
         language = QLocale::system().name();
     }
     record(SettingKey::LocaleLanguage, normaliseLocale(language));
-    record(SettingKey::LocaleFormats,
-           normaliseLocale(qEnvironmentVariable("LC_TIME", language)));
+    record(SettingKey::LocaleFormats, normaliseLocale(qEnvironmentVariable("LC_TIME", language)));
 
-    QString timezone = run(QStringLiteral("timedatectl"), {QStringLiteral("show"),
-                                                           QStringLiteral("--property=Timezone"),
-                                                           QStringLiteral("--value")});
+    QString timezone = run(
+        QStringLiteral("timedatectl"),
+        {QStringLiteral("show"), QStringLiteral("--property=Timezone"), QStringLiteral("--value")});
     if (timezone.isEmpty()) {
         // Fall back to the symlink every systemd and non-systemd system keeps.
         const QString link = QFile::symLinkTarget(QStringLiteral("/etc/localtime"));
@@ -266,8 +265,8 @@ QList<SettingValue> LinuxSettingsProvider::readAll() const {
 
     // --------------------------------------------------- default apps
     record(SettingKey::DefaultBrowser,
-           run(QStringLiteral("xdg-settings"), {QStringLiteral("get"),
-                                                QStringLiteral("default-web-browser")}));
+           run(QStringLiteral("xdg-settings"),
+               {QStringLiteral("get"), QStringLiteral("default-web-browser")}));
     record(SettingKey::DefaultMailClient,
            run(QStringLiteral("xdg-mime"), {QStringLiteral("query"), QStringLiteral("default"),
                                             QStringLiteral("x-scheme-handler/mailto")}));
@@ -293,14 +292,14 @@ ApplyResult LinuxSettingsProvider::apply(const SettingValue& value) const {
                 return kdeWrite(QStringLiteral("kdeglobals"), QStringLiteral("General"),
                                 QStringLiteral("ColorScheme"), scheme)
                            ? ApplyResult{ApplyOutcome::Approximated,
-                                         QStringLiteral("set to %1").arg(scheme), {}}
+                                         QStringLiteral("set to %1").arg(scheme),
+                                         {}}
                            : failed(QStringLiteral("could not write kdeglobals"));
             }
-            const QString scheme = value.value == QLatin1String("dark")
-                                       ? QStringLiteral("prefer-dark")
-                                       : value.value == QLatin1String("light")
-                                             ? QStringLiteral("prefer-light")
-                                             : QStringLiteral("default");
+            const QString scheme =
+                value.value == QLatin1String("dark")    ? QStringLiteral("prefer-dark")
+                : value.value == QLatin1String("light") ? QStringLiteral("prefer-light")
+                                                        : QStringLiteral("default");
             return gsettingsSet(QStringLiteral("org.gnome.desktop.interface"),
                                 QStringLiteral("color-scheme"), scheme)
                        ? applied()
@@ -309,8 +308,8 @@ ApplyResult LinuxSettingsProvider::apply(const SettingValue& value) const {
 
         case SettingKey::DesktopWallpaper: {
             if (!QFile::exists(value.value)) {
-                return {ApplyOutcome::Failed,
-                        QStringLiteral("the image is not on this computer"), {}};
+                return {
+                    ApplyOutcome::Failed, QStringLiteral("the image is not on this computer"), {}};
             }
             const QString uri = QUrl::fromLocalFile(value.value).toString();
             const bool light = gsettingsSet(QStringLiteral("org.gnome.desktop.background"),
@@ -347,12 +346,13 @@ ApplyResult LinuxSettingsProvider::apply(const SettingValue& value) const {
         }
 
         case SettingKey::DefaultBrowser:
-            return runSucceeds(QStringLiteral("xdg-settings"),
-                               {QStringLiteral("set"), QStringLiteral("default-web-browser"),
-                                value.value})
+            return runSucceeds(
+                       QStringLiteral("xdg-settings"),
+                       {QStringLiteral("set"), QStringLiteral("default-web-browser"), value.value})
                        ? applied()
                        : ApplyResult{ApplyOutcome::Failed,
-                                     QStringLiteral("that browser is not installed here"), {}};
+                                     QStringLiteral("that browser is not installed here"),
+                                     {}};
 
         case SettingKey::AccessibilityTextScale:
             return gsettingsSet(QStringLiteral("org.gnome.desktop.interface"),
@@ -431,7 +431,8 @@ ApplyResult LinuxSettingsProvider::apply(const SettingValue& value) const {
                                 QStringLiteral("accent-color"), value.value)
                        ? applied()
                        : ApplyResult{ApplyOutcome::Unsupported,
-                                     QStringLiteral("this desktop has no accent colour"), {}};
+                                     QStringLiteral("this desktop has no accent colour"),
+                                     {}};
 
         case SettingKey::DefaultMailClient:
             return runSucceeds(QStringLiteral("xdg-mime"),
@@ -439,11 +440,11 @@ ApplyResult LinuxSettingsProvider::apply(const SettingValue& value) const {
                                 QStringLiteral("x-scheme-handler/mailto")})
                        ? applied()
                        : ApplyResult{ApplyOutcome::Failed,
-                                     QStringLiteral("that program is not installed here"), {}};
+                                     QStringLiteral("that program is not installed here"),
+                                     {}};
 
         case SettingKey::LocaleFormats:
-            return {ApplyOutcome::NeedsPrivilege,
-                    QStringLiteral("format settings are system-wide"),
+            return {ApplyOutcome::NeedsPrivilege, QStringLiteral("format settings are system-wide"),
                     QStringLiteral("sudo localectl set-locale LC_TIME=%1")
                         .arg(toPosixLocale(value.value))};
     }

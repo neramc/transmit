@@ -76,9 +76,9 @@ QList<RewriteEdit> rewriteIni(const QString& path, const QStringList& keys,
             continue;
         }
 
-        lines[i] = trimmedEnd.left(equals + 1) + rewritten + (line.endsWith(u'\r') ? QStringLiteral("\r") : QString());
-        edits.append(RewriteEdit{path,
-                                 section.isEmpty() ? key : section + u'/' + key,
+        lines[i] = trimmedEnd.left(equals + 1) + rewritten +
+                   (line.endsWith(u'\r') ? QStringLiteral("\r") : QString());
+        edits.append(RewriteEdit{path, section.isEmpty() ? key : section + u'/' + key,
                                  value.trimmed(), rewritten.trimmed(), appId});
         changed = true;
     }

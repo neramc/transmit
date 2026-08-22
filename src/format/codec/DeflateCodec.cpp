@@ -1,9 +1,9 @@
 #include "format/codec/DeflateCodec.h"
 
-#include <zlib.h>
-
 #include <algorithm>
 #include <string>
+
+#include <zlib.h>
 
 namespace transmit::format {
 namespace {
@@ -12,7 +12,9 @@ Error zlibError(int code, const char* what) {
     return makeError(ErrorCode::CodecFailure, what, " (zlib code ", std::to_string(code), ")");
 }
 
-int clampLevel(int level) { return std::clamp(level, 1, 9); }
+int clampLevel(int level) {
+    return std::clamp(level, 1, 9);
+}
 
 }  // namespace
 

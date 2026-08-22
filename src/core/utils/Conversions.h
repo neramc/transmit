@@ -11,7 +11,9 @@ namespace transmit::core {
 
 /// Qt strings are UTF-16 and the format layer speaks UTF-8; these are the only
 /// two places that conversion should happen.
-inline std::string toUtf8(const QString& text) { return text.toStdString(); }
+inline std::string toUtf8(const QString& text) {
+    return text.toStdString();
+}
 inline QString fromUtf8(std::string_view text) {
     return QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()));
 }

@@ -43,8 +43,9 @@ int RewritePlan::apply(QStringList* errors) const {
         QFile::remove(backup);
         if (QFile::exists(path) && !QFile::rename(path, backup)) {
             if (errors != nullptr) {
-                *errors << QCoreApplication::translate(
-                               "Rewrite", "Could not set aside the original of %1").arg(path);
+                *errors << QCoreApplication::translate("Rewrite",
+                                                       "Could not set aside the original of %1")
+                               .arg(path);
             }
             QFile::remove(staged);
             continue;
@@ -93,8 +94,8 @@ QList<ContinuityNote> RewritePlan::toNotes() const {
         ContinuityNote note;
         note.grade = ContinuityGrade::Adapted;
         note.domain = DomainId::AppState;
-        note.subject = QStringLiteral("%1 - %2")
-                           .arg(QFileInfo(edit.filePath).fileName(), edit.location);
+        note.subject =
+            QStringLiteral("%1 - %2").arg(QFileInfo(edit.filePath).fileName(), edit.location);
         note.detail = QCoreApplication::translate("Rewrite", "Pointed at \"%1\" instead of \"%2\".")
                           .arg(edit.newValue, edit.oldValue);
         notes.push_back(note);

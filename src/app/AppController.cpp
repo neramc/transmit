@@ -10,8 +10,7 @@
 namespace transmit::app {
 
 AppController::AppController(QObject* parent)
-    : QObject(parent),
-      settings_(QStringLiteral("Transmit"), QStringLiteral("Transmit")) {
+    : QObject(parent), settings_(QStringLiteral("Transmit"), QStringLiteral("Transmit")) {
     platform_ = platform::PlatformService::create();
     environment_ = platform_->environment();
     themeMode_ = settings_.value(QStringLiteral("ui/theme"), QStringLiteral("system")).toString();
@@ -34,26 +33,42 @@ void AppController::setThemeMode(const QString& mode) {
     emit themeModeChanged();
 }
 
-QString AppController::osName() const { return environment_.osName; }
+QString AppController::osName() const {
+    return environment_.osName;
+}
 
 QString AppController::osFamily() const {
     return core::fromUtf8(format::osFamilyName(environment_.os));
 }
 
-QString AppController::hostName() const { return environment_.hostName; }
-QString AppController::userName() const { return environment_.userName; }
-QString AppController::homeDirectory() const { return environment_.homeDirectory; }
-QString AppController::desktopEnvironment() const { return environment_.desktopEnvironment; }
+QString AppController::hostName() const {
+    return environment_.hostName;
+}
+QString AppController::userName() const {
+    return environment_.userName;
+}
+QString AppController::homeDirectory() const {
+    return environment_.homeDirectory;
+}
+QString AppController::desktopEnvironment() const {
+    return environment_.desktopEnvironment;
+}
 
 QString AppController::packageManager() const {
     return platform::packageSourceName(platform_->nativePackageSource());
 }
 
-QString AppController::appVersion() { return QStringLiteral(TRANSMIT_VERSION); }
+QString AppController::appVersion() {
+    return QStringLiteral(TRANSMIT_VERSION);
+}
 
-bool AppController::encryptionAvailable() { return format::ArchiveCipher::isAvailable(); }
+bool AppController::encryptionAvailable() {
+    return format::ArchiveCipher::isAvailable();
+}
 
-bool AppController::isMac() const { return environment_.os == format::OsFamily::MacOs; }
+bool AppController::isMac() const {
+    return environment_.os == format::OsFamily::MacOs;
+}
 
 QString AppController::toFileUrl(const QString& path) {
     return path.isEmpty() ? QString() : QUrl::fromLocalFile(path).toString();
@@ -73,6 +88,8 @@ void AppController::revealInFileManager(const QString& path) {
     QDesktopServices::openUrl(QUrl::fromLocalFile(target));
 }
 
-QString AppController::formatBytes(quint64 bytes) { return core::formatBytes(bytes); }
+QString AppController::formatBytes(quint64 bytes) {
+    return core::formatBytes(bytes);
+}
 
 }  // namespace transmit::app

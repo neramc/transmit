@@ -26,12 +26,18 @@ QVariant ContinuityReportModel::data(const QModelIndex& index, int role) const {
     const core::ContinuityNote& note = notes_.at(visible_.at(index.row()));
 
     switch (role) {
-        case GradeRole:      return static_cast<int>(note.grade);
-        case GradeNameRole:  return core::continuityGradeName(note.grade);
-        case DomainNameRole: return fromUtf8(format::domainName(note.domain));
-        case SubjectRole:    return note.subject;
-        case DetailRole:     return note.detail;
-        default:             return {};
+        case GradeRole:
+            return static_cast<int>(note.grade);
+        case GradeNameRole:
+            return core::continuityGradeName(note.grade);
+        case DomainNameRole:
+            return fromUtf8(format::domainName(note.domain));
+        case SubjectRole:
+            return note.subject;
+        case DetailRole:
+            return note.detail;
+        default:
+            return {};
     }
 }
 

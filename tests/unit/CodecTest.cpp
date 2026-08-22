@@ -1,7 +1,7 @@
-#include <gtest/gtest.h>
-
 #include <random>
 #include <string>
+
+#include <gtest/gtest.h>
 
 #include "format/codec/Codec.h"
 
@@ -41,8 +41,8 @@ TEST_P(CodecRoundTrip, RestoresTheExactBytes) {
     }
 
     const CompressionProfile profile{id, 6, false};
-    for (const std::size_t size : {std::size_t{0}, std::size_t{1}, std::size_t{1024},
-                                   std::size_t{200000}}) {
+    for (const std::size_t size :
+         {std::size_t{0}, std::size_t{1}, std::size_t{1024}, std::size_t{200000}}) {
         const ByteBuffer original = compressibleData(size);
 
         ByteBuffer compressed;

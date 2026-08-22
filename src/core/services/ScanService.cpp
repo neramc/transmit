@@ -13,9 +13,9 @@
 #include "format/FileIo.h"
 
 #ifndef Q_OS_WIN
-#include <sys/stat.h>
 #include <grp.h>
 #include <pwd.h>
+#include <sys/stat.h>
 #endif
 
 namespace transmit::core {
@@ -98,7 +98,9 @@ QRegularExpression compilePattern(const QString& pattern) {
 
 }  // namespace
 
-ExcludeMatcher::ExcludeMatcher(const QStringList& patterns) { add(patterns); }
+ExcludeMatcher::ExcludeMatcher(const QStringList& patterns) {
+    add(patterns);
+}
 
 void ExcludeMatcher::add(const QStringList& patterns) {
     for (const QString& pattern : patterns) {
@@ -155,10 +157,9 @@ void ScanService::scanRoot(const CaptureRoot& root, const CaptureSelection& sele
         return;
     }
 
-    const QString rootPath =
-        root.relative.isEmpty()
-            ? fromUtf8(*base)
-            : fromUtf8(format::joinPath(*base, toUtf8(root.relative)));
+    const QString rootPath = root.relative.isEmpty()
+                                 ? fromUtf8(*base)
+                                 : fromUtf8(format::joinPath(*base, toUtf8(root.relative)));
 
     const QFileInfo rootInfo(rootPath);
     if (!rootInfo.exists()) {
@@ -199,8 +200,8 @@ void ScanService::scanRoot(const CaptureRoot& root, const CaptureSelection& sele
             std::error_code ec;
             const auto rawTarget =
                 std::filesystem::read_symlink(format::toFsPath(toUtf8(absolute)), ec);
-            item.symlinkTarget = ec ? info.symLinkTarget()
-                                    : fromUtf8(format::fromFsPath(rawTarget));
+            item.symlinkTarget =
+                ec ? info.symLinkTarget() : fromUtf8(format::fromFsPath(rawTarget));
             ++result.symlinkCount;
         } else if (info.isDir()) {
             item.type = format::EntryType::Directory;
@@ -247,15 +248,14 @@ void ScanService::scanRoot(const CaptureRoot& root, const CaptureSelection& sele
     if (rootInfo.isDir() && !rootInfo.isSymLink()) {
         record(rootInfo);
 
-        QDirIterator::IteratorFlags flags = root.recursive ? QDirIterator::Subdirectories
-                                                           : QDirIterator::NoIteratorFlags;
+        QDirIterator::IteratorFlags flags =
+            root.recursive ? QDirIterator::Subdirectories : QDirIterator::NoIteratorFlags;
         if (selection.followSymlinks) {
             flags |= QDirIterator::FollowSymlinks;
         }
 
-        QDirIterator iterator(rootPath, QDir::AllEntries | QDir::Hidden | QDir::System |
-                                            QDir::NoDotAndDotDot,
-                              flags);
+        QDirIterator iterator(
+            rootPath, QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot, flags);
         while (iterator.hasNext()) {
             if (cancelToken.isCancelled()) {
                 return;

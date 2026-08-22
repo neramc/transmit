@@ -33,20 +33,30 @@ QVariant DriveListModel::data(const QModelIndex& index, int role) const {
     const platform::StorageVolume& volume = volumes_.at(index.row());
 
     switch (role) {
-        case DisplayNameRole:      return volume.displayName;
-        case RootPathRole:         return volume.rootPath;
-        case FileSystemRole:       return volume.fileSystem;
-        case TotalBytesRole:       return volume.totalBytes;
-        case FreeBytesRole:        return volume.freeBytes;
-        case FreeTextRole:         return formatBytes(volume.freeBytes);
-        case TotalTextRole:        return formatBytes(volume.totalBytes);
-        case RemovableRole:        return volume.removable;
-        case ReadOnlyRole:         return volume.readOnly;
-        case RequiresSplittingRole:return volume.requiresSplitting();
+        case DisplayNameRole:
+            return volume.displayName;
+        case RootPathRole:
+            return volume.rootPath;
+        case FileSystemRole:
+            return volume.fileSystem;
+        case TotalBytesRole:
+            return volume.totalBytes;
+        case FreeBytesRole:
+            return volume.freeBytes;
+        case FreeTextRole:
+            return formatBytes(volume.freeBytes);
+        case TotalTextRole:
+            return formatBytes(volume.totalBytes);
+        case RemovableRole:
+            return volume.removable;
+        case ReadOnlyRole:
+            return volume.readOnly;
+        case RequiresSplittingRole:
+            return volume.requiresSplitting();
         case SubtitleRole: {
-            QString subtitle = tr("%1 free of %2")
-                                   .arg(formatBytes(volume.freeBytes),
-                                        formatBytes(volume.totalBytes));
+            QString subtitle =
+                tr("%1 free of %2")
+                    .arg(formatBytes(volume.freeBytes), formatBytes(volume.totalBytes));
             if (!volume.fileSystem.isEmpty()) {
                 subtitle += QStringLiteral(" - ") + volume.fileSystem;
             }
@@ -54,8 +64,9 @@ QVariant DriveListModel::data(const QModelIndex& index, int role) const {
                 subtitle += tr(" - read-only");
             } else if (volume.requiresSplitting()) {
                 // Worth saying plainly: this is why the archive arrives in parts.
-                subtitle += tr(" - this drive cannot hold a file over 4 GB, so the archive will "
-                               "be written in parts");
+                subtitle +=
+                    tr(" - this drive cannot hold a file over 4 GB, so the archive will "
+                       "be written in parts");
             }
             return subtitle;
         }
@@ -65,16 +76,11 @@ QVariant DriveListModel::data(const QModelIndex& index, int role) const {
 }
 
 QHash<int, QByteArray> DriveListModel::roleNames() const {
-    return {{DisplayNameRole, "displayName"},
-            {RootPathRole, "rootPath"},
-            {FileSystemRole, "fileSystem"},
-            {TotalBytesRole, "totalBytes"},
-            {FreeBytesRole, "freeBytes"},
-            {FreeTextRole, "freeText"},
-            {TotalTextRole, "totalText"},
-            {RemovableRole, "removable"},
-            {ReadOnlyRole, "readOnly"},
-            {RequiresSplittingRole, "requiresSplitting"},
+    return {{DisplayNameRole, "displayName"}, {RootPathRole, "rootPath"},
+            {FileSystemRole, "fileSystem"},   {TotalBytesRole, "totalBytes"},
+            {FreeBytesRole, "freeBytes"},     {FreeTextRole, "freeText"},
+            {TotalTextRole, "totalText"},     {RemovableRole, "removable"},
+            {ReadOnlyRole, "readOnly"},       {RequiresSplittingRole, "requiresSplitting"},
             {SubtitleRole, "subtitle"}};
 }
 

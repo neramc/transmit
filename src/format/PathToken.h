@@ -58,7 +58,9 @@ struct TokenizedPath {
     PathTokenId token = PathTokenId::Absolute;
     std::string relative;
 
-    [[nodiscard]] bool isAbsoluteFallback() const noexcept { return token == PathTokenId::Absolute; }
+    [[nodiscard]] bool isAbsoluteFallback() const noexcept {
+        return token == PathTokenId::Absolute;
+    }
 
     /// Renders as "{DOCUMENTS}/reports/q3.pdf" for manifests, logs and the UI.
     [[nodiscard]] std::string toDisplayString() const;

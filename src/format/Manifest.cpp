@@ -354,24 +354,34 @@ Result<ManifestEntry> readEntry(ByteView data) {
 
 std::string_view domainName(DomainId domain) noexcept {
     switch (domain) {
-        case DomainId::UserData:       return "userdata";
-        case DomainId::AppState:       return "appstate";
-        case DomainId::SystemSettings: return "settings";
-        case DomainId::Secrets:        return "secrets";
-        case DomainId::AppInventory:   return "apps";
-        case DomainId::Unknown:        return "unknown";
+        case DomainId::UserData:
+            return "userdata";
+        case DomainId::AppState:
+            return "appstate";
+        case DomainId::SystemSettings:
+            return "settings";
+        case DomainId::Secrets:
+            return "secrets";
+        case DomainId::AppInventory:
+            return "apps";
+        case DomainId::Unknown:
+            return "unknown";
     }
     return "unknown";
 }
 
 Result<DomainId> domainFromName(std::string_view name) {
-    if (name == "userdata") return DomainId::UserData;
-    if (name == "appstate") return DomainId::AppState;
-    if (name == "settings") return DomainId::SystemSettings;
-    if (name == "secrets")  return DomainId::Secrets;
-    if (name == "apps")     return DomainId::AppInventory;
-    return makeError(ErrorCode::InvalidArgument,
-                     "unknown domain '", std::string(name),
+    if (name == "userdata")
+        return DomainId::UserData;
+    if (name == "appstate")
+        return DomainId::AppState;
+    if (name == "settings")
+        return DomainId::SystemSettings;
+    if (name == "secrets")
+        return DomainId::Secrets;
+    if (name == "apps")
+        return DomainId::AppInventory;
+    return makeError(ErrorCode::InvalidArgument, "unknown domain '", std::string(name),
                      "' (expected userdata, appstate, settings, secrets or apps)");
 }
 
@@ -382,9 +392,12 @@ std::vector<DomainId> allDomains() {
 
 std::string_view entryTypeName(EntryType type) noexcept {
     switch (type) {
-        case EntryType::File:      return "file";
-        case EntryType::Directory: return "directory";
-        case EntryType::Symlink:   return "symlink";
+        case EntryType::File:
+            return "file";
+        case EntryType::Directory:
+            return "directory";
+        case EntryType::Symlink:
+            return "symlink";
     }
     return "file";
 }

@@ -10,7 +10,8 @@ namespace transmit::format {
 class XzCodec final : public ICodec {
 public:
     [[nodiscard]] CodecId id() const noexcept override { return CodecId::Xz; }
-    Status compress(ByteView input, const CompressionProfile& profile, ByteBuffer& output) const override;
+    Status compress(ByteView input, const CompressionProfile& profile,
+                    ByteBuffer& output) const override;
     Status decompress(ByteView input, std::size_t rawSize, ByteBuffer& output) const override;
 };
 

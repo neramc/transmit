@@ -15,7 +15,8 @@ TEST(NormalizePath, ConvertsWindowsSeparatorsAndKeepsTheDrive) {
     EXPECT_EQ(normalizePath(R"(C:\Users\Bob\Documents)", OsFamily::Windows),
               "C:/Users/Bob/Documents");
     EXPECT_EQ(normalizePath(R"(C:\)", OsFamily::Windows), "C:/");
-    EXPECT_EQ(normalizePath(R"(\\server\share\folder)", OsFamily::Windows), "//server/share/folder");
+    EXPECT_EQ(normalizePath(R"(\\server\share\folder)", OsFamily::Windows),
+              "//server/share/folder");
 }
 
 TEST(NormalizePath, LeavesBackslashesAloneOnPosixWhereTheyAreLegalInNames) {

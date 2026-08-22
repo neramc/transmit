@@ -17,7 +17,7 @@ using platform::SettingValue;
 struct CapturedSetting {
     SettingKey key = SettingKey::AppearanceTheme;
     QString value;
-    QString sourceEnvironment;   ///< the desktop or shell it was read from
+    QString sourceEnvironment;  ///< the desktop or shell it was read from
 };
 
 /// Captures and restores the desktop preferences that make a new machine feel
@@ -39,8 +39,7 @@ public:
     /// `scriptDirectory` receives the privileged-command script, if any is
     /// needed; pass an empty string during a dry run.
     [[nodiscard]] QList<ContinuityNote> restore(const QList<CapturedSetting>& settings,
-                                                const QString& scriptDirectory,
-                                                bool dryRun) const;
+                                                const QString& scriptDirectory, bool dryRun) const;
 
     /// Wallpapers are files, and a wallpaper setting is worthless if the image
     /// stayed behind. This reports the image so the capture can include it.

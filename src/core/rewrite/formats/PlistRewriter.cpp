@@ -13,7 +13,9 @@ namespace {
 
 constexpr char kBinaryPlistMagic[] = "bplist00";
 
-bool isBinaryPlist(const QByteArray& raw) { return raw.startsWith(kBinaryPlistMagic); }
+bool isBinaryPlist(const QByteArray& raw) {
+    return raw.startsWith(kBinaryPlistMagic);
+}
 
 /// macOS ships plutil, which converts between the binary and XML forms without
 /// needing a plist library. On other platforms only XML plists can be handled,
@@ -61,8 +63,8 @@ QByteArray rewriteXmlPlist(const QByteArray& xml, const QStringList& keys,
                 if (reader.name() == QLatin1String("key")) {
                     pendingKey.clear();
                 } else if (reader.name() == QLatin1String("string")) {
-                    wantNextString = !pendingKey.isEmpty() &&
-                                     keys.contains(pendingKey, Qt::CaseInsensitive);
+                    wantNextString =
+                        !pendingKey.isEmpty() && keys.contains(pendingKey, Qt::CaseInsensitive);
                 }
                 break;
             case QXmlStreamReader::EndElement:

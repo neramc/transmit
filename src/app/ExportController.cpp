@@ -16,7 +16,8 @@ using core::formatDuration;
 
 /// A file name a user can recognise on a stick holding several captures.
 QString suggestFileName(const platform::EnvironmentInfo& environment) {
-    QString host = environment.hostName.isEmpty() ? QStringLiteral("machine") : environment.hostName;
+    QString host =
+        environment.hostName.isEmpty() ? QStringLiteral("machine") : environment.hostName;
     host.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9_-]")), QStringLiteral("-"));
     return QStringLiteral("%1-%2.txa")
         .arg(host, QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-hhmm")));
@@ -49,11 +50,12 @@ QString ExportController::bytesReadText() const {
     if (progress_.bytesTotal == 0) {
         return formatBytes(progress_.bytesDone);
     }
-    return tr("%1 of %2")
-        .arg(formatBytes(progress_.bytesDone), formatBytes(progress_.bytesTotal));
+    return tr("%1 of %2").arg(formatBytes(progress_.bytesDone), formatBytes(progress_.bytesTotal));
 }
 
-QString ExportController::bytesWrittenText() const { return formatBytes(progress_.bytesStored); }
+QString ExportController::bytesWrittenText() const {
+    return formatBytes(progress_.bytesStored);
+}
 
 QString ExportController::compressionText() const {
     if (progress_.bytesDone == 0 || progress_.bytesStored == 0) {
@@ -85,14 +87,11 @@ QString ExportController::summaryText() const {
     if (!report_.succeeded) {
         return {};
     }
-    QString text = tr("%1 files, %2 folders")
-                       .arg(report_.fileCount)
-                       .arg(report_.directoryCount);
-    text += tr(" - %1 became %2")
-                .arg(formatBytes(report_.rawBytes), formatBytes(report_.storedBytes));
+    QString text = tr("%1 files, %2 folders").arg(report_.fileCount).arg(report_.directoryCount);
+    text +=
+        tr(" - %1 became %2").arg(formatBytes(report_.rawBytes), formatBytes(report_.storedBytes));
     if (report_.deduplicatedBytes > 0) {
-        text += tr(", saving %1 on repeated content")
-                    .arg(formatBytes(report_.deduplicatedBytes));
+        text += tr(", saving %1 on repeated content").arg(formatBytes(report_.deduplicatedBytes));
     }
     return text;
 }
@@ -127,8 +126,7 @@ void ExportController::start(const QString& profileId, const QString& destinatio
     }
 
     const QString folder = destinationFolder.isEmpty() ? QDir::homePath() : destinationFolder;
-    request.destinationPath =
-        QDir(folder).filePath(suggestFileName(platform_->environment()));
+    request.destinationPath = QDir(folder).filePath(suggestFileName(platform_->environment()));
 
     running_ = true;
     emit runningChanged();

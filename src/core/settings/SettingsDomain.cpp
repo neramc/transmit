@@ -43,8 +43,10 @@ QString writePrivilegedScript(const QStringList& commands, const QString& direct
     content += QStringLiteral("# Settings from your old computer that this system will not let\n");
     content += QStringLiteral("# a program change on your behalf. Read this, then run it.\n");
     content += QStringLiteral("#\n");
-    content += QStringLiteral("# Some of these need an administrator password. Transmit does not\n");
-    content += QStringLiteral("# ask for one, which is why they are here rather than already done.\n\n");
+    content +=
+        QStringLiteral("# Some of these need an administrator password. Transmit does not\n");
+    content +=
+        QStringLiteral("# ask for one, which is why they are here rather than already done.\n\n");
     for (const QString& command : commands) {
         content += command + u'\n';
     }
@@ -127,8 +129,8 @@ QList<ContinuityNote> SettingsDomain::restore(const QList<CapturedSetting>& sett
                 ++approximated;
                 notes.push_back(ContinuityNote{
                     ContinuityGrade::Adapted, DomainId::SystemSettings, name,
-                    QCoreApplication::translate(
-                        "Settings", "Set to the closest match this system offers (%1).")
+                    QCoreApplication::translate("Settings",
+                                                "Set to the closest match this system offers (%1).")
                         .arg(result.detail)});
                 break;
 
@@ -140,8 +142,8 @@ QList<ContinuityNote> SettingsDomain::restore(const QList<CapturedSetting>& sett
                     ContinuityGrade::Manual, DomainId::SystemSettings, name,
                     QCoreApplication::translate("Settings", "%1. It was \"%2\" before.")
                         .arg(result.detail.isEmpty()
-                                 ? QCoreApplication::translate(
-                                       "Settings", "This needs to be changed by you")
+                                 ? QCoreApplication::translate("Settings",
+                                                               "This needs to be changed by you")
                                  : result.detail,
                              setting.value)});
                 break;
@@ -168,16 +170,16 @@ QList<ContinuityNote> SettingsDomain::restore(const QList<CapturedSetting>& sett
             ContinuityGrade::Full, DomainId::SystemSettings,
             QCoreApplication::translate("Settings", "Preferences"),
             dryRun ? QCoreApplication::translate(
-                         "Settings", "%n setting(s) would be carried across as they were.",
-                         nullptr, applied)
-                   : QCoreApplication::translate(
-                         "Settings", "%n setting(s) were carried across as they were.", nullptr,
-                         applied)});
+                         "Settings", "%n setting(s) would be carried across as they were.", nullptr,
+                         applied)
+                   : QCoreApplication::translate("Settings",
+                                                 "%n setting(s) were carried across as they were.",
+                                                 nullptr, applied)});
     }
 
     if (!privilegedCommands.isEmpty() && !dryRun) {
-        const QString path = writePrivilegedScript(privilegedCommands, scriptDirectory,
-                                                   platform_.environment().os);
+        const QString path =
+            writePrivilegedScript(privilegedCommands, scriptDirectory, platform_.environment().os);
         if (!path.isEmpty()) {
             notes.push_back(ContinuityNote{
                 ContinuityGrade::Manual, DomainId::SystemSettings,

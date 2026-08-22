@@ -2,10 +2,10 @@
 
 #ifdef TRANSMIT_HAVE_LZMA
 
-#include <lzma.h>
-
 #include <algorithm>
 #include <string>
+
+#include <lzma.h>
 
 namespace transmit::format {
 namespace {
@@ -55,7 +55,8 @@ Status XzCodec::decompress(ByteView input, std::size_t rawSize, ByteBuffer& outp
         return lzmaError(rc, "xz decompression failed");
     }
     if (outPos != rawSize) {
-        return makeError(ErrorCode::CorruptArchive, "decompressed size does not match block header");
+        return makeError(ErrorCode::CorruptArchive,
+                         "decompressed size does not match block header");
     }
     return ok();
 }

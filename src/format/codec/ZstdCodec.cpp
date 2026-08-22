@@ -1,10 +1,10 @@
 #include "format/codec/ZstdCodec.h"
 
-#include <zstd.h>
-
 #include <algorithm>
 #include <memory>
 #include <string>
+
+#include <zstd.h>
 
 namespace transmit::format {
 namespace {
@@ -26,7 +26,9 @@ Error zstdError(std::size_t code, const char* what) {
 
 }  // namespace
 
-int ZstdCodec::maxLevel() noexcept { return ZSTD_maxCLevel(); }
+int ZstdCodec::maxLevel() noexcept {
+    return ZSTD_maxCLevel();
+}
 
 Status ZstdCodec::compress(ByteView input, const CompressionProfile& profile,
                            ByteBuffer& output) const {
@@ -85,7 +87,8 @@ Status ZstdCodec::decompress(ByteView input, std::size_t rawSize, ByteBuffer& ou
         return zstdError(produced, "zstd decompression failed");
     }
     if (produced != rawSize) {
-        return makeError(ErrorCode::CorruptArchive, "decompressed size does not match block header");
+        return makeError(ErrorCode::CorruptArchive,
+                         "decompressed size does not match block header");
     }
     return ok();
 }

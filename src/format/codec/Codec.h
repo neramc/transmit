@@ -24,10 +24,10 @@ std::string_view codecName(CodecId id) noexcept;
 /// while decompressing roughly an order of magnitude faster - which matters
 /// because restoring an environment is the time-critical half of the job.
 enum class CompressionPreset : std::uint8_t {
-    Fast,     ///< zstd level 6
-    Balanced, ///< zstd level 12
-    Maximum,  ///< zstd level 22, long window  (default)
-    Extreme,  ///< xz -9e
+    Fast,      ///< zstd level 6
+    Balanced,  ///< zstd level 12
+    Maximum,   ///< zstd level 22, long window  (default)
+    Extreme,   ///< xz -9e
 };
 
 struct CompressionProfile {

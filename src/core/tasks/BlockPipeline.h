@@ -2,6 +2,7 @@
 
 #include <QFuture>
 #include <QThreadPool>
+
 #include <deque>
 #include <memory>
 

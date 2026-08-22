@@ -12,7 +12,7 @@ namespace transmit::core {
 struct InstallPlan {
     /// Applications this system's package manager can install, with the
     /// identifier it knows them by.
-    QList<QPair<QString, QString>> installable;   ///< display name, package identifier
+    QList<QPair<QString, QString>> installable;  ///< display name, package identifier
 
     /// Applications the catalog knows but this package manager cannot supply.
     QStringList manual;

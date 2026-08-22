@@ -133,7 +133,8 @@ PathTokenMap MacOsPlatformService::knownFolders() const {
 
     set(PathTokenId::Home, home);
     set(PathTokenId::Desktop, QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
-    set(PathTokenId::Documents, QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));
+    set(PathTokenId::Documents,
+        QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));
     set(PathTokenId::Downloads, QStandardPaths::writableLocation(QStandardPaths::DownloadLocation));
     set(PathTokenId::Pictures, QStandardPaths::writableLocation(QStandardPaths::PicturesLocation));
     set(PathTokenId::Music, QStandardPaths::writableLocation(QStandardPaths::MusicLocation));
@@ -193,14 +194,14 @@ QList<InstalledApp> MacOsPlatformService::installedApplications() const {
          {QStringLiteral("/Applications"), QDir::homePath() + QStringLiteral("/Applications"),
           QStringLiteral("/Applications/Utilities")}) {
         const QDir dir(directory);
-        for (const QFileInfo& bundle :
-             dir.entryInfoList(QStringList{QStringLiteral("*.app")}, QDir::Dirs | QDir::NoDotAndDotDot)) {
+        for (const QFileInfo& bundle : dir.entryInfoList(QStringList{QStringLiteral("*.app")},
+                                                         QDir::Dirs | QDir::NoDotAndDotDot)) {
             apps.push_back(readBundle(bundle));
         }
     }
 
-    const QString brew = runCommand(QStringLiteral("brew"),
-                                    {QStringLiteral("list"), QStringLiteral("--versions")});
+    const QString brew =
+        runCommand(QStringLiteral("brew"), {QStringLiteral("list"), QStringLiteral("--versions")});
     for (const QString& line : brew.split(u'\n', Qt::SkipEmptyParts)) {
         const QStringList columns = line.split(u' ', Qt::SkipEmptyParts);
         if (columns.isEmpty()) {
@@ -229,16 +230,15 @@ QList<InstalledApp> MacOsPlatformService::installedApplications() const {
     return apps;
 }
 
-QList<RunningApp> MacOsPlatformService::runningApplications(
-    const QStringList& processNames) const {
+QList<RunningApp> MacOsPlatformService::runningApplications(const QStringList& processNames) const {
     QList<RunningApp> running;
     if (processNames.isEmpty()) {
         return running;
     }
 
     const QString output =
-        runCommand(QStringLiteral("ps"), {QStringLiteral("-Ac"), QStringLiteral("-o"),
-                                          QStringLiteral("pid=,comm=")});
+        runCommand(QStringLiteral("ps"),
+                   {QStringLiteral("-Ac"), QStringLiteral("-o"), QStringLiteral("pid=,comm=")});
     for (const QString& line : output.split(u'\n', Qt::SkipEmptyParts)) {
         const QString trimmed = line.trimmed();
         const qsizetype space = trimmed.indexOf(u' ');
