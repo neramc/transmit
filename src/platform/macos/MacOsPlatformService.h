@@ -21,6 +21,7 @@ public:
         const QStringList& paths) const override;
     [[nodiscard]] QString packageInstallCommand() const override;
     [[nodiscard]] PackageSource nativePackageSource() const override;
+    [[nodiscard]] std::unique_ptr<SettingsProvider> settingsProvider() const override;
 
     /// True when the process can read the protected user data locations. The
     /// UI uses this to show the Full Disk Access prompt before a capture.

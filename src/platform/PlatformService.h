@@ -7,6 +7,7 @@
 
 #include "format/PathToken.h"
 #include "format/Result.h"
+#include "platform/SettingsProvider.h"
 
 namespace transmit::platform {
 
@@ -144,6 +145,9 @@ public:
 
     /// Package manager native to this system, used to pick catalog entries.
     [[nodiscard]] virtual PackageSource nativePackageSource() const = 0;
+
+    /// Reads and writes the desktop preferences Transmit carries across.
+    [[nodiscard]] virtual std::unique_ptr<SettingsProvider> settingsProvider() const = 0;
 };
 
 }  // namespace transmit::platform

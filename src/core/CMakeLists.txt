@@ -7,6 +7,8 @@ add_library(transmit_core STATIC
     recipe/RecipeCatalog.cpp
     recipe/AppInventoryPayload.cpp
     recipe/StateRelocator.cpp
+    recipe/InstallScriptWriter.cpp
+    settings/SettingsDomain.cpp
     rewrite/PathTranslator.cpp
     rewrite/RewritePlan.cpp
     rewrite/PathRewriter.cpp

@@ -299,6 +299,13 @@ int runImport(QCommandLineParser& parser, const QString& archivePath,
               << Qt::endl;
     }
 
+    if (!report.installScriptPath.isEmpty()) {
+        out() << QStringLiteral("  wrote %1 to reinstall %2 program(s) - read it before running it")
+                     .arg(report.installScriptPath)
+                     .arg(report.programsToInstall)
+              << Qt::endl;
+    }
+
     if (!report.renames.isEmpty()) {
         out() << Qt::endl << QStringLiteral("Renamed for this system:") << Qt::endl;
         for (const auto& [from, to] : report.renames) {

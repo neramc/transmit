@@ -179,6 +179,12 @@ struct ImportReport {
     qint64 elapsedMilliseconds = 0;
 
     QString rollbackArchivePath;
+
+    /// Where the generated install script was written, if any. Transmit never
+    /// runs it: installing software is the user's decision and their password.
+    QString installScriptPath;
+    int programsToInstall = 0;
+    int programsNeedingManualInstall = 0;
     QList<ContinuityNote> notes;
     QList<RestoredItem> items;
 

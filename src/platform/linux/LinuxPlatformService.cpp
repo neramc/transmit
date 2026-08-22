@@ -1,5 +1,7 @@
 #include "platform/linux/LinuxPlatformService.h"
 
+#include "platform/linux/LinuxSettingsProvider.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -624,6 +626,10 @@ QString LinuxPlatformService::packageInstallCommand() const {
 PackageSource LinuxPlatformService::nativePackageSource() const {
     const EnvironmentInfo info = environment();
     return packageSourceForDistro(info.distroId, info.distroLike);
+}
+
+std::unique_ptr<SettingsProvider> LinuxPlatformService::settingsProvider() const {
+    return std::make_unique<LinuxSettingsProvider>();
 }
 
 }  // namespace transmit::platform

@@ -9,6 +9,7 @@
 #include "core/recipe/AppInventoryPayload.h"
 #include "core/recipe/RecipeCatalog.h"
 #include "core/services/ConsistentCopy.h"
+#include "core/settings/SettingsDomain.h"
 #include "core/tasks/BlockPipeline.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
@@ -151,6 +152,38 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         qCInfo(logCapture) << "recognised" << matchedApps.size() << "applications";
     }
 
+    // --------------------------------------------------- system settings
+    QList<CapturedSetting> capturedSettings;
+    if (selection.includes(DomainId::SystemSettings)) {
+        const SettingsDomain settings(platform_);
+        capturedSettings = settings.capture();
+
+        // A wallpaper setting is worthless if the image stayed behind, so the
+        // picture itself joins the capture.
+        const QString wallpaper = SettingsDomain::wallpaperPath(capturedSettings);
+        if (!wallpaper.isEmpty() && QFileInfo::exists(wallpaper)) {
+            const format::TokenizedPath tokenised =
+                platform_.knownFolders().tokenize(toUtf8(wallpaper));
+            if (!tokenised.isAbsoluteFallback()) {
+                CaptureRoot root;
+                root.token = tokenised.token;
+                root.relative = fromUtf8(tokenised.relative);
+                root.domain = DomainId::SystemSettings;
+                root.recursive = false;
+                selection.roots.push_back(root);
+            } else {
+                report.notes.push_back(ContinuityNote{
+                    ContinuityGrade::Manual, DomainId::SystemSettings,
+                    QCoreApplication::translate("Export", "Desktop background"),
+                    QCoreApplication::translate(
+                        "Export",
+                        "The image is outside your personal folders, so it was not captured. "
+                        "Copy \"%1\" across yourself if you want it.")
+                        .arg(wallpaper)});
+            }
+        }
+    }
+
     // ------------------------------------------------------------ scan
     if (progress) {
         ProgressUpdate update;
@@ -226,6 +259,11 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         if (const auto base = sourceTokens.base(token)) {
             manifest.source.tokenBases[token] = *base;
         }
+    }
+
+    if (!capturedSettings.isEmpty()) {
+        manifest.payloads.push_back(format::DomainPayload{DomainId::SystemSettings, "settings.v1",
+                                                          SettingsDomain::encode(capturedSettings)});
     }
 
     if (!matchedApps.isEmpty()) {

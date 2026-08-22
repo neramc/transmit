@@ -10,6 +10,8 @@
 #include <optional>
 
 #include "core/recipe/AppInventoryPayload.h"
+#include "core/recipe/InstallScriptWriter.h"
+#include "core/settings/SettingsDomain.h"
 #include "core/recipe/RecipeCatalog.h"
 #include "core/recipe/StateRelocator.h"
 #include "core/rewrite/PathRewriter.h"
@@ -653,6 +655,74 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                 "%n item(s) were renamed because their names are not valid on this system, or "
                 "because two of them differ only by capitalisation.",
                 nullptr, static_cast<int>(report.renames.size()))});
+    }
+
+    // ------------------------------------------------ desktop preferences
+    if (request.domains.isEmpty() ||
+        request.domains.contains(static_cast<int>(DomainId::SystemSettings))) {
+        if (const auto* payload = manifest.findPayload(DomainId::SystemSettings, "settings.v1")) {
+            const QList<CapturedSetting> settings = SettingsDomain::decode(payload->data);
+
+            // Emulating another operating system is a translation exercise on
+            // paper; actually changing this machine's preferences would be a
+            // surprise nobody asked for.
+            const bool emulating = request.emulateOs != OsFamily::Unknown &&
+                                   request.emulateOs != platform_.environment().os;
+
+            const QString scriptDirectory = request.destinationOverride.isEmpty()
+                                                ? platform_.environment().homeDirectory
+                                                : request.destinationOverride;
+
+            report.notes += SettingsDomain(platform_).restore(settings, scriptDirectory,
+                                                              request.dryRun || emulating);
+        }
+    }
+
+    // ------------------------------------------- reinstalling programs
+    // The settings are in place; what is missing is the programs themselves,
+    // which cannot cross an operating system boundary as binaries.
+    if (!inventoryEntries.isEmpty() &&
+        (request.domains.isEmpty() ||
+         request.domains.contains(static_cast<int>(DomainId::AppInventory)))) {
+        const InstallScriptWriter writer(platform_);
+        const InstallPlan installPlan = writer.plan(inventoryEntries);
+
+        report.programsToInstall = static_cast<int>(installPlan.installable.size());
+        report.programsNeedingManualInstall = static_cast<int>(installPlan.manual.size());
+
+        if (!request.dryRun && !installPlan.isEmpty()) {
+            const QString directory = request.destinationOverride.isEmpty()
+                                          ? platform_.environment().homeDirectory
+                                          : request.destinationOverride;
+            report.installScriptPath = writer.write(installPlan, directory);
+        }
+
+        if (!installPlan.installable.isEmpty()) {
+            report.notes.push_back(ContinuityNote{
+                ContinuityGrade::Manual, DomainId::AppInventory,
+                QCoreApplication::translate("Import", "Programs to reinstall"),
+                report.installScriptPath.isEmpty()
+                    ? QCoreApplication::translate(
+                          "Import", "%n program(s) from your old computer can be installed here.",
+                          nullptr, static_cast<int>(installPlan.installable.size()))
+                    : QCoreApplication::translate(
+                          "Import",
+                          "%n program(s) can be installed here. Transmit wrote a script to \"%1\" "
+                          "but has not run it - read it first, then run it yourself.",
+                          nullptr, static_cast<int>(installPlan.installable.size()))
+                          .arg(report.installScriptPath)});
+        }
+
+        if (!installPlan.manual.isEmpty()) {
+            report.notes.push_back(ContinuityNote{
+                ContinuityGrade::Manual, DomainId::AppInventory,
+                QCoreApplication::translate("Import", "Programs to install by hand"),
+                QCoreApplication::translate(
+                    "Import",
+                    "No package manager here offers these, so install them yourself. Their "
+                    "settings are already restored: %1")
+                    .arg(installPlan.manual.join(QStringLiteral(", ")))});
+        }
     }
 
     report.succeeded = true;

@@ -1,5 +1,7 @@
 #include "platform/macos/MacOsPlatformService.h"
 
+#include "platform/macos/MacOsSettingsProvider.h"
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -272,5 +274,9 @@ QString MacOsPlatformService::packageInstallCommand() const {
 }
 
 PackageSource MacOsPlatformService::nativePackageSource() const { return PackageSource::Homebrew; }
+
+std::unique_ptr<SettingsProvider> MacOsPlatformService::settingsProvider() const {
+    return std::make_unique<MacOsSettingsProvider>();
+}
 
 }  // namespace transmit::platform

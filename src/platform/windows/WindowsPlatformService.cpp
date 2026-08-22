@@ -1,5 +1,7 @@
 #include "platform/windows/WindowsPlatformService.h"
 
+#include "platform/windows/WindowsSettingsProvider.h"
+
 #include <QDir>
 #include <QFileInfo>
 #include <QHostInfo>
@@ -261,5 +263,9 @@ QString WindowsPlatformService::packageInstallCommand() const {
 }
 
 PackageSource WindowsPlatformService::nativePackageSource() const { return PackageSource::Winget; }
+
+std::unique_ptr<SettingsProvider> WindowsPlatformService::settingsProvider() const {
+    return std::make_unique<WindowsSettingsProvider>();
+}
 
 }  // namespace transmit::platform

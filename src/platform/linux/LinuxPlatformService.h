@@ -20,6 +20,7 @@ public:
         const QStringList& paths) const override;
     [[nodiscard]] QString packageInstallCommand() const override;
     [[nodiscard]] PackageSource nativePackageSource() const override;
+    [[nodiscard]] std::unique_ptr<SettingsProvider> settingsProvider() const override;
 };
 
 /// Reads /etc/os-release into a key/value map. Exposed for testing and for the
