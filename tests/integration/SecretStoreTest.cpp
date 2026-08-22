@@ -50,6 +50,11 @@ void SecretStoreTest::initTestCase() {
 
     // Writing then reading back is the only honest probe: a build without
     // libsecret reports the keyring as available because it can still write.
+    //
+    // On a platform with no way to run against a throwaway store - Windows
+    // has none - this leaves one entry named below in the real one. It is the
+    // price of finding out whether reading works at all, and the name says
+    // exactly what it is.
     platform::SecretRecord probe;
     probe.kind = platform::SecretKind::ApplicationPassword;
     probe.service = testLabel(QStringLiteral("probe"));

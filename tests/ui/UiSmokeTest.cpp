@@ -30,16 +30,24 @@ QtMessageHandler g_previous = nullptr;
 /// neither is a QML defect - which is what these tests are for. Everything
 /// else is still collected, including the untagged category that carries
 /// binding errors and the qrc: URL they came from.
-bool describesTheMachineNotTheTree(const QMessageLogContext& context) {
+bool describesTheMachineNotTheTree(const QMessageLogContext& context, const QString& message) {
     const QLatin1String category(context.category != nullptr ? context.category : "");
-    return category.startsWith(QLatin1String("qt.qpa.")) ||
-           category.startsWith(QLatin1String("qt.scenegraph.")) ||
-           category.startsWith(QLatin1String("qt.rhi."));
+    if (category.startsWith(QLatin1String("qt.qpa.")) ||
+        category.startsWith(QLatin1String("qt.scenegraph.")) ||
+        category.startsWith(QLatin1String("qt.rhi."))) {
+        return true;
+    }
+
+    // The font database reports on what is installed without a category of its
+    // own - a Qt with no fonts directory beside it, or a family it had to
+    // substitute. Matched on the prefix Qt puts there, because there is
+    // nothing else to match on.
+    return message.startsWith(QLatin1String("QFontDatabase:"));
 }
 
 void collectMessages(QtMsgType type, const QMessageLogContext& context, const QString& message) {
     if ((type == QtWarningMsg || type == QtCriticalMsg || type == QtFatalMsg) &&
-        !describesTheMachineNotTheTree(context)) {
+        !describesTheMachineNotTheTree(context, message)) {
         g_messages.append(message);
     }
     if (g_previous != nullptr) {
