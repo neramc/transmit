@@ -65,13 +65,13 @@ leave out.
 
 **Your files** — documents, pictures, music, video, downloads, desktop.
 
-**Application data and settings** — 73 programs are described in the shipped
-catalog: browsers, editors, terminals, shells, messengers, media players,
-graphics tools, office suites and utilities. For each one Transmit knows where
-its state lives on every platform, which parts are cache worth leaving behind,
-which files contain paths that need rewriting, and what it should warn you
-about. Anything not in the catalog is still captured if it lives in a folder
-you selected.
+**Application data and settings** — the whole configuration tree travels, so a
+program Transmit has never heard of keeps its settings. On top of that, 73
+programs are described in the shipped catalog: browsers, editors, terminals,
+shells, messengers, media players, graphics tools, office suites and utilities.
+For those, Transmit also knows where their state lives on *each* platform, so it
+can move it to the right place; which parts are cache worth leaving behind;
+which files hold paths that need correcting; and what it should warn you about.
 
 **Desktop preferences** — appearance and accent colour, wallpaper (including
 the image itself), language, formats, time zone, keyboard layouts, default

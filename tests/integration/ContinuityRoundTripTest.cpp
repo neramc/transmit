@@ -1,6 +1,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QSet>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -31,6 +32,8 @@ private slots:
     void reportsWhatARestoreWouldDoWithoutWriting();
     void honoursTheSkipConflictPolicy();
     void aRestoreCanBeUndone();
+    void settingsOfAnUnknownProgramStillTravel();
+    void overlappingRootsCaptureAFileOnlyOnce();
     void cleanupTestCase();
 
 private:
@@ -91,6 +94,12 @@ void ContinuityRoundTripTest::buildSourceTree(const QString& home) {
         byte = static_cast<char>((state >> 24) & 0xFFu);
     }
     write(home + "/Documents/random.bin", noise);
+
+    // A program the catalog has never heard of. Its settings should still
+    // travel: a migration that only carried the applications someone thought
+    // to write a recipe for would be a poor one.
+    write(home + "/.config/some-obscure-tool/settings.json", "{\"root\":\"/tmp\"}\n");
+    write(home + "/.local/share/some-obscure-tool/state.db", "not really a database\n");
     QDir().mkpath(home + "/Documents/empty");
 }
 
@@ -367,6 +376,75 @@ void ContinuityRoundTripTest::aRestoreCanBeUndone() {
     // What was added is gone.
     QVERIFY2(!QFile::exists(destination + "/PICTURES/holiday.jpg"),
              "files the restore created should be removed again");
+}
+
+void ContinuityRoundTripTest::settingsOfAnUnknownProgramStillTravel() {
+    core::ExportService exporter(*platform_);
+    core::CancelToken token;
+
+    core::ExportRequest request;
+    request.destinationPath = archivePath("unknown-app.txa");
+    request.selection = core::ProfileService::fullContinuity().selection;
+    request.preset = format::CompressionPreset::Fast;
+
+    const core::ExportReport exported = exporter.run(request, token);
+    QVERIFY2(exported.succeeded, qPrintable(exported.errorMessage));
+
+    const QString destination = workspace_.filePath("unknown-app-restored");
+    core::ImportService importer(*platform_);
+    core::ImportRequest restore;
+    restore.archivePath = request.destinationPath;
+    restore.destinationOverride = destination;
+    restore.createRollback = false;
+
+    QVERIFY(importer.run(restore, token).succeeded);
+
+    QFile settings(destination + "/APPCONFIG/some-obscure-tool/settings.json");
+    QVERIFY2(settings.open(QIODevice::ReadOnly), qPrintable(settings.fileName()));
+    QCOMPARE(settings.readAll(), QByteArray("{\"root\":\"/tmp\"}\n"));
+
+    QVERIFY(QFile::exists(destination + "/APPDATA/some-obscure-tool/state.db"));
+}
+
+/// The catalog names an application's own directory, and the full profile also
+/// takes the configuration tree that directory sits in. The same file must not
+/// be read, compressed and stored twice.
+void ContinuityRoundTripTest::overlappingRootsCaptureAFileOnlyOnce() {
+    core::CaptureSelection selection;
+    selection.domains = {static_cast<int>(format::DomainId::AppState)};
+
+    core::CaptureRoot broad;
+    broad.token = format::PathTokenId::AppConfig;
+    broad.domain = format::DomainId::AppState;
+    selection.roots.push_back(broad);
+
+    core::CaptureRoot specific;
+    specific.token = format::PathTokenId::AppConfig;
+    specific.relative = QStringLiteral("some-obscure-tool");
+    specific.domain = format::DomainId::AppState;
+    specific.appId = QStringLiteral("test.tool");
+    selection.roots.push_back(specific);
+
+    const core::ScanService scanner(*platform_);
+    core::CancelToken token;
+    const core::ScanResult result = scanner.scan(selection, token);
+
+    QStringList paths;
+    for (const core::ScannedItem& item : result.items) {
+        paths << item.absolutePath;
+    }
+
+    QSet<QString> unique(paths.begin(), paths.end());
+    QCOMPARE(unique.size(), paths.size());
+
+    // The counters have to agree with the list they describe.
+    quint64 files = 0;
+    for (const core::ScannedItem& item : result.items) {
+        if (item.type == format::EntryType::File) {
+            ++files;
+        }
+    }
+    QCOMPARE(result.fileCount, files);
 }
 
 QTEST_MAIN(ContinuityRoundTripTest)

@@ -5,6 +5,7 @@
 #include <QDirIterator>
 #include <QElapsedTimer>
 #include <QFileInfo>
+#include <QSet>
 
 #include <filesystem>
 
@@ -137,6 +138,31 @@ ScanResult ScanService::scan(const CaptureSelection& selection, CancelToken& can
         }
         scanRoot(root, selection, globalExcludes, result, cancelToken, progress);
     }
+
+    // Roots overlap by design: a recipe names an application's own directory,
+    // and a profile may also take the whole configuration tree it sits in.
+    // Whichever claimed a file first keeps it, so the recipe's application id
+    // survives rather than being replaced by the broader sweep.
+    QSet<QString> seen;
+    QList<ScannedItem> unique;
+    unique.reserve(result.items.size());
+
+    for (ScannedItem& item : result.items) {
+        if (seen.contains(item.absolutePath)) {
+            if (item.type == format::EntryType::File) {
+                result.totalBytes -= item.size;
+                --result.fileCount;
+            } else if (item.type == format::EntryType::Directory) {
+                --result.directoryCount;
+            } else {
+                --result.symlinkCount;
+            }
+            continue;
+        }
+        seen.insert(item.absolutePath);
+        unique.push_back(std::move(item));
+    }
+    result.items = std::move(unique);
 
     qCInfo(logCapture) << "scan found" << result.fileCount << "files," << result.directoryCount
                        << "directories," << result.symlinkCount << "links, totalling"
