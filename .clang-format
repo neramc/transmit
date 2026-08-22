@@ -17,18 +17,26 @@ SpaceAfterTemplateKeyword: false
 
 # Qt headers first, then the standard library, then our own - so a missing
 # include in one of our headers surfaces rather than being masked.
+#
+# windows.h gets a group to itself ahead of the other system headers. The rest
+# of the Windows SDK - tlhelp32.h, wincred.h - uses BOOL, DWORD and WINAPI
+# without declaring them, so those files only compile once windows.h has been
+# seen. Sorted together and alphabetically they would land the wrong way round,
+# which is a build failure that only appears on one platform.
 IncludeBlocks: Regroup
 IncludeCategories:
   - Regex: '^<Q.*'
     Priority: 1
-  - Regex: '^<.*\.h>'
+  - Regex: '^<windows\.h>'
     Priority: 3
+  - Regex: '^<.*\.h>'
+    Priority: 4
   - Regex: '^<.*'
     Priority: 2
   - Regex: '^"(core|format|platform|app)/'
-    Priority: 4
-  - Regex: '.*'
     Priority: 5
+  - Regex: '.*'
+    Priority: 6
 ---
 # The macOS platform files are Objective-C++; same rules, different language tag.
 Language: ObjC

@@ -23,8 +23,18 @@ QStringList g_messages;
 QStringList g_loadMessages;
 QtMessageHandler g_previous = nullptr;
 
+/// Categories whose warnings say something about the machine rather than about
+/// the interface. A build runner with no fonts installed reports the family it
+/// substituted; that is true, and it is not a QML defect, which is what these
+/// tests are for.
+bool describesTheMachineNotTheTree(const QMessageLogContext& context) {
+    const QLatin1String category(context.category != nullptr ? context.category : "");
+    return category == QLatin1String("qt.qpa.fonts");
+}
+
 void collectMessages(QtMsgType type, const QMessageLogContext& context, const QString& message) {
-    if (type == QtWarningMsg || type == QtCriticalMsg || type == QtFatalMsg) {
+    if ((type == QtWarningMsg || type == QtCriticalMsg || type == QtFatalMsg) &&
+        !describesTheMachineNotTheTree(context)) {
         g_messages.append(message);
     }
     if (g_previous != nullptr) {

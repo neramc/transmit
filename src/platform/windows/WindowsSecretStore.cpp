@@ -7,8 +7,9 @@
 #include "core/utils/Logging.h"
 
 #ifdef Q_OS_WIN
-#include <wincred.h>
 #include <windows.h>
+
+#include <wincred.h>
 #endif
 
 namespace transmit::platform {

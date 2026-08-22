@@ -132,14 +132,29 @@ PathTokenMap MacOsPlatformService::knownFolders() const {
         }
     };
 
+    // Every folder below hangs off the same home directory.
+    //
+    // QStandardPaths would answer for the user folders, but on macOS it asks
+    // Cocoa, which reports the account's real home and takes no notice of
+    // $HOME. The rest of this table uses QDir::homePath, which does. The two
+    // agree for an ordinary login and disagree the moment anything redirects
+    // HOME - a service account, a sandbox, a test - and the table would then
+    // describe two different machines at once, with {HOME} pointing one way
+    // and {DOCUMENTS} the other.
+    //
+    // The names are fixed by the operating system, so deriving them loses
+    // nothing.
+    const auto userFolder = [&home](const char* name) {
+        return home + QLatin1Char('/') + QLatin1String(name);
+    };
+
     set(PathTokenId::Home, home);
-    set(PathTokenId::Desktop, QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
-    set(PathTokenId::Documents,
-        QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));
-    set(PathTokenId::Downloads, QStandardPaths::writableLocation(QStandardPaths::DownloadLocation));
-    set(PathTokenId::Pictures, QStandardPaths::writableLocation(QStandardPaths::PicturesLocation));
-    set(PathTokenId::Music, QStandardPaths::writableLocation(QStandardPaths::MusicLocation));
-    set(PathTokenId::Videos, QStandardPaths::writableLocation(QStandardPaths::MoviesLocation));
+    set(PathTokenId::Desktop, userFolder("Desktop"));
+    set(PathTokenId::Documents, userFolder("Documents"));
+    set(PathTokenId::Downloads, userFolder("Downloads"));
+    set(PathTokenId::Pictures, userFolder("Pictures"));
+    set(PathTokenId::Music, userFolder("Music"));
+    set(PathTokenId::Videos, userFolder("Movies"));
 
     // macOS keeps both roaming-style and machine-local application data in
     // Application Support, so both tokens resolve there.

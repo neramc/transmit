@@ -15,8 +15,9 @@
 #include "platform/windows/WindowsSettingsProvider.h"
 
 #ifdef Q_OS_WIN
-#include <tlhelp32.h>
 #include <windows.h>
+
+#include <tlhelp32.h>
 #endif
 
 namespace transmit::platform {
