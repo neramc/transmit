@@ -149,10 +149,16 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
     }
 
     request.passphrase = readPassphrase(parser, passphraseFileOption, passphraseOption);
-    if (request.selection.domains.contains(static_cast<int>(format::DomainId::Secrets)) &&
-        request.passphrase.isEmpty()) {
-        return reportError(
-            QStringLiteral("capturing credentials requires a passphrase; pass --passphrase-file"));
+    if (request.selection.domains.contains(static_cast<int>(format::DomainId::Secrets))) {
+        if (request.passphrase.isEmpty()) {
+            return reportError(QStringLiteral(
+                "capturing saved passwords requires a passphrase; pass --passphrase-file"));
+        }
+        // Worth saying out loud before it happens, not only in the report.
+        err() << QStringLiteral(
+                     "note: saved passwords will be written into this archive. Keep the drive "
+                     "and the passphrase apart.")
+              << Qt::endl;
     }
 
     CancelToken cancelToken;

@@ -9,6 +9,7 @@
 
 #include "core/recipe/AppInventoryPayload.h"
 #include "core/recipe/RecipeCatalog.h"
+#include "core/secrets/SecretsDomain.h"
 #include "core/services/ConsistentCopy.h"
 #include "core/settings/SettingsDomain.h"
 #include "core/tasks/BlockPipeline.h"
@@ -152,6 +153,25 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         qCInfo(logCapture) << "recognised" << matchedApps.size() << "applications";
     }
 
+    // ------------------------------------------------- saved passwords
+    // Refused above unless the archive is encrypted, so by this point the
+    // plaintext has somewhere safe to go.
+    format::ByteBuffer secretsPayload;
+    if (selection.includes(DomainId::Secrets)) {
+        if (progress) {
+            ProgressUpdate update;
+            update.stage = QCoreApplication::translate("Export", "Collecting saved passwords");
+            progress(update);
+        }
+
+        const SecretsDomain secrets(platform_);
+        SecretsDomain::CaptureOptions options;
+        auto captured = secrets.capture(options);
+
+        secretsPayload = std::move(captured.payload);
+        report.notes += captured.notes;
+    }
+
     // --------------------------------------------------- system settings
     QList<CapturedSetting> capturedSettings;
     if (selection.includes(DomainId::SystemSettings)) {
@@ -259,6 +279,11 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         if (const auto base = sourceTokens.base(token)) {
             manifest.source.tokenBases[token] = *base;
         }
+    }
+
+    if (!secretsPayload.empty()) {
+        manifest.payloads.push_back(
+            format::DomainPayload{DomainId::Secrets, "secrets.v1", std::move(secretsPayload)});
     }
 
     if (!capturedSettings.isEmpty()) {
@@ -369,16 +394,6 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
 
     for (const auto& part : writer->parts()) {
         report.archiveParts.push_back(fromUtf8(format::fromFsPath(part)));
-    }
-
-    if (report.encrypted && request.selection.includes(DomainId::Secrets)) {
-        report.notes.push_back(ContinuityNote{
-            ContinuityGrade::Full, DomainId::Secrets,
-            QCoreApplication::translate("Export", "Credentials"),
-            QCoreApplication::translate(
-                "Export",
-                "This archive contains saved passwords. Anyone with the file and the passphrase "
-                "can read them, so keep the drive and the passphrase apart.")});
     }
 
     qCInfo(logCapture) << "captured" << report.fileCount << "files:" << formatBytes(report.rawBytes)

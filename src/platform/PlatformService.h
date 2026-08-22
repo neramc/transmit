@@ -8,6 +8,7 @@
 
 #include "format/PathToken.h"
 #include "format/Result.h"
+#include "platform/SecretStore.h"
 #include "platform/SettingsProvider.h"
 
 namespace transmit::platform {
@@ -149,6 +150,10 @@ public:
 
     /// Reads and writes the desktop preferences Transmit carries across.
     [[nodiscard]] virtual std::unique_ptr<SettingsProvider> settingsProvider() const = 0;
+
+    /// Reads and writes this system's credential store. Only ever used when
+    /// the user has explicitly opted in and the archive is encrypted.
+    [[nodiscard]] virtual std::unique_ptr<SecretStore> secretStore() const = 0;
 };
 
 }  // namespace transmit::platform

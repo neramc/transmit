@@ -16,6 +16,7 @@
 #include "core/recipe/StateRelocator.h"
 #include "core/rewrite/PathRewriter.h"
 #include "core/rewrite/PathTranslator.h"
+#include "core/secrets/SecretsDomain.h"
 #include "core/settings/SettingsDomain.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
@@ -655,6 +656,21 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                 "%n item(s) were renamed because their names are not valid on this system, or "
                 "because two of them differ only by capitalisation.",
                 nullptr, static_cast<int>(report.renames.size()))});
+    }
+
+    // ---------------------------------------------------- saved passwords
+    if (request.domains.isEmpty() ||
+        request.domains.contains(static_cast<int>(DomainId::Secrets))) {
+        if (const auto* payload = manifest.findPayload(DomainId::Secrets, "secrets.v1")) {
+            const bool emulating = request.emulateOs != OsFamily::Unknown &&
+                                   request.emulateOs != platform_.environment().os;
+            const QString scriptDirectory = request.destinationOverride.isEmpty()
+                                                ? platform_.environment().homeDirectory
+                                                : request.destinationOverride;
+
+            report.notes += SecretsDomain(platform_).restore(payload->data, scriptDirectory,
+                                                             request.dryRun || emulating);
+        }
     }
 
     // ------------------------------------------------ desktop preferences

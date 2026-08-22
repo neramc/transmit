@@ -9,6 +9,7 @@ add_library(transmit_core STATIC
     recipe/StateRelocator.cpp
     recipe/InstallScriptWriter.cpp
     settings/SettingsDomain.cpp
+    secrets/SecretsDomain.cpp
     rewrite/PathTranslator.cpp
     rewrite/RewritePlan.cpp
     rewrite/PathRewriter.cpp

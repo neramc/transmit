@@ -1,5 +1,6 @@
 #include "platform/macos/MacOsPlatformService.h"
 
+#include "platform/macos/MacOsSecretStore.h"
 #include "platform/macos/MacOsSettingsProvider.h"
 
 #include <QDir>
@@ -277,6 +278,10 @@ PackageSource MacOsPlatformService::nativePackageSource() const { return Package
 
 std::unique_ptr<SettingsProvider> MacOsPlatformService::settingsProvider() const {
     return std::make_unique<MacOsSettingsProvider>();
+}
+
+std::unique_ptr<SecretStore> MacOsPlatformService::secretStore() const {
+    return std::make_unique<MacOsSecretStore>();
 }
 
 }  // namespace transmit::platform

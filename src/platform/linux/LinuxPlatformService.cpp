@@ -14,6 +14,7 @@
 
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
+#include "platform/linux/LinuxSecretStore.h"
 #include "platform/linux/LinuxSettingsProvider.h"
 
 namespace transmit::platform {
@@ -632,6 +633,10 @@ PackageSource LinuxPlatformService::nativePackageSource() const {
 
 std::unique_ptr<SettingsProvider> LinuxPlatformService::settingsProvider() const {
     return std::make_unique<LinuxSettingsProvider>();
+}
+
+std::unique_ptr<SecretStore> LinuxPlatformService::secretStore() const {
+    return std::make_unique<LinuxSecretStore>();
 }
 
 }  // namespace transmit::platform

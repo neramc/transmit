@@ -21,6 +21,7 @@ public:
     [[nodiscard]] QString packageInstallCommand() const override;
     [[nodiscard]] PackageSource nativePackageSource() const override;
     [[nodiscard]] std::unique_ptr<SettingsProvider> settingsProvider() const override;
+    [[nodiscard]] std::unique_ptr<SecretStore> secretStore() const override;
 
     /// True when the process can read the protected user data locations. The
     /// UI uses this to show the Full Disk Access prompt before a capture.

@@ -18,6 +18,7 @@ public:
     [[nodiscard]] QString packageInstallCommand() const override;
     [[nodiscard]] PackageSource nativePackageSource() const override;
     [[nodiscard]] std::unique_ptr<SettingsProvider> settingsProvider() const override;
+    [[nodiscard]] std::unique_ptr<SecretStore> secretStore() const override;
 };
 
 }  // namespace transmit::platform

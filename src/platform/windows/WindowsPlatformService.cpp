@@ -11,6 +11,7 @@
 
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
+#include "platform/windows/WindowsSecretStore.h"
 #include "platform/windows/WindowsSettingsProvider.h"
 
 #ifdef Q_OS_WIN
@@ -267,6 +268,10 @@ PackageSource WindowsPlatformService::nativePackageSource() const {
 
 std::unique_ptr<SettingsProvider> WindowsPlatformService::settingsProvider() const {
     return std::make_unique<WindowsSettingsProvider>();
+}
+
+std::unique_ptr<SecretStore> WindowsPlatformService::secretStore() const {
+    return std::make_unique<WindowsSecretStore>();
 }
 
 }  // namespace transmit::platform
