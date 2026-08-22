@@ -1,12 +1,39 @@
 #include "format/FileIo.h"
 
+#include <array>
 #include <cerrno>
 #include <cstring>
+#include <string>
 #include <system_error>
 #include <utility>
 
 namespace transmit::format {
 namespace {
+
+/// The message for an errno value, without std::strerror.
+///
+/// std::strerror returns a pointer to a shared buffer, so two threads failing
+/// at once can read each other's message - and this layer is used from the
+/// compression workers. MSVC deprecates it outright for the same reason.
+std::string describeErrno(int code) {
+    constexpr std::size_t kMessageSize = 256;
+    std::array<char, kMessageSize> buffer{};
+
+#if defined(_WIN32)
+    if (::strerror_s(buffer.data(), buffer.size(), code) != 0) {
+        return "unknown error";
+    }
+    return buffer.data();
+#elif defined(__GLIBC__) && defined(_GNU_SOURCE)
+    // The GNU flavour returns the message, which may or may not be the buffer.
+    return ::strerror_r(code, buffer.data(), buffer.size());
+#else
+    if (::strerror_r(code, buffer.data(), buffer.size()) != 0) {
+        return "unknown error";
+    }
+    return buffer.data();
+#endif
+}
 
 Error errnoError(const std::filesystem::path& path, const char* what) {
     const int code = errno;
@@ -18,7 +45,7 @@ Error errnoError(const std::filesystem::path& path, const char* what) {
     } else if (code == ENOMEM) {
         mapped = ErrorCode::OutOfMemory;
     }
-    return makeError(mapped, what, " '", fromFsPath(path), "': ", std::strerror(code));
+    return makeError(mapped, what, " '", fromFsPath(path), "': ", describeErrno(code));
 }
 
 #if !defined(_WIN32)
