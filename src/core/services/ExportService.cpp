@@ -60,6 +60,28 @@ format::ManifestEntry toManifestEntry(const ScannedItem& item, quint64 id) {
 ExportService::ExportService(platform::PlatformService& platformService)
     : platform_(platformService) {}
 
+QList<platform::RunningApp> ExportService::applicationsToClose(
+    const CaptureSelection& selection) const {
+    if (!selection.includes(DomainId::AppState)) {
+        return {};
+    }
+
+    RecipeCatalog catalog;
+    catalog.loadDefaults();
+
+    const platform::EnvironmentInfo environment = platform_.environment();
+    const format::PathTokenMap folders = platform_.knownFolders();
+
+    QList<MatchedApp> matched = catalog.match(platform_.installedApplications(), environment.os);
+    matched += catalog.matchByStateOnly(matched, environment.os, folders);
+
+    QStringList quiesce;
+    for (const MatchedApp& match : matched) {
+        quiesce += match.recipe.quiesceProcesses;
+    }
+    return platform_.runningApplications(quiesce);
+}
+
 quint64 ExportService::splitSizeFor(const platform::StorageVolume& volume) {
     if (!volume.requiresSplitting()) {
         return 0;

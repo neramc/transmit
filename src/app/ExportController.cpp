@@ -32,11 +32,74 @@ ExportController::ExportController(QObject* parent) : QObject(parent) {
 
     connect(&watcher_, &QFutureWatcher<core::ExportReport>::finished, this,
             &ExportController::handleFinished);
+    connect(&programWatcher_, &QFutureWatcher<QList<platform::RunningApp>>::finished, this,
+            &ExportController::handleProgramCheckFinished);
 }
 
 ExportController::~ExportController() {
     cancelToken_.cancel();
     watcher_.waitForFinished();
+    programWatcher_.waitForFinished();
+}
+
+core::CaptureSelection ExportController::selectionFor(const QString& profileId,
+                                                      const QStringList& domains,
+                                                      bool includeSecrets) {
+    core::CaptureSelection selection = core::ProfileService::profileById(profileId).selection;
+
+    if (!domains.isEmpty()) {
+        selection.domains.clear();
+        for (const QString& name : domains) {
+            if (const auto domain = format::domainFromName(core::toUtf8(name))) {
+                selection.domains.insert(static_cast<int>(*domain));
+            }
+        }
+    }
+    if (includeSecrets) {
+        selection.domains.insert(static_cast<int>(format::DomainId::Secrets));
+    }
+    return selection;
+}
+
+void ExportController::checkForRunningPrograms(const QString& profileId,
+                                               const QStringList& domains) {
+    if (checkingPrograms_ || running_) {
+        return;
+    }
+    checkingPrograms_ = true;
+    emit programsToCloseChanged();
+
+    core::ExportService* const service = service_.get();
+    const core::CaptureSelection selection = selectionFor(profileId, domains, false);
+    programWatcher_.setFuture(QtConcurrent::run(
+        [service, selection]() { return service->applicationsToClose(selection); }));
+}
+
+void ExportController::handleProgramCheckFinished() {
+    const QList<platform::RunningApp> running = programWatcher_.result();
+
+    programsToClose_.clear();
+    for (const platform::RunningApp& app : running) {
+        const QString name = app.displayName.isEmpty() ? app.processName : app.displayName;
+        if (!programsToClose_.contains(name)) {
+            programsToClose_.push_back(name);
+        }
+    }
+    programsToClose_.sort(Qt::CaseInsensitive);
+
+    checkingPrograms_ = false;
+    programsChecked_ = true;
+    qCInfo(logCapture) << programsToClose_.size() << "program(s) should be closed first";
+    emit programsToCloseChanged();
+}
+
+void ExportController::forgetRunningPrograms() {
+    if (!programsChecked_ && programsToClose_.isEmpty()) {
+        return;
+    }
+    programsToClose_.clear();
+    programsChecked_ = false;
+    emit programsToCloseChanged();
 }
 
 double ExportController::fileProgress() const {
@@ -139,19 +202,7 @@ void ExportController::start(const QString& profileId, const QString& destinatio
 
     core::ExportRequest request;
     request.label = label;
-    request.selection = core::ProfileService::profileById(profileId).selection;
-
-    if (!domains.isEmpty()) {
-        request.selection.domains.clear();
-        for (const QString& name : domains) {
-            if (const auto domain = format::domainFromName(core::toUtf8(name))) {
-                request.selection.domains.insert(static_cast<int>(*domain));
-            }
-        }
-    }
-    if (includeSecrets) {
-        request.selection.domains.insert(static_cast<int>(format::DomainId::Secrets));
-    }
+    request.selection = selectionFor(profileId, domains, includeSecrets);
 
     request.passphrase = passphrase;
     request.partSize = splitForFat32 ? format::kFat32SafePartSize : 0;

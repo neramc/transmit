@@ -52,6 +52,13 @@ Item {
 
     function goTo(next) {
         step = next
+
+        // The answer goes stale the moment the user closes something, so it is
+        // asked afresh each time they arrive at the last step before Start.
+        if (next === 2 && page.includeAppState) {
+            ExportController.forgetRunningPrograms()
+            ExportController.checkForRunningPrograms(page.profileId, page.selectedDomains)
+        }
     }
 
     /// Makes the tick boxes agree with the profile just chosen. Without this,
@@ -292,6 +299,103 @@ Item {
 
                     AppSectionHeader {
                         title: qsTr("How should it be packed?")
+                    }
+
+                    // Asked here rather than reported afterwards: being told at
+                    // the end of a long capture to close a program and start
+                    // again is not a warning, it is a waste of the wait.
+                    AppCard {
+                        Layout.fillWidth: true
+                        visible: ExportController.checkingPrograms
+                                 || ExportController.programsToClose.length > 0
+                        implicitHeight: quiesce.implicitHeight + Spacing.xl * 2
+
+                        ColumnLayout {
+                            id: quiesce
+                            anchors.fill: parent
+                            anchors.margins: Spacing.xl
+                            spacing: Spacing.md
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Spacing.sm
+
+                                AppSpinner {
+                                    running: ExportController.checkingPrograms
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+
+                                AppIcon {
+                                    name: "alert"
+                                    color: Colors.warning
+                                    visible: !ExportController.checkingPrograms
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: ExportController.checkingPrograms
+                                          ? qsTr("Checking what is running…")
+                                          : qsTr("Close these before you start")
+                                    color: Colors.textPrimary
+                                    font.family: Typography.family
+                                    font.pixelSize: Typography.heading
+                                    font.weight: Typography.semiBold
+                                }
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                visible: !ExportController.checkingPrograms
+                                text: qsTr("These programs are running and have their data open. "
+                                         + "Transmit can still copy it, but a file written while "
+                                         + "it is being read may arrive half-finished.")
+                                color: Colors.textSecondary
+                                font.family: Typography.family
+                                font.pixelSize: Typography.small
+                                lineHeight: Typography.lineHeightNormal
+                                wrapMode: Text.WordWrap
+                            }
+
+                            Repeater {
+                                model: ExportController.programsToClose
+
+                                RowLayout {
+                                    id: programRow
+
+                                    required property string modelData
+
+                                    Layout.fillWidth: true
+                                    spacing: Spacing.sm
+
+                                    Text {
+                                        text: "\u2022"
+                                        color: Colors.textSecondary
+                                        font.family: Typography.family
+                                        font.pixelSize: Typography.body
+                                    }
+
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: programRow.modelData
+                                        color: Colors.textPrimary
+                                        font.family: Typography.family
+                                        font.pixelSize: Typography.body
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+
+                            AppButton {
+                                text: qsTr("Check again")
+                                enabled: !ExportController.checkingPrograms
+                                onClicked: {
+                                    ExportController.forgetRunningPrograms()
+                                    ExportController.checkForRunningPrograms(
+                                        page.profileId, page.selectedDomains)
+                                }
+                            }
+                        }
                     }
 
                     AppLabelledField {

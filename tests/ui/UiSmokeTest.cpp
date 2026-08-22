@@ -51,6 +51,7 @@ private slots:
     void theThemeFollowsTheController();
     void reducedMotionSilencesTheAnimations();
     void aLongReportRendersWithoutWarnings();
+    void theCaptureWizardAsksWhatIsRunning();
     void confirmingADialogRunsTheAction();
     void dismissingADialogRunsNothing();
 
@@ -239,6 +240,38 @@ void UiSmokeTest::aLongReportRendersWithoutWarnings() {
                                 .arg(QString::number(grade), g_messages.join(u'\n'))));
     }
     model->setGradeFilter(-1);
+
+    evaluate(QStringLiteral("AppController.currentPage = 'home'"));
+    settle(120);
+}
+
+void UiSmokeTest::theCaptureWizardAsksWhatIsRunning() {
+    // Reaching the last step before Start has to produce an answer about
+    // running programs, because being told after a long capture that one was
+    // open is not a warning - it is a wasted wait.
+    evaluate(QStringLiteral("AppController.currentPage = 'export'"));
+    settle(200);
+
+    evaluate(QStringLiteral("ExportController.forgetRunningPrograms()"));
+    QCOMPARE(evaluate(QStringLiteral("ExportController.programsChecked")).toBool(), false);
+
+    evaluate(QStringLiteral(
+        "ExportController.checkForRunningPrograms('full', ['userdata', 'appstate'])"));
+
+    // Asking the system what is installed shells out to a package manager, so
+    // this is generous rather than tight.
+    for (int waited = 0; waited < 60000; waited += 250) {
+        if (evaluate(QStringLiteral("ExportController.programsChecked")).toBool()) {
+            break;
+        }
+        settle(250);
+    }
+
+    QVERIFY2(evaluate(QStringLiteral("ExportController.programsChecked")).toBool(),
+             "the check never answered");
+    QVERIFY2(!evaluate(QStringLiteral("ExportController.checkingPrograms")).toBool(),
+             "the check should not still be running once it has answered");
+    QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join(u'\n')));
 
     evaluate(QStringLiteral("AppController.currentPage = 'home'"));
     settle(120);

@@ -33,6 +33,14 @@ public:
     /// volume that cannot hold the whole archive is reported by the caller.
     [[nodiscard]] static quint64 splitSizeFor(const platform::StorageVolume& volume);
 
+    /// The programs that are running now and would be captured mid-write.
+    ///
+    /// A capture reports these afterwards too, but by then the user has
+    /// already waited for it - being told at the end to close a program and
+    /// start again is not much of a warning. This lets the wizard ask first.
+    [[nodiscard]] QList<platform::RunningApp> applicationsToClose(
+        const CaptureSelection& selection) const;
+
 private:
     platform::PlatformService& platform_;
 };
