@@ -11,6 +11,10 @@ RowLayout {
     property string value: ""
     property int labelWidth: 150
 
+    /// A row whose value is empty says nothing and looks broken, so by default
+    /// it is simply not there. Callers that want the gap can override this.
+    visible: pair.value !== ""
+
     Layout.fillWidth: true
     spacing: Spacing.md
 

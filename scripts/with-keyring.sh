@@ -20,6 +20,10 @@ if ! command -v gnome-keyring-daemon >/dev/null 2>&1; then
     echo "gnome-keyring-daemon is not installed" >&2
     exit 1
 fi
+if ! command -v secret-tool >/dev/null 2>&1; then
+    echo "secret-tool is not installed (apt install libsecret-tools)" >&2
+    exit 1
+fi
 if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
     echo "no session bus - run this under dbus-run-session" >&2
     exit 1
@@ -34,5 +38,16 @@ export XDG_DATA_HOME="$keyring_home/.local/share"
 # The password is for a keyring that exists for the length of this command.
 eval "$(printf 'transmit-test\n' | gnome-keyring-daemon --unlock --components=secrets 2>/dev/null)"
 export GNOME_KEYRING_CONTROL
+
+# --unlock does not create the default collection, and in a home directory
+# this new there is none to unlock. Anything asking for the default collection
+# then gets "no object at /org/freedesktop/secrets/collection/login", and the
+# daemon tries to raise a graphical prompt that cannot appear. Storing one
+# entry is what brings the collection into existence.
+printf 'bootstrap' | secret-tool store --label='transmit-test bootstrap' \
+    transmit-test bootstrap >/dev/null 2>&1 || {
+        echo "could not create the default keyring collection" >&2
+        exit 1
+    }
 
 "$@"

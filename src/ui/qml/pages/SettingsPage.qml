@@ -12,8 +12,8 @@ AppScrollView {
         width: page.availableWidth
         spacing: Spacing.xl
 
-        AppSectionHeader { title: qsTr("Settings") }
-
+        // No heading: the toolbar above already says where you are, and
+        // saying it twice just pushes the first setting down the page.
         AppLabelledField {
             Layout.fillWidth: true
             label: qsTr("Appearance")

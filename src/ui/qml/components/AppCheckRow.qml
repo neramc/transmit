@@ -43,7 +43,18 @@ RowLayout {
 
     Switch {
         id: toggle
+
+        // A definite size with a minimum to match. Without it the layout gives
+        // the wrapping description its full unwrapped width and squeezes the
+        // switch down to a sliver at the edge of the panel - present, but far
+        // too narrow to see or to hit.
+        implicitWidth: 44
+        implicitHeight: 24
+        padding: 0
+
         Layout.alignment: Qt.AlignVCenter
+        Layout.preferredWidth: implicitWidth
+        Layout.minimumWidth: implicitWidth
 
         Accessible.name: row.label
         Accessible.description: row.description
@@ -51,8 +62,8 @@ RowLayout {
         indicator: Rectangle {
             implicitWidth: 40
             implicitHeight: 22
-            x: toggle.leftPadding
-            y: parent.height / 2 - height / 2
+            x: (toggle.width - width) / 2
+            y: (toggle.height - height) / 2
             radius: Radius.pill
             color: toggle.checked ? Colors.accent : Colors.borderStrong
             opacity: toggle.enabled ? 1.0 : 0.5

@@ -12,6 +12,11 @@
 #include <QSysInfo>
 #include <QTextStream>
 
+#include <vector>
+
+#include <pwd.h>
+#include <unistd.h>
+
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
 #include "platform/linux/LinuxSecretStore.h"
@@ -133,6 +138,37 @@ bool isRemovableDevice(const QString& devicePath) {
 
 /// Crostini (the Linux container on ChromeOS) looks like Debian but mounts the
 /// user's ChromeOS files under /mnt/chromeos, which capture must handle.
+/// The account name, which the archive records so a restore can say where it
+/// came from.
+///
+/// USER and LOGNAME are only set by a login shell. A desktop session started
+/// by a display manager, a systemd service, and a container all routinely have
+/// neither, and the password database is the answer in every one of those
+/// cases.
+QString currentUserName() {
+    const QString fromEnvironment = qEnvironmentVariable("USER", qEnvironmentVariable("LOGNAME"));
+    if (!fromEnvironment.isEmpty()) {
+        return fromEnvironment;
+    }
+
+    // getpwuid_r wants a buffer whose size the system will tell us, or a
+    // reasonable guess when it declines to.
+    long suggested = ::sysconf(_SC_GETPW_R_SIZE_MAX);
+    if (suggested <= 0) {
+        suggested = 16384;
+    }
+
+    std::vector<char> buffer(static_cast<std::size_t>(suggested));
+    struct ::passwd record {};
+    struct ::passwd* found = nullptr;
+
+    if (::getpwuid_r(::getuid(), &record, buffer.data(), buffer.size(), &found) == 0 &&
+        found != nullptr && found->pw_name != nullptr) {
+        return QString::fromLocal8Bit(found->pw_name);
+    }
+    return {};
+}
+
 bool isChromiumOsContainer() {
     return QFile::exists(QStringLiteral("/dev/.cros_milestone")) ||
            QFile::exists(QStringLiteral("/etc/apt/sources.list.d/cros.list")) ||
@@ -304,7 +340,7 @@ EnvironmentInfo LinuxPlatformService::environment() const {
     info.osName = osRelease.value(QStringLiteral("PRETTY_NAME"), QSysInfo::prettyProductName());
     info.osVersion = osRelease.value(QStringLiteral("VERSION_ID"), QSysInfo::productVersion());
     info.hostName = QHostInfo::localHostName();
-    info.userName = qEnvironmentVariable("USER", qEnvironmentVariable("LOGNAME"));
+    info.userName = currentUserName();
     info.homeDirectory = QDir::homePath();
     info.architecture = QSysInfo::currentCpuArchitecture();
 

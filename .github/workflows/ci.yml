@@ -45,7 +45,7 @@ jobs:
           sudo apt-get install -y ninja-build libzstd-dev liblzma-dev libssl-dev \
                                   libsqlite3-dev libsecret-1-dev \
                                   libgl1-mesa-dev libxkbcommon-x11-0 xvfb \
-                                  gnome-keyring dbus-x11
+                                  gnome-keyring libsecret-tools dbus-x11
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
@@ -84,8 +84,17 @@ jobs:
       - name: Test against a real keyring
         if: runner.os == 'Linux'
         run: |
+          set -o pipefail
           dbus-run-session -- scripts/with-keyring.sh \
-              ./build/tests/integration/transmit_SecretStore_test
+              ./build/tests/integration/transmit_SecretStore_test | tee keyring.log
+
+          # The suite skips itself when there is no secret service, which is
+          # the right behaviour on a developer's machine and useless here: a
+          # step that always skips reports success and proves nothing.
+          if grep -q "SKIP   : SecretStoreTest::initTestCase" keyring.log; then
+              echo "::error::the credential tests skipped - no keyring was reachable"
+              exit 1
+          fi
 
       # The interface has to start, not merely link. This catches a QML module
       # that failed to register, which no unit test would notice.
@@ -142,6 +151,9 @@ jobs:
 
       - name: Check formatting
         run: scripts/format.sh --check
+
+      - name: Check every QML file is registered
+        run: scripts/check-qml-modules.sh
 
       - name: Configure
         run: cmake --preset cli-only

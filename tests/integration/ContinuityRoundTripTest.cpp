@@ -39,9 +39,24 @@ private slots:
 
 private:
     /// Builds a home directory with the shapes that break naive tools: nested
-    /// folders, duplicate content, an awkward name, and a case-only collision.
+    /// folders, duplicate content, an awkward name, and - where the filesystem
+    /// can hold one - a case-only collision.
     void buildSourceTree(const QString& home);
+
+    /// Whether this filesystem tells Notes.txt from notes.txt.
+    ///
+    /// macOS formats its boot volume case-insensitively by default, so the
+    /// pair the collision tests want simply cannot exist there. Detected by
+    /// asking rather than by looking at the platform name: a case-sensitive
+    /// volume on macOS and a case-insensitive one on Linux are both perfectly
+    /// possible.
+    [[nodiscard]] static bool distinguishesCase(const QString& directory);
     [[nodiscard]] core::CaptureSelection documentsSelection() const;
+
+    /// Where this platform actually keeps a program's configuration and data,
+    /// which is where the fixture has to put the unknown program's files for
+    /// the capture to find them at all.
+    [[nodiscard]] QString baseFor(format::PathTokenId token) const;
     [[nodiscard]] QString sourceHome() const { return workspace_.filePath("home"); }
     [[nodiscard]] QString archivePath(const QString& name) const {
         return workspace_.filePath(name);
@@ -51,6 +66,11 @@ private:
     QString originalHome_;
     QHash<QString, QString> overriddenEnvironment_;
     std::unique_ptr<platform::PlatformService> platform_;
+    bool distinguishesCase_ = true;
+
+    /// How many files the documents profile should find. One fewer where the
+    /// filesystem folded the case-only pair into a single file.
+    quint64 documentFileCount_ = 8;
 };
 
 void ContinuityRoundTripTest::initTestCase() {
@@ -71,8 +91,15 @@ void ContinuityRoundTripTest::initTestCase() {
     }
     qputenv("HOME", sourceHome().toUtf8());
 
-    buildSourceTree(sourceHome());
+    // Created after HOME is set, so its folder table describes the fake home.
     platform_ = platform::PlatformService::create();
+
+    distinguishesCase_ = distinguishesCase(sourceHome());
+    if (!distinguishesCase_) {
+        qInfo("this filesystem folds case; the collision fixture is reduced to one file");
+    }
+
+    buildSourceTree(sourceHome());
 }
 
 void ContinuityRoundTripTest::cleanupTestCase() {
@@ -87,6 +114,27 @@ void ContinuityRoundTripTest::cleanupTestCase() {
     }
 }
 
+bool ContinuityRoundTripTest::distinguishesCase(const QString& directory) {
+    QDir().mkpath(directory);
+    const QString lower = directory + QStringLiteral("/transmit-case-probe");
+    const QString upper = directory + QStringLiteral("/TRANSMIT-CASE-PROBE");
+
+    QFile probe(lower);
+    if (!probe.open(QIODevice::WriteOnly)) {
+        return true;  // cannot tell; assume the stricter of the two
+    }
+    probe.close();
+
+    const bool folded = QFileInfo::exists(upper);
+    QFile::remove(lower);
+    return !folded;
+}
+
+QString ContinuityRoundTripTest::baseFor(format::PathTokenId token) const {
+    const auto base = platform_->knownFolders().base(token);
+    return base ? QString::fromStdString(*base) : QString();
+}
+
 void ContinuityRoundTripTest::buildSourceTree(const QString& home) {
     const auto write = [](const QString& path, const QByteArray& content) {
         QDir().mkpath(QFileInfo(path).absolutePath());
@@ -98,7 +146,15 @@ void ContinuityRoundTripTest::buildSourceTree(const QString& home) {
     write(home + "/Documents/reports/q1.txt", "first quarter\n");
     write(home + "/Documents/reports/q2.txt", "second quarter\n");
     write(home + "/Documents/notes.txt", "lower case notes\n");
-    write(home + "/Documents/Notes.txt", "upper case notes\n");
+
+    // The twin only exists where the filesystem can hold both. Writing it
+    // anyway on a case-insensitive volume would not create a second file, it
+    // would silently overwrite the first - and every count below would then be
+    // measuring something other than what it says.
+    if (distinguishesCase_) {
+        write(home + "/Documents/Notes.txt", "upper case notes\n");
+    }
+    documentFileCount_ = distinguishesCase_ ? 8 : 7;
     write(home + "/Documents/copy-a.bin", QByteArray(4096, 'd'));
     write(home + "/Documents/copy-b.bin", QByteArray(4096, 'd'));
     write(home + "/Pictures/holiday.jpg", QByteArray(20000, '\x7f'));
@@ -116,8 +172,13 @@ void ContinuityRoundTripTest::buildSourceTree(const QString& home) {
     // A program the catalog has never heard of. Its settings should still
     // travel: a migration that only carried the applications someone thought
     // to write a recipe for would be a poor one.
-    write(home + "/.config/some-obscure-tool/settings.json", "{\"root\":\"/tmp\"}\n");
-    write(home + "/.local/share/some-obscure-tool/state.db", "not really a database\n");
+    // Written where this platform actually keeps them, not where Linux does:
+    // ~/.config is not a known folder on macOS or Windows, so a file there
+    // would not be captured at all and the test would be proving nothing.
+    write(baseFor(format::PathTokenId::AppConfig) + "/some-obscure-tool/settings.json",
+          "{\"root\":\"/tmp\"}\n");
+    write(baseFor(format::PathTokenId::AppData) + "/some-obscure-tool/state.db",
+          "not really a database\n");
     QDir().mkpath(home + "/Documents/empty");
 }
 
@@ -136,7 +197,7 @@ void ContinuityRoundTripTest::capturesAndRestoresUserFiles() {
 
     const core::ExportReport exported = exporter.run(request, token);
     QVERIFY2(exported.succeeded, qPrintable(exported.errorMessage));
-    QCOMPARE(exported.fileCount, 8u);
+    QCOMPARE(exported.fileCount, documentFileCount_);
     QVERIFY(exported.storedBytes > 0);
 
     core::ImportService importer(*platform_);
@@ -234,7 +295,7 @@ void ContinuityRoundTripTest::encryptsWhenGivenAPassphrase() {
     const core::ArchiveSummary unlocked =
         importer.inspect(request.destinationPath, request.passphrase);
     QVERIFY(unlocked.unlocked);
-    QCOMPARE(unlocked.fileCount, 8u);
+    QCOMPARE(unlocked.fileCount, documentFileCount_);
 
     core::ImportRequest restore;
     restore.archivePath = request.destinationPath;
@@ -261,6 +322,10 @@ void ContinuityRoundTripTest::refusesCredentialsWithoutAPassphrase() {
 }
 
 void ContinuityRoundTripTest::renamesFilesThatCollideOnACaseBlindTarget() {
+    if (!distinguishesCase_) {
+        QSKIP("this filesystem cannot hold the pair that is supposed to collide");
+    }
+
     core::ExportService exporter(*platform_);
     core::CancelToken token;
 
@@ -282,6 +347,7 @@ void ContinuityRoundTripTest::renamesFilesThatCollideOnACaseBlindTarget() {
     // Notes.txt and notes.txt cannot coexist on Windows; one must be renamed
     // rather than silently overwriting the other.
     QCOMPARE(report.renames.size(), 1);
+
     QVERIFY(report.renames.first().second.contains(QStringLiteral("~1")));
 }
 
@@ -334,7 +400,7 @@ void ContinuityRoundTripTest::honoursTheSkipConflictPolicy() {
 
     const core::ImportReport report = importer.run(second, token);
     QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
-    QCOMPARE(report.filesSkipped, 8u);
+    QCOMPARE(report.filesSkipped, documentFileCount_);
     QCOMPARE(report.bytesWritten, 0u);
 }
 
@@ -351,7 +417,12 @@ void ContinuityRoundTripTest::aRestoreCanBeUndone() {
     QVERIFY(exporter.run(request, token).succeeded);
 
     const QString destination = workspace_.filePath("undo-target");
-    const QString existing = destination + "/DOCUMENTS/notes.txt";
+
+    // Deliberately not notes.txt: on a case-blind target that name is one half
+    // of the collision pair, so which of the two lands there - and whether the
+    // file already sitting there is the one replaced - depends on the
+    // filesystem. q1.txt means the same thing everywhere.
+    const QString existing = destination + "/DOCUMENTS/reports/q1.txt";
     QDir().mkpath(QFileInfo(existing).absolutePath());
     {
         QFile file(existing);
@@ -373,7 +444,7 @@ void ContinuityRoundTripTest::aRestoreCanBeUndone() {
     // The restore replaced one file and added several others.
     QFile replaced(existing);
     QVERIFY(replaced.open(QIODevice::ReadOnly));
-    QCOMPARE(replaced.readAll(), QByteArray("lower case notes\n"));
+    QCOMPARE(replaced.readAll(), QByteArray("first quarter\n"));
     replaced.close();
     QVERIFY(QFile::exists(destination + "/PICTURES/holiday.jpg"));
 

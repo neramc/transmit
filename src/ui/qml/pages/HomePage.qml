@@ -127,11 +127,7 @@ AppScrollView {
                 AppKeyValue { label: qsTr("Computer"); value: AppController.hostName }
                 AppKeyValue { label: qsTr("Account");  value: AppController.userName }
                 AppKeyValue { label: qsTr("Home folder"); value: AppController.homeDirectory }
-                AppKeyValue {
-                    label: qsTr("Desktop")
-                    value: AppController.desktopEnvironment
-                    visible: AppController.desktopEnvironment !== ""
-                }
+                AppKeyValue { label: qsTr("Desktop"); value: AppController.desktopEnvironment }
                 AppKeyValue {
                     label: qsTr("Installs programs with")
                     value: AppController.packageManager
