@@ -23,13 +23,18 @@ QStringList g_messages;
 QStringList g_loadMessages;
 QtMessageHandler g_previous = nullptr;
 
-/// Categories whose warnings say something about the machine rather than about
-/// the interface. A build runner with no fonts installed reports the family it
-/// substituted; that is true, and it is not a QML defect, which is what these
-/// tests are for.
+/// Categories whose warnings describe the machine rather than the interface.
+///
+/// A runner with no fonts installed reports the family it substituted, and one
+/// with no graphics reports the backend it fell back to. Both are true, and
+/// neither is a QML defect - which is what these tests are for. Everything
+/// else is still collected, including the untagged category that carries
+/// binding errors and the qrc: URL they came from.
 bool describesTheMachineNotTheTree(const QMessageLogContext& context) {
     const QLatin1String category(context.category != nullptr ? context.category : "");
-    return category == QLatin1String("qt.qpa.fonts");
+    return category.startsWith(QLatin1String("qt.qpa.")) ||
+           category.startsWith(QLatin1String("qt.scenegraph.")) ||
+           category.startsWith(QLatin1String("qt.rhi."));
 }
 
 void collectMessages(QtMsgType type, const QMessageLogContext& context, const QString& message) {

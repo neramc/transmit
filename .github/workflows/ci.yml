@@ -85,6 +85,30 @@ jobs:
               echo "::group::Re-running the failures verbosely"
               ctest --test-dir build --rerun-failed --output-on-failure --verbose || true
               echo "::endgroup::"
+
+              # ctest relays what a test wrote to stdout, and on Windows that
+              # has come back empty even under --verbose. QtTest can write its
+              # own report to a file instead, which nothing in between can
+              # swallow.
+              echo "::group::Reports written straight to a file"
+              for suite in UiSmoke RestoreUndo ContinuityRoundTrip PathRewrite SecretStore; do
+                  for binary in "build/tests/ui/transmit_${suite}_test" \
+                                "build/tests/integration/transmit_${suite}_test" \
+                                "build/transmit_${suite}_test"; do
+                      for candidate in "$binary" "$binary.exe"; do
+                          [ -x "$candidate" ] || continue
+                          report="$suite-report.txt"
+                          QT_QPA_PLATFORM=offscreen "$candidate" -o "$report,txt" \
+                              >/dev/null 2>&1 || true
+                          if [ -s "$report" ]; then
+                              echo "----- $suite -----"
+                              cat "$report"
+                          fi
+                          break 2
+                      done
+                  done
+              done
+              echo "::endgroup::"
               exit 1
           }
 
