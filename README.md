@@ -83,8 +83,11 @@ into an install script for the target's package manager. Transmit writes the
 script; it never runs it. Installing software is your decision and your
 password.
 
-**Saved credentials** — opt-in, and not yet implemented. See *Not built yet*
-below.
+**Saved credentials** — opt-in, and off unless you turn it on. Wireless
+passphrases and credential-store entries are decrypted on the old machine, put
+into the encrypted archive, and re-stored on the new one. This is refused
+outright without a passphrase, and the report says plainly that the drive
+contains passwords.
 
 ### What deliberately stays behind
 
@@ -168,7 +171,13 @@ transmit-cli verify ARCHIVE       # check every block against its hash
 transmit-cli import ARCHIVE [--into DIR] [--dry-run] [--verify]
                     [--conflict skip|overwrite|newer|keep-both]
                     [--emulate-os windows|macos|linux]
+transmit-cli rollback UNDO-POINT  # reverse a restore
 ```
+
+Before a restore replaces anything, it saves what it is about to replace and
+notes what it is about to add. `transmit-cli rollback` puts the first back and
+removes the second, so a restore you did not want can be reversed without
+re-running anything.
 
 `--emulate-os` reports what a restore onto another system would do, from this
 one. It is how the cross-platform translation is tested without three machines,
@@ -204,12 +213,10 @@ expensive happens off the interface thread.
 
 Honest list of what the design covers but the code does not:
 
-- **Credential migration.** The archive format and the refusal to write
-  credentials unencrypted are in place; the platform code that reads Windows
-  Credential Manager, the macOS Keychain and libsecret is not.
-- **Rollback.** `ImportRequest` carries the flag and settings rewrites already
-  keep `.transmit-backup` copies, but a whole-restore rollback archive is not
-  written yet.
+- **Enumerating the Linux login keyring.** Wireless passphrases work through
+  NetworkManager, but `secret-tool` can only look a secret up by attribute, not
+  list the keyring, so application passwords there stay behind. Linking
+  libsecret directly would fix this.
 - **Packaging.** No deb, rpm, AppImage, MSI or dmg recipes.
 - **Volume snapshots on Windows and macOS.** Both fall back to consistent
   database copies, which covers the common case; VSS and APFS snapshots are not

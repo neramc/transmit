@@ -22,6 +22,7 @@ add_library(transmit_core STATIC
     services/ConsistentCopy.cpp
     services/ExportService.cpp
     services/ImportService.cpp
+    services/RollbackWriter.cpp
     services/ProfileService.cpp
     tasks/BlockPipeline.cpp)
 

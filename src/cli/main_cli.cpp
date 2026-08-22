@@ -18,6 +18,7 @@
 #include "core/services/ExportService.h"
 #include "core/services/ImportService.h"
 #include "core/services/ProfileService.h"
+#include "core/services/RollbackWriter.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
 #include "platform/PlatformService.h"
@@ -359,6 +360,23 @@ int runVerify(const QString& archivePath, const QString& passphrase) {
     return 0;
 }
 
+int runRollback(const QString& archivePath) {
+    const auto result = core::RollbackWriter::undo(archivePath);
+    if (!result) {
+        return reportError(core::describeError(result.error()));
+    }
+
+    out() << QStringLiteral("Put back %1 file(s) and removed %2 that the restore had added")
+                 .arg(result->filesRestored)
+                 .arg(result->filesRemoved)
+          << Qt::endl;
+
+    for (const QString& error : result->errors) {
+        err() << QStringLiteral("  ") << error << Qt::endl;
+    }
+    return result->errors.isEmpty() ? 0 : 1;
+}
+
 int runProfiles() {
     for (const core::CaptureProfile& profile : core::ProfileService::builtInProfiles()) {
         out() << QStringLiteral("%1  %2").arg(profile.id, -12).arg(profile.displayName) << Qt::endl;
@@ -452,7 +470,8 @@ int main(int argc, char** argv) {
     parser.addVersionOption();
     parser.addPositionalArgument(
         QStringLiteral("command"),
-        QStringLiteral("export, import, inspect, verify, profiles, drives or environment"));
+        QStringLiteral(
+            "export, import, inspect, verify, rollback, profiles, drives or environment"));
     parser.addPositionalArgument(QStringLiteral("archive"),
                                  QStringLiteral("archive path, for import, inspect and verify"));
 
@@ -540,6 +559,12 @@ int main(int argc, char** argv) {
             return reportError(QStringLiteral("verify needs an archive path"));
         }
         return runVerify(archive, passphrase);
+    }
+    if (command == QLatin1String("rollback")) {
+        if (archive.isEmpty()) {
+            return reportError(QStringLiteral("rollback needs the path of an undo point"));
+        }
+        return runRollback(archive);
     }
     if (command == QLatin1String("profiles")) {
         return runProfiles();

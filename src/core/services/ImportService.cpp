@@ -17,6 +17,7 @@
 #include "core/rewrite/PathRewriter.h"
 #include "core/rewrite/PathTranslator.h"
 #include "core/secrets/SecretsDomain.h"
+#include "core/services/RollbackWriter.h"
 #include "core/settings/SettingsDomain.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
@@ -393,6 +394,53 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
     quint64 totalBytes = 0;
     for (const format::ManifestEntry* entry : ordered) {
         totalBytes += entry->size;
+    }
+
+    if (request.createRollback && !request.dryRun) {
+        QStringList intended;
+        intended.reserve(ordered.size());
+
+        format::NameSanitizer probe(format::SanitizeOptions::forTarget(targetOs));
+        for (const format::ManifestEntry* entry : ordered) {
+            if (entry->type != format::EntryType::File) {
+                continue;
+            }
+            const format::TokenizedPath placed =
+                entry->domain == DomainId::AppState ? relocator.relocate(entry->path) : entry->path;
+            const format::TokenizedPath safePath{placed.token,
+                                                 probe.sanitizeRelativePath(placed.relative)};
+            if (const auto resolved = tokens.resolve(safePath)) {
+                intended << fromUtf8(*resolved);
+            }
+        }
+
+        const QString directory = request.destinationOverride.isEmpty()
+                                      ? platform_.environment().homeDirectory
+                                      : request.destinationOverride;
+
+        auto rollback = RollbackWriter::capture(intended, directory);
+        if (rollback) {
+            report.rollbackArchivePath = *rollback;
+            if (!report.rollbackArchivePath.isEmpty()) {
+                report.notes.push_back(ContinuityNote{
+                    ContinuityGrade::Full, DomainId::Unknown,
+                    QCoreApplication::translate("Import", "You can undo this"),
+                    QCoreApplication::translate(
+                        "Import",
+                        "Everything this restore is about to replace was saved first. To put it "
+                        "back, run: transmit-cli rollback \"%1\"")
+                        .arg(report.rollbackArchivePath)});
+            }
+        } else {
+            // Not being able to take an undo point is worth saying, but it is
+            // not a reason to refuse a restore the user asked for.
+            report.notes.push_back(
+                ContinuityNote{ContinuityGrade::Manual, DomainId::Unknown,
+                               QCoreApplication::translate("Import", "No undo point"),
+                               QCoreApplication::translate(
+                                   "Import", "This restore could not be made reversible: %1")
+                                   .arg(describeError(rollback.error()))});
+        }
     }
 
     QElapsedTimer throttle;

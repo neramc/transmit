@@ -8,6 +8,7 @@
 #include "core/services/ExportService.h"
 #include "core/services/ImportService.h"
 #include "core/services/ProfileService.h"
+#include "core/services/RollbackWriter.h"
 #include "core/utils/Conversions.h"
 #include "platform/PlatformService.h"
 
@@ -29,6 +30,7 @@ private slots:
     void renamesFilesThatCollideOnACaseBlindTarget();
     void reportsWhatARestoreWouldDoWithoutWriting();
     void honoursTheSkipConflictPolicy();
+    void aRestoreCanBeUndone();
     void cleanupTestCase();
 
 private:
@@ -307,6 +309,64 @@ void ContinuityRoundTripTest::honoursTheSkipConflictPolicy() {
     QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
     QCOMPARE(report.filesSkipped, 8u);
     QCOMPARE(report.bytesWritten, 0u);
+}
+
+/// A restore writes into the places a person actually keeps things, so it has
+/// to be reversible: what it replaced goes back, and what it added goes away.
+void ContinuityRoundTripTest::aRestoreCanBeUndone() {
+    core::ExportService exporter(*platform_);
+    core::CancelToken token;
+
+    core::ExportRequest request;
+    request.destinationPath = archivePath("undo.txa");
+    request.selection = documentsSelection();
+    request.preset = format::CompressionPreset::Fast;
+    QVERIFY(exporter.run(request, token).succeeded);
+
+    const QString destination = workspace_.filePath("undo-target");
+    const QString existing = destination + "/DOCUMENTS/notes.txt";
+    QDir().mkpath(QFileInfo(existing).absolutePath());
+    {
+        QFile file(existing);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("what was here before\n");
+    }
+
+    core::ImportService importer(*platform_);
+    core::ImportRequest restore;
+    restore.archivePath = request.destinationPath;
+    restore.destinationOverride = destination;
+    restore.conflictPolicy = core::ConflictPolicy::Overwrite;
+    restore.createRollback = true;
+
+    const core::ImportReport report = importer.run(restore, token);
+    QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
+    QVERIFY2(!report.rollbackArchivePath.isEmpty(), "an undo point should have been written");
+
+    // The restore replaced one file and added several others.
+    QFile replaced(existing);
+    QVERIFY(replaced.open(QIODevice::ReadOnly));
+    QCOMPARE(replaced.readAll(), QByteArray("lower case notes\n"));
+    replaced.close();
+    QVERIFY(QFile::exists(destination + "/PICTURES/holiday.jpg"));
+
+    const auto undone = core::RollbackWriter::undo(report.rollbackArchivePath);
+    // QVERIFY2 evaluates its message eagerly, so the failure text has to be
+    // built without touching error() on a Result that holds a value.
+    const QString undoError = undone ? QString() : core::describeError(undone.error());
+    QVERIFY2(undone, qPrintable(undoError));
+    QVERIFY(undone->errors.isEmpty());
+    QCOMPARE(undone->filesRestored, 1);
+    QVERIFY(undone->filesRemoved > 0);
+
+    // What was replaced is back, byte for byte.
+    QFile putBack(existing);
+    QVERIFY(putBack.open(QIODevice::ReadOnly));
+    QCOMPARE(putBack.readAll(), QByteArray("what was here before\n"));
+
+    // What was added is gone.
+    QVERIFY2(!QFile::exists(destination + "/PICTURES/holiday.jpg"),
+             "files the restore created should be removed again");
 }
 
 QTEST_MAIN(ContinuityRoundTripTest)
