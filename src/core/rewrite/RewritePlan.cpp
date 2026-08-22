@@ -23,6 +23,28 @@ int RewritePlan::fileCount() const {
     return static_cast<int>(files.size());
 }
 
+QStringList RewritePlan::files() const {
+    QStringList paths;
+    QSet<QString> seen;
+    for (const RewriteEdit& edit : edits_) {
+        if (!seen.contains(edit.filePath)) {
+            seen.insert(edit.filePath);
+            paths.push_back(edit.filePath);
+        }
+    }
+    return paths;
+}
+
+int RewritePlan::discardBackups(const QStringList& files) {
+    int removed = 0;
+    for (const QString& path : files) {
+        if (QFile::remove(path + QLatin1String(kBackupSuffix))) {
+            ++removed;
+        }
+    }
+    return removed;
+}
+
 int RewritePlan::apply(QStringList* errors) const {
     // The rewriters have already written the new contents to a staging file
     // next to the target; applying is the swap, which is what makes the whole

@@ -1,9 +1,12 @@
 #include "app/ImportController.h"
 
 #include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QLocale>
 #include <QtConcurrent/QtConcurrentRun>
 
+#include "core/rewrite/RewritePlan.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
 
@@ -47,11 +50,105 @@ ImportController::ImportController(QObject* parent) : QObject(parent) {
 
     connect(&watcher_, &QFutureWatcher<core::ImportReport>::finished, this,
             &ImportController::handleFinished);
+    connect(&undoWatcher_,
+            &QFutureWatcher<format::Result<core::RollbackWriter::UndoResult>>::finished, this,
+            &ImportController::handleUndoFinished);
 }
 
 ImportController::~ImportController() {
     cancelToken_.cancel();
     watcher_.waitForFinished();
+    undoWatcher_.waitForFinished();
+}
+
+bool ImportController::canUndo() const {
+    return !undoUsed_ && !undoing_ && finished_ && report_.succeeded && !wasDryRun_ &&
+           !report_.rollbackArchivePath.isEmpty();
+}
+
+QString ImportController::undoDescription() const {
+    if (report_.rollbackArchivePath.isEmpty()) {
+        return {};
+    }
+    if (report_.rewrittenFiles.isEmpty()) {
+        return tr(
+            "Puts back everything this restore replaced and removes what it added. "
+            "Programs you installed yourself are not touched.");
+    }
+    return tr(
+        "Puts back everything this restore replaced, removes what it added, and undoes "
+        "the %n settings file(s) whose folder names were corrected.",
+        nullptr, static_cast<int>(report_.rewrittenFiles.size()));
+}
+
+void ImportController::undoLastRestore() {
+    if (!canUndo()) {
+        return;
+    }
+
+    undoing_ = true;
+    undoSummary_.clear();
+    emit undoChanged();
+
+    const QString archive = report_.rollbackArchivePath;
+    undoWatcher_.setFuture(
+        QtConcurrent::run([archive]() { return core::RollbackWriter::undo(archive); }));
+}
+
+void ImportController::handleUndoFinished() {
+    const auto result = undoWatcher_.result();
+    undoing_ = false;
+
+    if (!result) {
+        undoSummary_ =
+            tr("The undo could not be read: %1").arg(core::describeError(result.error()));
+        qCWarning(logRestore) << "undo failed:" << undoSummary_;
+        emit undoChanged();
+        return;
+    }
+
+    // Used, whatever the individual errors were: the archive has been applied
+    // and running it a second time would not improve matters.
+    undoUsed_ = true;
+    forgetUndoPoint();
+
+    undoSummary_ = tr("Put back %n file(s)", nullptr, result->filesRestored) +
+                   tr(" and removed %n that the restore had added.", nullptr, result->filesRemoved);
+    for (const QString& error : result->errors) {
+        undoSummary_ += QLatin1Char('\n') + error;
+    }
+
+    qCInfo(logRestore) << "undo restored" << result->filesRestored << "and removed"
+                       << result->filesRemoved;
+    emit undoChanged();
+}
+
+void ImportController::forgetUndoPoint() {
+    if (report_.rollbackArchivePath.isEmpty()) {
+        return;
+    }
+    QFile::remove(report_.rollbackArchivePath);
+
+    // rmdir only succeeds on an empty directory, which is exactly the
+    // condition for removing it: anything else in there was not ours.
+    QDir().rmdir(QFileInfo(report_.rollbackArchivePath).absolutePath());
+}
+
+void ImportController::keepLastRestore() {
+    if (!canUndo()) {
+        return;
+    }
+
+    const int discarded = core::RewritePlan::discardBackups(report_.rewrittenFiles);
+    forgetUndoPoint();
+
+    undoUsed_ = true;
+    undoSummary_ = discarded == 0
+                       ? tr("Kept. The undo point has been deleted.")
+                       : tr("Kept. The undo point and %n kept original(s) have been deleted.",
+                            nullptr, discarded);
+    qCInfo(logRestore) << "restore accepted;" << discarded << "backup(s) discarded";
+    emit undoChanged();
 }
 
 QString ImportController::sourceDescription() const {
@@ -161,8 +258,11 @@ void ImportController::start(const QString& passphrase, const QString& conflictP
     request.destinationOverride = destinationOverride;
 
     running_ = true;
+    undoUsed_ = false;
+    undoSummary_.clear();
     emit runningChanged();
     emit progressChanged();
+    emit undoChanged();
 
     auto* service = service_.get();
     core::CancelToken* token = &cancelToken_;
@@ -184,6 +284,7 @@ void ImportController::handleFinished() {
 
     emit runningChanged();
     emit finishedChanged();
+    emit undoChanged();
     emit reportReady();
 }
 

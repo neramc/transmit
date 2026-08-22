@@ -14,6 +14,7 @@
 #include "app/models/ContinuityReportModel.h"
 #include "core/continuity/ContinuityTypes.h"
 #include "core/services/ImportService.h"
+#include "core/services/RollbackWriter.h"
 #include "core/services/ScanService.h"
 #include "platform/PlatformService.h"
 
@@ -45,6 +46,10 @@ class ImportController : public QObject {
     Q_PROPERTY(QString summaryText READ summaryText NOTIFY finishedChanged)
     Q_PROPERTY(bool wasDryRun READ wasDryRun NOTIFY finishedChanged)
     Q_PROPERTY(QVariantMap archiveCounts READ archiveCounts NOTIFY archiveCountsChanged)
+    Q_PROPERTY(bool canUndo READ canUndo NOTIFY undoChanged)
+    Q_PROPERTY(bool undoing READ isUndoing NOTIFY undoChanged)
+    Q_PROPERTY(QString undoSummary READ undoSummary NOTIFY undoChanged)
+    Q_PROPERTY(QString undoDescription READ undoDescription NOTIFY undoChanged)
 
 public:
     explicit ImportController(QObject* parent = nullptr);
@@ -73,6 +78,17 @@ public:
     /// been looked at. A drive missing from the map has not been read yet.
     [[nodiscard]] QVariantMap archiveCounts() const { return archiveCounts_; }
 
+    /// True while there is an undo point for the last restore that has neither
+    /// been used nor thrown away.
+    [[nodiscard]] bool canUndo() const;
+    [[nodiscard]] bool isUndoing() const { return undoing_; }
+
+    /// What the undo did, once it has run. Empty before that.
+    [[nodiscard]] QString undoSummary() const { return undoSummary_; }
+
+    /// What undoing would do, in the user's terms.
+    [[nodiscard]] QString undoDescription() const;
+
     [[nodiscard]] const core::ImportReport& report() const { return report_; }
 
 public slots:
@@ -93,6 +109,18 @@ public slots:
     /// binds to - it can tell "none" from "not yet".
     [[nodiscard]] QStringList archivesOn(const QString& folder) const;
 
+    /// Puts the machine back the way it was before the last restore.
+    ///
+    /// Every restore writes an undo point before it touches anything, which
+    /// until now nothing in the interface could reach - so the application was
+    /// quietly leaving an archive in the user's home that only the command
+    /// line could use.
+    void undoLastRestore();
+
+    /// Accepts the restore: the undo point and the kept originals of every
+    /// rewritten file are deleted. Nothing that was restored is touched.
+    void keepLastRestore();
+
     /// Runs the restore. With `dryRun` nothing is written and the report says
     /// what would have happened.
     void start(const QString& passphrase, const QString& conflictPolicy, bool dryRun,
@@ -111,12 +139,18 @@ signals:
     void progressChanged();
     void finishedChanged();
     void archiveCountsChanged();
+    void undoChanged();
     void reportReady();
 
 private:
     void handleProgress(const core::ProgressUpdate& update);
     void handleFinished();
     void recordScan(const QString& folder, const QStringList& archives);
+    void handleUndoFinished();
+
+    /// Deletes the undo point, and the directory holding it if that leaves it
+    /// empty. Used by both answers - undoing consumes it, keeping discards it.
+    void forgetUndoPoint();
 
     std::unique_ptr<platform::PlatformService> platform_;
     std::unique_ptr<core::ImportService> service_;
@@ -130,6 +164,11 @@ private:
     bool running_ = false;
     bool finished_ = false;
     bool wasDryRun_ = false;
+
+    QFutureWatcher<format::Result<core::RollbackWriter::UndoResult>> undoWatcher_;
+    QString undoSummary_;
+    bool undoing_ = false;
+    bool undoUsed_ = false;
 
     QHash<QString, QStringList> archivesByFolder_;
     QSet<QString> scansInFlight_;

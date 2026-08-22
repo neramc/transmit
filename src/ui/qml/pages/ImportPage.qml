@@ -327,6 +327,96 @@ Item {
                     body: ImportController.errorMessage
                 }
 
+                // Every restore leaves an undo point behind. Until now nothing
+                // in the window said so, which meant Transmit was writing an
+                // archive into someone's home that they had no way to use.
+                AppCard {
+                    Layout.fillWidth: true
+                    visible: ImportController.canUndo || ImportController.undoing
+                             || ImportController.undoSummary !== ""
+                    implicitHeight: undoBox.implicitHeight + Spacing.xl * 2
+
+                    ColumnLayout {
+                        id: undoBox
+                        anchors.fill: parent
+                        anchors.margins: Spacing.xl
+                        spacing: Spacing.md
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Spacing.sm
+
+                            AppIcon {
+                                name: "refresh"
+                                color: Colors.textSecondary
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                text: qsTr("This can be undone")
+                                color: Colors.textPrimary
+                                font.family: Typography.family
+                                font.pixelSize: Typography.heading
+                                font.weight: Typography.semiBold
+                            }
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            visible: ImportController.undoSummary === ""
+                            text: ImportController.undoDescription
+                            color: Colors.textSecondary
+                            font.family: Typography.family
+                            font.pixelSize: Typography.small
+                            lineHeight: Typography.lineHeightNormal
+                            wrapMode: Text.WordWrap
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            visible: ImportController.undoSummary !== ""
+                            text: ImportController.undoSummary
+                            color: Colors.textPrimary
+                            font.family: Typography.family
+                            font.pixelSize: Typography.small
+                            wrapMode: Text.WordWrap
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            visible: ImportController.canUndo || ImportController.undoing
+                            spacing: Spacing.md
+
+                            AppSpinner {
+                                running: ImportController.undoing
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            AppButton {
+                                text: qsTr("Undo this restore")
+                                variant: "danger"
+                                enabled: ImportController.canUndo
+                                onClicked: page.dialogs.confirm({
+                                    heading: qsTr("Undo the restore?"),
+                                    body: ImportController.undoDescription,
+                                    confirmText: qsTr("Undo"),
+                                    cancelText: qsTr("Leave it"),
+                                    destructive: true
+                                }, () => ImportController.undoLastRestore())
+                            }
+
+                            AppButton {
+                                text: qsTr("Keep it")
+                                enabled: ImportController.canUndo
+                                onClicked: ImportController.keepLastRestore()
+                            }
+                        }
+                    }
+                }
+
                 Item { Layout.fillHeight: true }
             }
         }

@@ -42,6 +42,14 @@ public:
     /// Restores every backup this plan created.
     int revert(QStringList* errors = nullptr) const;
 
+    /// Every file the plan touches, once each.
+    [[nodiscard]] QStringList files() const;
+
+    /// Throws away the kept originals. For when the user has decided the
+    /// restore is staying: until then the backups are what makes it
+    /// reversible, and after that they are litter in someone's config folder.
+    static int discardBackups(const QStringList& files);
+
     /// Turns the plan into report entries, so the user sees these changes in
     /// the same place as everything else.
     [[nodiscard]] QList<ContinuityNote> toNotes() const;

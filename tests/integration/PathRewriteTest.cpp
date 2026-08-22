@@ -1,6 +1,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
@@ -40,6 +41,7 @@ private slots:
     void sqliteRewriteUpdatesOnlyTheNamedColumn();
 
     void planCanBeAppliedAndReverted();
+    void keptOriginalsAreThrownAwayOnRequest();
     void firefoxProfileIsRepointedEndToEnd();
 
     void catalogLoadsAndMatches();
@@ -353,6 +355,45 @@ void PathRewriteTest::planCanBeAppliedAndReverted() {
 
     QCOMPARE(plan.revert(), 1);
     QCOMPARE(read(QStringLiteral("settings.ini")), original);
+}
+
+void PathRewriteTest::keptOriginalsAreThrownAwayOnRequest() {
+    // Applying keeps the pre-rewrite version beside each file, which is what
+    // makes the pass reversible. Nothing used to remove them, so a restore the
+    // user was perfectly happy with left .transmit-backup files sitting in
+    // their configuration folders for good.
+    write(QStringLiteral("settings.ini"), "[General]\nPath=C:\\Users\\Bob\\Documents\\x\n");
+
+    core::AppRecipe recipe;
+    recipe.id = QStringLiteral("test.app");
+    recipe.rewrites.push_back(core::RecipeRewriteRule{QStringLiteral("settings.ini"),
+                                                      QStringLiteral("ini"),
+                                                      {QStringLiteral("Path")},
+                                                      {},
+                                                      1,
+                                                      {},
+                                                      {}});
+
+    core::RewritePlan plan;
+    core::PathRewriter(windowsToLinux()).planFor(recipe, workspace_->path(), plan);
+    QCOMPARE(plan.apply(), 1);
+
+    const QStringList touched = plan.files();
+    QCOMPARE(touched.size(), 1);
+
+    const QString backup = touched.first() + QLatin1String(core::RewritePlan::kBackupSuffix);
+    QVERIFY2(QFileInfo::exists(backup), "applying should keep the original");
+
+    QCOMPARE(core::RewritePlan::discardBackups(touched), 1);
+    QVERIFY2(!QFileInfo::exists(backup), "the kept original should be gone");
+
+    // The rewritten file itself is untouched by the clean-up: accepting a
+    // restore must not undo any part of it.
+    QVERIFY(read(QStringLiteral("settings.ini")).contains("/home/bob/Documents/x"));
+
+    // Asking twice is not an error, which matters because the undo path and
+    // the accept path can both reach it.
+    QCOMPARE(core::RewritePlan::discardBackups(touched), 0);
 }
 
 void PathRewriteTest::firefoxProfileIsRepointedEndToEnd() {

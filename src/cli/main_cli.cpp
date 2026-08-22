@@ -320,6 +320,14 @@ int runImport(QCommandLineParser& parser, const QString& archivePath,
               << Qt::endl;
     }
 
+    // An undo point nobody is told about is an archive quietly taking up room
+    // in someone's home directory.
+    if (!report.rollbackArchivePath.isEmpty()) {
+        out() << QStringLiteral("  this can be undone: transmit-cli rollback %1")
+                     .arg(report.rollbackArchivePath)
+              << Qt::endl;
+    }
+
     if (!report.renames.isEmpty()) {
         out() << Qt::endl << QStringLiteral("Renamed for this system:") << Qt::endl;
         for (const auto& [from, to] : report.renames) {

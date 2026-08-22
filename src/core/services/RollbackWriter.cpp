@@ -6,6 +6,7 @@
 #include <QFileInfo>
 #include <QSaveFile>
 
+#include "core/rewrite/RewritePlan.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
 #include "format/BlockPacker.h"
@@ -162,6 +163,18 @@ format::Result<QString> RollbackWriter::capture(const QStringList& targets,
     return archivePath;
 }
 
+namespace {
+
+/// A file that was rewritten during the restore has its pre-rewrite version
+/// beside it. Once the file itself has gone back to how it was - or has been
+/// deleted outright - that copy is describing a state that no longer exists,
+/// so it goes too.
+void discardRewriteBackup(const QString& path) {
+    QFile::remove(path + QLatin1String(RewritePlan::kBackupSuffix));
+}
+
+}  // namespace
+
 format::Result<RollbackWriter::UndoResult> RollbackWriter::undo(const QString& archivePath) {
     UndoResult result;
 
@@ -203,6 +216,7 @@ format::Result<RollbackWriter::UndoResult> RollbackWriter::undo(const QString& a
         } else {
             result.errors << QStringLiteral("%1: %2").arg(path, file.errorString());
         }
+        discardRewriteBackup(path);
     }
 
     // Files the restore created did not exist before, so putting things back
@@ -218,6 +232,7 @@ format::Result<RollbackWriter::UndoResult> RollbackWriter::undo(const QString& a
             } else {
                 result.errors << QStringLiteral("could not remove %1").arg(path);
             }
+            discardRewriteBackup(path);
         }
     }
 

@@ -673,6 +673,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
 
             if (!plan.isEmpty()) {
                 report.notes += plan.toNotes();
+                report.rewrittenFiles = plan.files();
 
                 QStringList errors;
                 const int changed = plan.apply(&errors);
@@ -690,7 +691,8 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                         QCoreApplication::translate(
                             "Import",
                             "The version of each changed file as it arrived is kept next to it "
-                            "with a .transmit-backup suffix, so these changes can be undone.")});
+                            "with a .transmit-backup suffix. Undoing the restore removes them; "
+                            "so does telling Transmit you are keeping it.")});
                 }
             }
         }

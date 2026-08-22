@@ -180,6 +180,11 @@ struct ImportReport {
 
     QString rollbackArchivePath;
 
+    /// Files whose contents were repointed at this machine's folders. Each has
+    /// its pre-rewrite version kept beside it, so this is also the list of
+    /// backups to clear away once the restore is being kept.
+    QStringList rewrittenFiles;
+
     /// Where the generated install script was written, if any. Transmit never
     /// runs it: installing software is the user's decision and their password.
     QString installScriptPath;
