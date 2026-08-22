@@ -401,10 +401,20 @@ QList<StorageVolume> LinuxPlatformService::storageVolumes() const {
             continue;
         }
 
+        // Read-only image mounts - snaps, AppImages, container layers - are
+        // never somewhere a user keeps or writes an archive, and listing them
+        // buries the drives that matter.
+        const QString fileSystemType = QString::fromUtf8(info.fileSystemType());
+        if (fileSystemType == QLatin1String("squashfs") ||
+            fileSystemType == QLatin1String("overlay") ||
+            fileSystemType == QLatin1String("erofs")) {
+            continue;
+        }
+
         StorageVolume volume;
         volume.rootPath = root;
         volume.displayName = info.displayName().isEmpty() ? root : info.displayName();
-        volume.fileSystem = QString::fromUtf8(info.fileSystemType());
+        volume.fileSystem = fileSystemType;
         volume.totalBytes = static_cast<quint64>(std::max<qint64>(info.bytesTotal(), 0));
         volume.freeBytes = static_cast<quint64>(std::max<qint64>(info.bytesAvailable(), 0));
         volume.readOnly = info.isReadOnly();

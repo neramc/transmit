@@ -11,6 +11,10 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
 endif()
 
+# All QML modules build into one tree so qmlimportscanner - and qmllint, and
+# Qt Creator - can find them from a single import path.
+set(QT_QML_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/qml" CACHE PATH "QML module output root")
+
 option(TRANSMIT_BUILD_APP     "Build the Qt Quick desktop application" ON)
 option(TRANSMIT_BUILD_CLI     "Build the headless command line tool"   ON)
 option(TRANSMIT_BUILD_TESTS   "Build unit and integration tests"       OFF)
