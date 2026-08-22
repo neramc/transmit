@@ -58,6 +58,16 @@ private:
     /// one when the caller is emulating another OS or restoring to a folder.
     [[nodiscard]] format::PathTokenMap targetTokens(const ImportRequest& request) const;
 
+    /// Works out which settings a real restore would repoint, without touching
+    /// anything the user owns.
+    ///
+    /// A preview that could not answer this would be missing the most invasive
+    /// part of the operation, so the application state is unpacked into a
+    /// throwaway directory, planned against, and thrown away again.
+    void previewRewrites(format::ArchiveReader& reader, const format::Manifest& manifest,
+                         const ImportRequest& request, const format::PathTokenMap& targetFolders,
+                         OsFamily targetOs, ImportReport& report) const;
+
     platform::PlatformService& platform_;
 };
 

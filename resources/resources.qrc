@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/catalog">
+        <file alias="app-catalog.json">app-catalog.json</file>
+    </qresource>
+</RCC>

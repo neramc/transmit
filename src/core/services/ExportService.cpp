@@ -6,12 +6,15 @@
 #include <QFileInfo>
 #include <algorithm>
 
+#include "core/recipe/AppInventoryPayload.h"
+#include "core/recipe/RecipeCatalog.h"
 #include "core/services/ConsistentCopy.h"
 #include "core/tasks/BlockPipeline.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
 #include "format/BlockPacker.h"
 #include "format/Container.h"
+#include "format/Serialization.h"
 
 namespace transmit::core {
 namespace {
@@ -93,6 +96,61 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
             "clear the credentials option."));
     }
 
+    const platform::EnvironmentInfo environment = platform_.environment();
+
+    // ------------------------------------------------- application state
+    // Program binaries cannot cross an operating system boundary, but the data
+    // and settings they keep can. The catalog says where each application puts
+    // that state on this platform, and those directories join the selection.
+    CaptureSelection selection = request.selection;
+    QList<MatchedApp> matchedApps;
+
+    if (selection.includes(DomainId::AppState) || selection.includes(DomainId::AppInventory)) {
+        if (progress) {
+            ProgressUpdate update;
+            update.stage = QCoreApplication::translate("Export", "Looking at your programs");
+            progress(update);
+        }
+
+        RecipeCatalog catalog;
+        catalog.loadDefaults();
+
+        const format::PathTokenMap folders = platform_.knownFolders();
+        const QList<platform::InstalledApp> installed = platform_.installedApplications();
+
+        matchedApps = catalog.match(installed, environment.os);
+        matchedApps += catalog.matchByStateOnly(matchedApps, environment.os, folders);
+
+        if (selection.includes(DomainId::AppState)) {
+            selection.roots += catalog.captureRootsFor(matchedApps, environment.os, folders);
+        }
+
+        // Anything holding its files open would be captured mid-write, so the
+        // user is told which programs to close rather than having them killed.
+        QStringList quiesce;
+        for (const MatchedApp& match : matchedApps) {
+            quiesce += match.recipe.quiesceProcesses;
+        }
+        for (const platform::RunningApp& running : platform_.runningApplications(quiesce)) {
+            report.notes.push_back(ContinuityNote{
+                ContinuityGrade::Manual, DomainId::AppState, running.displayName,
+                QCoreApplication::translate(
+                    "Export",
+                    "This program is running, so its data may be captured half-written. Close it "
+                    "and run the capture again for a clean copy.")});
+        }
+
+        for (const MatchedApp& match : matchedApps) {
+            if (!match.recipe.note.isEmpty()) {
+                report.notes.push_back(ContinuityNote{match.recipe.expectedGrade,
+                                                      DomainId::AppState,
+                                                      match.recipe.displayName,
+                                                      match.recipe.note});
+            }
+        }
+        qCInfo(logCapture) << "recognised" << matchedApps.size() << "applications";
+    }
+
     // ------------------------------------------------------------ scan
     if (progress) {
         ProgressUpdate update;
@@ -101,8 +159,8 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     }
 
     const ScanService scanner(platform_);
-    ScanResult scan = scanner.scan(request.selection, cancelToken, progress);
-    report.notes = scan.notes;
+    ScanResult scan = scanner.scan(selection, cancelToken, progress);
+    report.notes += scan.notes;
 
     if (cancelToken.isCancelled()) {
         return fail(QCoreApplication::translate("Export", "Cancelled."));
@@ -150,7 +208,6 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     format::Manifest manifest;
     manifest.label = toUtf8(request.label);
 
-    const platform::EnvironmentInfo environment = platform_.environment();
     manifest.source.os = environment.os;
     manifest.source.osName = toUtf8(environment.osName);
     manifest.source.osVersion = toUtf8(environment.osVersion);
@@ -169,6 +226,11 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         if (const auto base = sourceTokens.base(token)) {
             manifest.source.tokenBases[token] = *base;
         }
+    }
+
+    if (!matchedApps.isEmpty()) {
+        manifest.payloads.push_back(
+            format::DomainPayload{DomainId::AppInventory, "apps.v1", encodeAppInventory(matchedApps)});
     }
 
     QList<format::BlockPacker::PlacementId> placements;

@@ -1,0 +1,3217 @@
+{
+  "$comment": "Transmit application catalog. Each entry says how to recognise an application on each platform, how to reinstall it, which directories hold its state, and which files inside that state contain paths that must be rewritten for the new machine. Drop additional files into the user catalog directory to extend or correct this.",
+  "version": 1,
+  "apps": [
+    {
+      "id": "org.alacritty.alacritty",
+      "name": "Alacritty",
+      "detect": {
+        "windows": [
+          "Alacritty",
+          "Alacritty.Alacritty"
+        ],
+        "macos": [
+          "org.alacritty",
+          "Alacritty"
+        ],
+        "linux": [
+          "alacritty"
+        ]
+      },
+      "install": {
+        "winget": "Alacritty.Alacritty",
+        "brew": "--cask alacritty",
+        "apt": "alacritty",
+        "dnf": "alacritty",
+        "pacman": "alacritty",
+        "nix": "alacritty",
+        "apk": "alacritty",
+        "xbps": "alacritty"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/alacritty",
+          "macos": "{HOME}/.config/alacritty",
+          "linux": "{HOME}/.config/alacritty"
+        }
+      ],
+      "grade": "adapted",
+      "note": "The font named in the configuration may not exist on the new system; the report will say so if it had to fall back."
+    },
+    {
+      "id": "com.anydesk.anydesk",
+      "name": "AnyDesk",
+      "detect": {
+        "windows": [
+          "AnyDesk",
+          "AnyDeskSoftwareGmbH.AnyDesk"
+        ],
+        "macos": [
+          "com.philandro.anydesk",
+          "AnyDesk"
+        ],
+        "linux": [
+          "anydesk"
+        ]
+      },
+      "install": {
+        "winget": "AnyDeskSoftwareGmbH.AnyDesk",
+        "brew": "--cask anydesk",
+        "apt": "anydesk",
+        "dnf": "anydesk",
+        "pacman": "anydesk-bin"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPDATA}/AnyDesk",
+          "macos": "{HOME}/.anydesk",
+          "linux": "{HOME}/.anydesk",
+          "exclude": [
+            "**/*.trace",
+            "**/*.log"
+          ]
+        }
+      ],
+      "grade": "manual",
+      "note": "The AnyDesk identity is tied to the machine, so this one gets a new address."
+    },
+    {
+      "id": "org.audacityteam.audacity",
+      "name": "Audacity",
+      "detect": {
+        "windows": [
+          "Audacity",
+          "Audacity.Audacity"
+        ],
+        "macos": [
+          "org.audacityteam.audacity",
+          "Audacity"
+        ],
+        "linux": [
+          "audacity"
+        ]
+      },
+      "install": {
+        "winget": "Audacity.Audacity",
+        "brew": "--cask audacity",
+        "apt": "audacity",
+        "dnf": "audacity",
+        "zypper": "audacity",
+        "pacman": "audacity",
+        "nix": "audacity",
+        "flatpak": "org.audacityteam.Audacity"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/audacity",
+          "macos": "{HOME}/Library/Application Support/audacity",
+          "linux": "{HOME}/.config/audacity",
+          "exclude": [
+            "**/SessionData/**"
+          ]
+        }
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "org.gnu.bash",
+      "name": "Bash",
+      "detect": {
+        "macos": [
+          "bash"
+        ],
+        "linux": [
+          "bash"
+        ]
+      },
+      "install": {
+        "brew": "bash",
+        "apt": "bash",
+        "dnf": "bash",
+        "zypper": "bash",
+        "pacman": "bash",
+        "nix": "bash",
+        "apk": "bash",
+        "xbps": "bash"
+      },
+      "state": [
+        {
+          "role": "config",
+          "macos": "{HOME}/.bashrc",
+          "linux": "{HOME}/.bashrc"
+        },
+        {
+          "role": "config",
+          "macos": "{HOME}/.bash_profile",
+          "linux": "{HOME}/.bash_profile"
+        },
+        {
+          "role": "config",
+          "macos": "{HOME}/.profile",
+          "linux": "{HOME}/.profile"
+        },
+        {
+          "role": "config",
+          "macos": "{HOME}/.aliases",
+          "linux": "{HOME}/.aliases"
+        }
+      ],
+      "grade": "adapted",
+      "note": "Shell configuration often names tools and paths from the old machine; the report lists what could not be resolved here."
+    },
+    {
+      "id": "org.blender.blender",
+      "name": "Blender",
+      "detect": {
+        "windows": [
+          "Blender",
+          "BlenderFoundation.Blender"
+        ],
+        "macos": [
+          "org.blenderfoundation.blender",
+          "Blender"
+        ],
+        "linux": [
+          "blender"
+        ]
+      },
+      "install": {
+        "winget": "BlenderFoundation.Blender",
+        "brew": "--cask blender",
+        "apt": "blender",
+        "dnf": "blender",
+        "zypper": "blender",
+        "pacman": "blender",
+        "nix": "blender",
+        "flatpak": "org.blender.Blender",
+        "snap": "blender"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPDATA}/Blender Foundation/Blender",
+          "macos": "{HOME}/Library/Application Support/Blender",
+          "linux": "{HOME}/.config/blender",
+          "exclude": [
+            "**/cache/**",
+            "**/autosave/**"
+          ]
+        }
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "com.brave.browser",
+      "name": "Brave",
+      "detect": {
+        "windows": [
+          "Brave",
+          "Brave.Brave"
+        ],
+        "macos": [
+          "com.brave.Browser",
+          "Brave Browser"
+        ],
+        "linux": [
+          "brave-browser",
+          "brave"
+        ]
+      },
+      "install": {
+        "winget": "Brave.Brave",
+        "brew": "--cask brave-browser",
+        "apt": "brave-browser",
+        "dnf": "brave-browser",
+        "pacman": "brave-bin",
+        "nix": "brave",
+        "flatpak": "com.brave.Browser"
+      },
+      "state": [
+        {
+          "role": "profile",
+          "windows": "{APPDATA}/BraveSoftware/Brave-Browser/User Data",
+          "macos": "{HOME}/Library/Application Support/BraveSoftware/Brave-Browser",
+          "linux": "{HOME}/.config/BraveSoftware/Brave-Browser",
+          "exclude": [
+            "**/Cache/**",
+            "**/Code Cache/**",
+            "**/GPUCache/**",
+            "**/Crashpad/**"
+          ]
+        }
+      ],
+      "rewrite": [
+        {
+          "file": "*/Preferences",
+          "format": "json",
+          "keys": [
+            "download.default_directory",
+            "savefile.default_directory"
+          ]
+        }
+      ],
+      "quiesce": [
+        "brave",
+        "brave.exe",
+        "Brave Browser"
+      ],
+      "grade": "adapted"
+    },
+    {
+      "id": "com.calibre-ebook.calibre",
+      "name": "calibre",
+      "detect": {
+        "windows": [
+          "calibre",
+          "calibre.calibre"
+        ],
+        "macos": [
+          "net.kovidgoyal.calibre",
+          "calibre"
+        ],
+        "linux": [
+          "calibre"
+        ]
+      },
+      "install": {
+        "winget": "calibre.calibre",
+        "brew": "--cask calibre",
+        "apt": "calibre",
+        "dnf": "calibre",
+        "zypper": "calibre",
+        "pacman": "calibre",
+        "nix": "calibre",
+        "flatpak": "com.calibre_ebook.calibre"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPDATA}/calibre",
+          "macos": "{HOME}/Library/Preferences/calibre",
+          "linux": "{HOME}/.config/calibre",
+          "exclude": [
+            "**/cache/**"
+          ]
+        }
+      ],
+      "grade": "adapted",
+      "note": "The library folder itself is ordinary files; make sure it is in the selection if it lives outside your documents."
+    },
+    {
+      "id": "org.chromium.chromium",
+      "name": "Chromium",
+      "detect": {
+        "windows": [
+          "Chromium"
+        ],
+        "macos": [
+          "org.chromium.Chromium",
+          "Chromium"
+        ],
+        "linux": [
+          "chromium",
+          "chromium-browser"
+        ]
+      },
+      "install": {
+        "winget": "Hibbiki.Chromium",
+        "brew": "--cask chromium",
+        "apt": "chromium-browser",
+        "dnf": "chromium",
+        "zypper": "chromium",
+        "pacman": "chromium",
+        "emerge": "www-client/chromium",
+        "nix": "chromium",
+        "apk": "chromium",
+        "xbps": "chromium",
+        "flatpak": "org.chromium.Chromium"
+      },
+      "state": [
+        {
+          "role": "profile",
+          "windows": "{APPDATA}/Chromium/User Data",
+          "macos": "{HOME}/Library/Application Support/Chromium",
+          "linux": "{HOME}/.config/chromium",
+          "exclude": [
+            "**/Cache/**",
+            "**/Code Cache/**",
+            "**/GPUCache/**",
+            "**/Crashpad/**",
+            "**/ShaderCache/**"
+          ]
+        }
+      ],
+      "rewrite": [
+        {
+          "file": "*/Preferences",
+          "format": "json",
+          "keys": [
+            "download.default_directory",
+            "savefile.default_directory"
+          ]
+        }
+      ],
+      "quiesce": [
+        "chromium",
+        "chromium-browser",
+        "chrome.exe"
+      ],
+      "grade": "adapted"
+    },
+    {
+      "id": "org.dbeaver.dbeaver",
+      "name": "DBeaver",
+      "detect": {
+        "windows": [
+          "DBeaver",
+          "dbeaver.dbeaver"
+        ],
+        "macos": [
+          "org.jkiss.dbeaver.core.product",
+          "DBeaver"
+        ],
+        "linux": [
+          "dbeaver-ce",
+          "dbeaver"
+        ]
+      },
+      "install": {
+        "winget": "dbeaver.dbeaver",
+        "brew": "--cask dbeaver-community",
+        "apt": "dbeaver-ce",
+        "pacman": "dbeaver",
+        "nix": "dbeaver-bin",
+        "flatpak": "io.dbeaver.DBeaverCommunity"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPDATA}/DBeaverData/workspace6/General/.dbeaver",
+          "macos": "{HOME}/Library/DBeaverData/workspace6/General/.dbeaver",
+          "linux": "{HOME}/.local/share/DBeaverData/workspace6/General/.dbeaver"
+        }
+      ],
+      "quiesce": [
+        "dbeaver",
+        "dbeaver.exe"
+      ],
+      "grade": "adapted",
+      "note": "Connection definitions travel; the saved passwords for them are protected by the old machine and need re-entering."
+    },
+    {
+      "id": "com.discord.discord",
+      "name": "Discord",
+      "detect": {
+        "windows": [
+          "Discord",
+          "Discord.Discord"
+        ],
+        "macos": [
+          "com.hnc.Discord",
+          "Discord"
+        ],
+        "linux": [
+          "discord"
+        ]
+      },
+      "install": {
+        "winget": "Discord.Discord",
+        "brew": "--cask discord",
+        "apt": "discord",
+        "dnf": "discord",
+        "pacman": "discord",
+        "nix": "discord",
+        "flatpak": "com.discordapp.Discord"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/discord",
+          "macos": "{HOME}/Library/Application Support/discord",
+          "linux": "{HOME}/.config/discord",
+          "exclude": [
+            "**/Cache/**",
+            "**/Code Cache/**",
+            "**/GPUCache/**",
+            "**/logs/**"
+          ]
+        }
+      ],
+      "quiesce": [
+        "Discord",
+        "discord",
+        "Discord.exe"
+      ],
+      "grade": "adapted"
+    },
+    {
+      "id": "com.docker.cli",
+      "name": "Docker configuration",
+      "detect": {
+        "windows": [
+          "Docker Desktop",
+          "Docker.DockerDesktop"
+        ],
+        "macos": [
+          "com.docker.docker",
+          "Docker"
+        ],
+        "linux": [
+          "docker-ce",
+          "docker.io",
+          "docker"
+        ]
+      },
+      "install": {
+        "winget": "Docker.DockerDesktop",
+        "brew": "--cask docker",
+        "apt": "docker.io",
+        "dnf": "docker",
+        "pacman": "docker",
+        "nix": "docker"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{HOME}/.docker/config.json",
+          "macos": "{HOME}/.docker/config.json",
+          "linux": "{HOME}/.docker/config.json"
+        }
+      ],
+      "grade": "adapted",
+      "note": "Only the client configuration travels. Images and containers are tied to the machine that built them and are rebuilt or pulled again."
+    },
+    {
+      "id": "im.riot.element",
+      "name": "Element",
+      "detect": {
+        "windows": [
+          "Element",
+          "Element.Element"
+        ],
+        "macos": [
+          "im.riot.app",
+          "Element"
+        ],
+        "linux": [
+          "element-desktop"
+        ]
+      },
+      "install": {
+        "winget": "Element.Element",
+        "brew": "--cask element",
+        "apt": "element-desktop",
+        "pacman": "element-desktop",
+        "nix": "element-desktop",
+        "flatpak": "im.riot.Riot"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/Element",
+          "macos": "{HOME}/Library/Application Support/Element",
+          "linux": "{HOME}/.config/Element",
+          "exclude": [
+            "**/Cache/**",
+            "**/GPUCache/**"
+          ]
+        }
+      ],
+      "grade": "manual",
+      "note": "Element stores its encryption keys per device. Verify this as a new session from another device rather than expecting the old keys to work."
+    },
+    {
+      "id": "org.gnu.emacs",
+      "name": "Emacs",
+      "detect": {
+        "windows": [
+          "Emacs",
+          "GNU.Emacs"
+        ],
+        "macos": [
+          "org.gnu.Emacs",
+          "Emacs"
+        ],
+        "linux": [
+          "emacs",
+          "emacs-nox"
+        ]
+      },
+      "install": {
+        "winget": "GNU.Emacs",
+        "brew": "--cask emacs",
+        "apt": "emacs",
+        "dnf": "emacs",
+        "zypper": "emacs",
+        "pacman": "emacs",
+        "emerge": "app-editors/emacs",
+        "nix": "emacs",
+        "apk": "emacs",
+        "xbps": "emacs"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/emacs",
+          "macos": "{HOME}/.emacs.d",
+          "linux": "{HOME}/.emacs.d",
+          "exclude": [
+            "**/eln-cache/**",
+            "**/elpa/**/*.elc",
+            "**/auto-save-list/**",
+            "**/backups/**"
+          ]
+        },
+        {
+          "role": "config",
+          "windows": "{HOME}/.emacs",
+          "macos": "{HOME}/.emacs",
+          "linux": "{HOME}/.emacs"
+        }
+      ],
+      "grade": "adapted",
+      "note": "Byte-compiled and natively compiled files are left behind because they are built for the old machine; Emacs regenerates them."
+    },
+    {
+      "id": "org.gnome.evolution",
+      "name": "Evolution",
+      "detect": {
+        "linux": [
+          "evolution"
+        ]
+      },
+      "install": {
+        "apt": "evolution",
+        "dnf": "evolution",
+        "zypper": "evolution",
+        "pacman": "evolution",
+        "nix": "evolution",
+        "flatpak": "org.gnome.Evolution"
+      },
+      "state": [
+        {
+          "role": "config",
+          "linux": "{HOME}/.config/evolution"
+        },
+        {
+          "role": "data",
+          "linux": "{HOME}/.local/share/evolution",
+          "exclude": [
+            "**/cache/**"
+          ]
+        }
+      ],
+      "grade": "adapted"
+    },
+    {
+      "id": "com.figma.desktop",
+      "name": "Figma",
+      "detect": {
+        "windows": [
+          "Figma",
+          "Figma.Figma"
+        ],
+        "macos": [
+          "com.figma.Desktop",
+          "Figma"
+        ],
+        "linux": [
+          "figma-linux"
+        ]
+      },
+      "install": {
+        "winget": "Figma.Figma",
+        "brew": "--cask figma",
+        "flatpak": "io.github.Figma_Linux.figma_linux"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPDATA}/Figma/settings.json",
+          "macos": "{HOME}/Library/Application Support/Figma/settings.json",
+          "linux": "{HOME}/.config/figma-linux/settings.json"
+        }
+      ],
+      "grade": "adapted",
+      "note": "Your files live in your Figma account, so they are there as soon as you sign in."
+    },
+    {
+      "id": "org.gnome.nautilus.bookmarks",
+      "name": "File manager bookmarks",
+      "detect": {
+        "linux": [
+          "nautilus",
+          "nemo",
+          "thunar",
+          "dolphin"
+        ]
+      },
+      "install": {
+        "apt": "nautilus",
+        "dnf": "nautilus",
+        "pacman": "nautilus"
+      },
+      "state": [
+        {
+          "role": "config",
+          "linux": "{HOME}/.config/gtk-3.0/bookmarks"
+        }
+      ],
+      "rewrite": [
+        {
+          "file": "bookmarks",
+          "format": "text",
+          "pattern": "^(file:///\\S*)",
+          "group": 1
+        }
+      ],
+      "grade": "adapted",
+      "note": "Bookmarked folders are repointed at where those folders landed on this machine."
+    },
+    {
+      "id": "org.filezilla-project.filezilla",
+      "name": "FileZilla",
+      "detect": {
+        "windows": [
+          "FileZilla",
+          "TimKosse.FileZilla.Client"
+        ],
+        "macos": [
+          "org.filezilla-project.filezilla",
+          "FileZilla"
+        ],
+        "linux": [
+          "filezilla"
+        ]
+      },
+      "install": {
+        "winget": "TimKosse.FileZilla.Client",
+        "brew": "--cask filezilla",
+        "apt": "filezilla",
+        "dnf": "filezilla",
+        "zypper": "filezilla",
+        "pacman": "filezilla",
+        "nix": "filezilla",
+        "flatpak": "org.filezillaproject.Filezilla"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/FileZilla",
+          "macos": "{HOME}/.config/filezilla",
+          "linux": "{HOME}/.config/filezilla",
+          "exclude": [
+            "**/*.tmp"
+          ]
+        }
+      ],
+      "grade": "adapted"
+    },
+    {
+      "id": "org.mozilla.firefox",
+      "name": "Firefox",
+      "detect": {
+        "windows": [
+          "Mozilla Firefox",
+          "Mozilla.Firefox"
+        ],
+        "macos": [
+          "org.mozilla.firefox",
+          "Firefox"
+        ],
+        "linux": [
+          "firefox",
+          "firefox-esr",
+          "org.mozilla.firefox"
+        ]
+      },
+      "install": {
+        "winget": "Mozilla.Firefox",
+        "brew": "--cask firefox",
+        "apt": "firefox",
+        "dnf": "firefox",
+        "zypper": "MozillaFirefox",
+        "pacman": "firefox",
+        "emerge": "www-client/firefox",
+        "nix": "firefox",
+        "apk": "firefox",
+        "xbps": "firefox",
+        "flatpak": "org.mozilla.firefox"
+      },
+      "state": [
+        {
+          "role": "profile",
+          "windows": "{APPCONFIG}/Mozilla/Firefox",
+          "macos": "{HOME}/Library/Application Support/Firefox",
+          "linux": "{HOME}/.mozilla/firefox",
+          "exclude": [
+            "**/cache2/**",
+            "**/startupCache/**",
+            "**/thumbnails/**",
+            "**/*.tmp",
+            "**/lock",
+            "**/.parentlock",
+            "**/crashes/**",
+            "**/minidumps/**",
+            "**/datareporting/**"
+          ]
+        }
+      ],
+      "rewrite": [
+        {
+          "file": "profiles.ini",
+          "format": "ini",
+          "keys": [
+            "Path",
+            "Default"
+          ]
+        },
+        {
+          "file": "installs.ini",
+          "format": "ini",
+          "keys": [
+            "Default"
+          ]
+        },
+        {
+          "file": "**/prefs.js",
+          "format": "text",
+          "pattern": "user_pref\\(\"browser\\.download\\.(?:dir|lastDir)\", \"([^\"]*)\"\\)",
+          "group": 1
+        },
+        {
+          "file": "**/prefs.js",
+          "format": "text",
+          "pattern": "user_pref\\(\"browser\\.startup\\.homepage_override\\.buildID\", \"([^\"]*)\"\\)",
+          "group": 1
+        }
+      ],
+      "quiesce": [
+        "firefox",
+        "firefox-bin",
+        "firefox.exe"
+      ],
+      "grade": "full",
+      "note": "Firefox keeps saved passwords in key4.db next to logins.json, both inside the profile, so they travel with it and keep working on the new system."
+    },
+    {
+      "id": "org.fishshell.fish",
+      "name": "fish shell",
+      "detect": {
+        "macos": [
+          "fish"
+        ],
+        "linux": [
+          "fish"
+        ]
+      },
+      "install": {
+        "brew": "fish",
+        "apt": "fish",
+        "dnf": "fish",
+        "zypper": "fish",
+        "pacman": "fish",
+        "nix": "fish",
+        "apk": "fish",
+        "xbps": "fish"
+      },
+      "state": [
+        {
+          "role": "config",
+          "macos": "{HOME}/.config/fish",
+          "linux": "{HOME}/.config/fish",
+          "exclude": [
+            "**/fish_history"
+          ]
+        }
+      ],
+      "grade": "adapted"
+    },
+    {
+      "id": "org.gimp.gimp",
+      "name": "GIMP",
+      "detect": {
+        "windows": [
+          "GIMP",
+          "GIMP.GIMP"
+        ],
+        "macos": [
+          "org.gimp.gimp",
+          "GIMP"
+        ],
+        "linux": [
+          "gimp"
+        ]
+      },
+      "install": {
+        "winget": "GIMP.GIMP",
+        "brew": "--cask gimp",
+        "apt": "gimp",
+        "dnf": "gimp",
+        "zypper": "gimp",
+        "pacman": "gimp",
+        "emerge": "media-gfx/gimp",
+        "nix": "gimp",
+        "apk": "gimp",
+        "flatpak": "org.gimp.GIMP"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/GIMP",
+          "macos": "{HOME}/Library/Application Support/GIMP",
+          "linux": "{HOME}/.config/GIMP",
+          "exclude": [
+            "**/tmp/**",
+            "**/swap/**"
+          ]
+        }
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "org.git-scm.git",
+      "name": "Git",
+      "detect": {
+        "windows": [
+          "Git",
+          "Git.Git"
+        ],
+        "macos": [
+          "git"
+        ],
+        "linux": [
+          "git"
+        ]
+      },
+      "install": {
+        "winget": "Git.Git",
+        "brew": "git",
+        "apt": "git",
+        "dnf": "git",
+        "zypper": "git",
+        "pacman": "git",
+        "emerge": "dev-vcs/git",
+        "nix": "git",
+        "apk": "git",
+        "xbps": "git"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{HOME}/.gitconfig",
+          "macos": "{HOME}/.gitconfig",
+          "linux": "{HOME}/.gitconfig"
+        },
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/git",
+          "macos": "{HOME}/.config/git",
+          "linux": "{HOME}/.config/git"
+        }
+      ],
+      "rewrite": [
+        {
+          "file": ".gitconfig",
+          "format": "ini",
+          "keys": [
+            "core/excludesfile",
+            "core/hooksPath",
+            "include/path",
+            "commit/template",
+            "core/editor"
+          ]
+        },
+        {
+          "file": "config",
+          "format": "ini",
+          "keys": [
+            "core/excludesfile",
+            "core/hooksPath",
+            "include/path",
+            "commit/template"
+          ]
+        }
+      ],
+      "grade": "adapted",
+      "note": "Paths inside the configuration are repointed. A credential helper named there is specific to the old system and is reported for you to set again."
+    },
+    {
+      "id": "com.github.cli",
+      "name": "GitHub CLI",
+      "detect": {
+        "windows": [
+          "GitHub CLI",
+          "GitHub.cli"
+        ],
+        "macos": [
+          "gh"
+        ],
+        "linux": [
+          "gh",
+          "github-cli"
+        ]
+      },
+      "install": {
+        "winget": "GitHub.cli",
+        "brew": "gh",
+        "apt": "gh",
+        "dnf": "gh",
+        "pacman": "github-cli",
+        "nix": "gh",
+        "apk": "github-cli",
+        "xbps": "github-cli"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/GitHub CLI",
+          "macos": "{HOME}/.config/gh",
+          "linux": "{HOME}/.config/gh"
+        }
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "org.gnupg.gnupg",
+      "name": "GnuPG",
+      "detect": {
+        "windows": [
+          "Gpg4win",
+          "GnuPG.Gpg4win"
+        ],
+        "macos": [
+          "gnupg"
+        ],
+        "linux": [
+          "gnupg",
+          "gpg",
+          "gnupg2"
+        ]
+      },
+      "install": {
+        "winget": "GnuPG.Gpg4win",
+        "brew": "gnupg",
+        "apt": "gnupg",
+        "dnf": "gnupg2",
+        "zypper": "gpg2",
+        "pacman": "gnupg",
+        "emerge": "app-crypt/gnupg",
+        "nix": "gnupg",
+        "apk": "gnupg",
+        "xbps": "gnupg"
+      },
+      "state": [
+        {
+          "role": "data",
+          "windows": "{APPDATA}/gnupg",
+          "macos": "{HOME}/.gnupg",
+          "linux": "{HOME}/.gnupg",
+          "exclude": [
+            "**/S.*",
+            "**/*.lock",
+            "**/random_seed"
+          ]
+        }
+      ],
+      "grade": "adapted",
+      "note": "Your keyring travels. Private keys are restored with owner-only permissions, which GnuPG insists on before it will use them."
+    },
+    {
+      "id": "com.google.chrome",
+      "name": "Google Chrome",
+      "detect": {
+        "windows": [
+          "Google Chrome",
+          "Google.Chrome"
+        ],
+        "macos": [
+          "com.google.Chrome",
+          "Google Chrome"
+        ],
+        "linux": [
+          "google-chrome-stable",
+          "google-chrome"
+        ]
+      },
+      "install": {
+        "winget": "Google.Chrome",
+        "brew": "--cask google-chrome",
+        "apt": "google-chrome-stable",
+        "dnf": "google-chrome-stable",
+        "pacman": "google-chrome",
+        "nix": "google-chrome"
+      },
+      "state": [
+        {
+          "role": "profile",
+          "windows": "{APPDATA}/Google/Chrome/User Data",
+          "macos": "{HOME}/Library/Application Support/Google/Chrome",
+          "linux": "{HOME}/.config/google-chrome",
+          "exclude": [
+            "**/Cache/**",
+            "**/Code Cache/**",
+            "**/GPUCache/**",
+            "**/Service Worker/CacheStorage/**",
+            "**/Crashpad/**",
+            "**/ShaderCache/**",
+            "**/component_crx_cache/**",
+            "**/*.tmp",
+            "**/Singleton*"
+          ]
+        }
+      ],
+      "rewrite": [
+        {
+          "file": "Local State",
+          "format": "json",
+          "keys": [
+            "profile.info_cache",
+            "user_experience_metrics.stability"
+          ]
+        },
+        {
+          "file": "*/Preferences",
+          "format": "json",
+          "keys": [
+            "download.default_directory",
+            "savefile.default_directory",
+            "selectfile.last_directory",
+            "printing.print_preview_sticky_settings"
+          ]
+        }
+      ],
+      "quiesce": [
+        "chrome",
+        "chrome.exe",
+        "Google Chrome"
+      ],
+      "grade": "adapted",
+      "note": "Chrome seals its saved passwords with a key held by the operating system, so those need the credentials option; bookmarks, history, extensions and settings move as they are."
+    },
+    {
+      "id": "io.helix-editor.helix",
+      "name": "Helix",
+      "detect": {
+        "windows": [
+          "Helix",
+          "Helix.Helix"
+        ],
+        "macos": [
+          "helix",
+          "hx"
+        ],
+        "linux": [
+          "helix",
+          "helix-editor"
+        ]
+      },
+      "install": {
+        "winget": "Helix.Helix",
+        "brew": "helix",
+        "apt": "helix",
+        "dnf": "helix",
+        "pacman": "helix",
+        "nix": "helix",
+        "apk": "helix",
+        "xbps": "helix"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/helix",
+          "macos": "{HOME}/.config/helix",
+          "linux": "{HOME}/.config/helix"
+        }
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "com.hexchat.hexchat",
+      "name": "HexChat",
+      "detect": {
+        "windows": [
+          "HexChat",
+          "HexChat.HexChat"
+        ],
+        "macos": [
+          "hexchat"
+        ],
+        "linux": [
+          "hexchat"
+        ]
+      },
+      "install": {
+        "winget": "HexChat.HexChat",
+        "apt": "hexchat",
+        "dnf": "hexchat",
+        "zypper": "hexchat",
+        "pacman": "hexchat",
+        "nix": "hexchat",
+        "flatpak": "io.github.Hexchat"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPDATA}/HexChat",
+          "macos": "{HOME}/Library/Application Support/HexChat",
+          "linux": "{HOME}/.config/hexchat",
+          "exclude": [
+            "**/logs/**",
+            "**/scrollback/**"
+          ]
+        }
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "org.inkscape.inkscape",
+      "name": "Inkscape",
+      "detect": {
+        "windows": [
+          "Inkscape",
+          "Inkscape.Inkscape"
+        ],
+        "macos": [
+          "org.inkscape.Inkscape",
+          "Inkscape"
+        ],
+        "linux": [
+          "inkscape"
+        ]
+      },
+      "install": {
+        "winget": "Inkscape.Inkscape",
+        "brew": "--cask inkscape",
+        "apt": "inkscape",
+        "dnf": "inkscape",
+        "zypper": "inkscape",
+        "pacman": "inkscape",
+        "nix": "inkscape",
+        "flatpak": "org.inkscape.Inkscape"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/inkscape",
+          "macos": "{HOME}/Library/Application Support/org.inkscape.Inkscape/config/inkscape",
+          "linux": "{HOME}/.config/inkscape"
+        }
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "io.insomnia.app",
+      "name": "Insomnia",
+      "detect": {
+        "windows": [
+          "Insomnia",
+          "Insomnia.Insomnia"
+        ],
+        "macos": [
+          "com.insomnia.app",
+          "Insomnia"
+        ],
+        "linux": [
+          "insomnia"
+        ]
+      },
+      "install": {
+        "winget": "Insomnia.Insomnia",
+        "brew": "--cask insomnia",
+        "pacman": "insomnia",
+        "nix": "insomnia",
+        "flatpak": "rest.insomnia.Insomnia"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/Insomnia",
+          "macos": "{HOME}/Library/Application Support/Insomnia",
+          "linux": "{HOME}/.config/Insomnia",
+          "exclude": [
+            "**/Cache/**",
+            "**/GPUCache/**"
+          ]
+        }
+      ],
+      "grade": "adapted"
+    },
+    {
+      "id": "com.jetbrains.toolbox",
+      "name": "JetBrains IDEs",
+      "detect": {
+        "windows": [
+          "JetBrains Toolbox",
+          "IntelliJ IDEA",
+          "PyCharm",
+          "CLion",
+          "WebStorm"
+        ],
+        "macos": [
+          "com.jetbrains.toolbox",
+          "IntelliJ IDEA",
+          "PyCharm",
+          "CLion"
+        ],
+        "linux": [
+          "jetbrains-toolbox",
+          "intellij-idea-community"
+        ]
+      },
+      "install": {
+        "winget": "JetBrains.Toolbox",
+        "brew": "--cask jetbrains-toolbox",
+        "pacman": "jetbrains-toolbox",
+        "nix": "jetbrains-toolbox",
+        "flatpak": "com.jetbrains.IntelliJ-IDEA-Community"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/JetBrains",
+          "macos": "{HOME}/Library/Application Support/JetBrains",
+          "linux": "{HOME}/.config/JetBrains",
+          "exclude": [
+            "**/caches/**",
+            "**/index/**",
+            "**/log/**",
+            "**/tmp/**"
+          ]
+        }
+      ],
+      "quiesce": [
+        "idea",
+        "pycharm",
+        "clion",
+        "webstorm",
+        "idea64.exe"
+      ],
+      "grade": "adapted",
+      "note": "Keymaps, colour schemes and inspection profiles carry across. Project indexes are rebuilt on first open and are deliberately not copied."
+    },
+    {
+      "id": "com.joplinapp.desktop",
+      "name": "Joplin",
+      "detect": {
+        "windows": [
+          "Joplin",
+          "Joplin.Joplin"
+        ],
+        "macos": [
+          "net.cozic.joplin-desktop",
+          "Joplin"
+        ],
+        "linux": [
+          "joplin-desktop",
+          "joplin"
+        ]
+      },
+      "install": {
+        "winget": "Joplin.Joplin",
+        "brew": "--cask joplin",
+        "pacman": "joplin-desktop",
+        "nix": "joplin-desktop",
+        "flatpak": "net.cozic.joplin_desktop"
+      },
+      "state": [
+        {
+          "role": "data",
+          "windows": "{APPCONFIG}/joplin-desktop",
+          "macos": "{HOME}/.config/joplin-desktop",
+          "linux": "{HOME}/.config/joplin-desktop",
+          "exclude": [
+            "**/cache/**",
+            "**/tmp/**",
+            "**/log.txt"
+          ]
+        }
+      ],
+      "quiesce": [
+        "joplin",
+        "Joplin.exe"
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "org.kde.kdeconnect",
+      "name": "KDE Connect",
+      "detect": {
+        "linux": [
+          "kdeconnect"
+        ]
+      },
+      "install": {
+        "apt": "kdeconnect",
+        "dnf": "kde-connect",
+        "zypper": "kdeconnect-kde",
+        "pacman": "kdeconnect",
+        "nix": "kdeconnect",
+        "flatpak": "org.kde.kdeconnect"
+      },
+      "state": [
+        {
+          "role": "config",
+          "linux": "{HOME}/.config/kdeconnect"
+        }
+      ],
+      "grade": "manual",
+      "note": "Paired devices are identified by a per-machine key, so pair this machine again."
+    },
+    {
+      "id": "org.keepassxc.keepassxc",
+      "name": "KeePassXC",
+      "detect": {
+        "windows": [
+          "KeePassXC",
+          "KeePassXCTeam.KeePassXC"
+        ],
+        "macos": [
+          "org.keepassxc.keepassxc",
+          "KeePassXC"
+        ],
+        "linux": [
+          "keepassxc"
+        ]
+      },
+      "install": {
+        "winget": "KeePassXCTeam.KeePassXC",
+        "brew": "--cask keepassxc",
+        "apt": "keepassxc",
+        "dnf": "keepassxc",
+        "zypper": "keepassxc",
+        "pacman": "keepassxc",
+        "nix": "keepassxc",
+        "apk": "keepassxc",
+        "flatpak": "org.keepassxc.KeePassXC"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/KeePassXC",
+          "macos": "{HOME}/Library/Application Support/KeePassXC",
+          "linux": "{HOME}/.config/keepassxc"
+        }
+      ],
+      "rewrite": [
+        {
+          "file": "keepassxc.ini",
+          "format": "ini",
+          "keys": [
+            "General/LastDatabases",
+            "General/LastOpenedDatabases",
+            "General/LastKeyFiles",
+            "General/LastDir"
+          ]
+        }
+      ],
+      "quiesce": [
+        "keepassxc",
+        "KeePassXC.exe"
+      ],
+      "grade": "adapted",
+      "note": "The password database is a file of your own; make sure it is in the selection, and the recent-files list is repointed at where it landed."
+    },
+    {
+      "id": "sh.kitty.terminal",
+      "name": "kitty",
+      "detect": {
+        "macos": [
+          "net.kovidgoyal.kitty",
+          "kitty"
+        ],
+        "linux": [
+          "kitty"
+        ]
+      },
+      "install": {
+        "brew": "--cask kitty",
+        "apt": "kitty",
+        "dnf": "kitty",
+        "zypper": "kitty",
+        "pacman": "kitty",
+        "nix": "kitty",
+        "apk": "kitty",
+        "xbps": "kitty"
+      },
+      "state": [
+        {
+          "role": "config",
+          "macos": "{HOME}/.config/kitty",
+          "linux": "{HOME}/.config/kitty"
+        }
+      ],
+      "grade": "adapted"
+    },
+    {
+      "id": "org.kde.krita",
+      "name": "Krita",
+      "detect": {
+        "windows": [
+          "Krita",
+          "KDE.Krita"
+        ],
+        "macos": [
+          "org.krita",
+          "Krita"
+        ],
+        "linux": [
+          "krita"
+        ]
+      },
+      "install": {
+        "winget": "KDE.Krita",
+        "brew": "--cask krita",
+        "apt": "krita",
+        "dnf": "krita",
+        "zypper": "krita",
+        "pacman": "krita",
+        "nix": "krita",
+        "flatpak": "org.kde.krita"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/kritarc",
+          "macos": "{HOME}/Library/Preferences/kritarc",
+          "linux": "{HOME}/.config/kritarc"
+        },
+        {
+          "role": "data",
+          "windows": "{APPDATA}/krita",
+          "macos": "{HOME}/Library/Application Support/krita",
+          "linux": "{HOME}/.local/share/krita"
+        }
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "org.libreoffice.libreoffice",
+      "name": "LibreOffice",
+      "detect": {
+        "windows": [
+          "LibreOffice",
+          "TheDocumentFoundation.LibreOffice"
+        ],
+        "macos": [
+          "org.libreoffice.script",
+          "LibreOffice"
+        ],
+        "linux": [
+          "libreoffice",
+          "libreoffice-core",
+          "libreoffice-still"
+        ]
+      },
+      "install": {
+        "winget": "TheDocumentFoundation.LibreOffice",
+        "brew": "--cask libreoffice",
+        "apt": "libreoffice",
+        "dnf": "libreoffice",
+        "zypper": "libreoffice",
+        "pacman": "libreoffice-still",
+        "emerge": "app-office/libreoffice",
+        "nix": "libreoffice",
+        "apk": "libreoffice",
+        "flatpak": "org.libreoffice.LibreOffice"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/LibreOffice/4/user",
+          "macos": "{HOME}/Library/Application Support/LibreOffice/4/user",
+          "linux": "{HOME}/.config/libreoffice/4/user",
+          "exclude": [
+            "**/backup/**",
+            "**/temp/**",
+            "**/cache/**",
+            "**/.lock"
+          ]
+        }
+      ],
+      "rewrite": [
+        {
+          "file": "registrymodifications.xcu",
+          "format": "text",
+          "pattern": "<value>(file:///[^<]*)</value>",
+          "group": 1
+        }
+      ],
+      "quiesce": [
+        "soffice",
+        "soffice.bin",
+        "soffice.exe"
+      ],
+      "grade": "adapted",
+      "note": "Templates, autocorrect entries, macros and your custom dictionary all travel."
+    },
+    {
+      "id": "com.logseq.logseq",
+      "name": "Logseq",
+      "detect": {
+        "windows": [
+          "Logseq",
+          "Logseq.Logseq"
+        ],
+        "macos": [
+          "com.electron.logseq",
+          "Logseq"
+        ],
+        "linux": [
+          "logseq"
+        ]
+      },
+      "install": {
+        "winget": "Logseq.Logseq",
+        "brew": "--cask logseq",
+        "pacman": "logseq-desktop-bin",
+        "nix": "logseq",
+        "flatpak": "com.logseq.Logseq"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/Logseq",
+          "macos": "{HOME}/Library/Application Support/Logseq",
+          "linux": "{HOME}/.config/Logseq",
+          "exclude": [
+            "**/Cache/**",
+            "**/GPUCache/**"
+          ]
+        }
+      ],
+      "grade": "adapted"
+    },
+    {
+      "id": "com.microsoft.edge",
+      "name": "Microsoft Edge",
+      "detect": {
+        "windows": [
+          "Microsoft Edge",
+          "Microsoft.Edge"
+        ],
+        "macos": [
+          "com.microsoft.edgemac",
+          "Microsoft Edge"
+        ],
+        "linux": [
+          "microsoft-edge-stable",
+          "microsoft-edge"
+        ]
+      },
+      "install": {
+        "winget": "Microsoft.Edge",
+        "brew": "--cask microsoft-edge",
+        "apt": "microsoft-edge-stable",
+        "dnf": "microsoft-edge-stable",
+        "pacman": "microsoft-edge-stable-bin"
+      },
+      "state": [
+        {
+          "role": "profile",
+          "windows": "{APPDATA}/Microsoft/Edge/User Data",
+          "macos": "{HOME}/Library/Application Support/Microsoft Edge",
+          "linux": "{HOME}/.config/microsoft-edge",
+          "exclude": [
+            "**/Cache/**",
+            "**/Code Cache/**",
+            "**/GPUCache/**",
+            "**/Crashpad/**"
+          ]
+        }
+      ],
+      "rewrite": [
+        {
+          "file": "*/Preferences",
+          "format": "json",
+          "keys": [
+            "download.default_directory",
+            "savefile.default_directory"
+          ]
+        }
+      ],
+      "quiesce": [
+        "msedge",
+        "msedge.exe",
+        "Microsoft Edge"
+      ],
+      "grade": "adapted"
+    },
+    {
+      "id": "io.mpv",
+      "name": "mpv",
+      "detect": {
+        "windows": [
+          "mpv"
+        ],
+        "macos": [
+          "io.mpv",
+          "mpv"
+        ],
+        "linux": [
+          "mpv"
+        ]
+      },
+      "install": {
+        "brew": "mpv",
+        "apt": "mpv",
+        "dnf": "mpv",
+        "zypper": "mpv",
+        "pacman": "mpv",
+        "emerge": "media-video/mpv",
+        "nix": "mpv",
+        "apk": "mpv",
+        "xbps": "mpv",
+        "flatpak": "io.mpv.Mpv"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/mpv",
+          "macos": "{HOME}/.config/mpv",
+          "linux": "{HOME}/.config/mpv"
+        }
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "io.neovim.nvim",
+      "name": "Neovim",
+      "detect": {
+        "windows": [
+          "Neovim",
+          "Neovim.Neovim"
+        ],
+        "macos": [
+          "neovim",
+          "nvim"
+        ],
+        "linux": [
+          "neovim",
+          "nvim"
+        ]
+      },
+      "install": {
+        "winget": "Neovim.Neovim",
+        "brew": "neovim",
+        "apt": "neovim",
+        "dnf": "neovim",
+        "zypper": "neovim",
+        "pacman": "neovim",
+        "emerge": "app-editors/neovim",
+        "nix": "neovim",
+        "apk": "neovim",
+        "xbps": "neovim"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/nvim",
+          "macos": "{HOME}/.config/nvim",
+          "linux": "{HOME}/.config/nvim"
+        },
+        {
+          "role": "data",
+          "windows": "{APPDATA}/nvim-data",
+          "macos": "{HOME}/.local/share/nvim",
+          "linux": "{HOME}/.local/share/nvim",
+          "exclude": [
+            "**/swap/**",
+            "**/shada/**",
+            "**/log"
+          ]
+        }
+      ],
+      "quiesce": [
+        "nvim",
+        "nvim.exe"
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "com.notion.desktop",
+      "name": "Notion",
+      "detect": {
+        "windows": [
+          "Notion",
+          "Notion.Notion"
+        ],
+        "macos": [
+          "notion.id",
+          "Notion"
+        ],
+        "linux": [
+          "notion-app"
+        ]
+      },
+      "install": {
+        "winget": "Notion.Notion",
+        "brew": "--cask notion"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/Notion",
+          "macos": "{HOME}/Library/Application Support/Notion",
+          "linux": "{HOME}/.config/Notion",
+          "exclude": [
+            "**/Cache/**",
+            "**/GPUCache/**",
+            "**/logs/**"
+          ]
+        }
+      ],
+      "grade": "adapted"
+    },
+    {
+      "id": "com.npmjs.npm",
+      "name": "npm settings",
+      "detect": {
+        "windows": [
+          "Node.js",
+          "OpenJS.NodeJS"
+        ],
+        "macos": [
+          "node",
+          "npm"
+        ],
+        "linux": [
+          "nodejs",
+          "npm"
+        ]
+      },
+      "install": {
+        "winget": "OpenJS.NodeJS",
+        "brew": "node",
+        "apt": "nodejs",
+        "dnf": "nodejs",
+        "zypper": "nodejs",
+        "pacman": "nodejs",
+        "nix": "nodejs",
+        "apk": "nodejs",
+        "xbps": "nodejs"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{HOME}/.npmrc",
+          "macos": "{HOME}/.npmrc",
+          "linux": "{HOME}/.npmrc"
+        }
+      ],
+      "grade": "adapted",
+      "note": "An access token in .npmrc is carried across as written; rotate it if the new machine is not equally trusted."
+    },
+    {
+      "id": "com.obsproject.studio",
+      "name": "OBS Studio",
+      "detect": {
+        "windows": [
+          "OBS Studio",
+          "OBSProject.OBSStudio"
+        ],
+        "macos": [
+          "com.obsproject.obs-studio",
+          "OBS"
+        ],
+        "linux": [
+          "obs-studio"
+        ]
+      },
+      "install": {
+        "winget": "OBSProject.OBSStudio",
+        "brew": "--cask obs",
+        "apt": "obs-studio",
+        "dnf": "obs-studio",
+        "zypper": "obs-studio",
+        "pacman": "obs-studio",
+        "nix": "obs-studio",
+        "flatpak": "com.obsproject.Studio"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/obs-studio",
+          "macos": "{HOME}/Library/Application Support/obs-studio",
+          "linux": "{HOME}/.config/obs-studio",
+          "exclude": [
+            "**/logs/**",
+            "**/crashes/**",
+            "**/updates/**"
+          ]
+        }
+      ],
+      "rewrite": [
+        {
+          "file": "basic/profiles/*/basic.ini",
+          "format": "ini",
+          "keys": [
+            "SimpleOutput/FilePath",
+            "AdvOut/RecFilePath",
+            "AdvOut/FFFilePath"
+          ]
+        }
+      ],
+      "quiesce": [
+        "obs",
+        "obs64.exe"
+      ],
+      "grade": "adapted",
+      "note": "Scenes and settings carry across. Sources that name a capture device or a window will need repointing on the new machine."
+    },
+    {
+      "id": "md.obsidian.obsidian",
+      "name": "Obsidian",
+      "detect": {
+        "windows": [
+          "Obsidian",
+          "Obsidian.Obsidian"
+        ],
+        "macos": [
+          "md.obsidian",
+          "Obsidian"
+        ],
+        "linux": [
+          "obsidian"
+        ]
+      },
+      "install": {
+        "winget": "Obsidian.Obsidian",
+        "brew": "--cask obsidian",
+        "pacman": "obsidian",
+        "nix": "obsidian",
+        "flatpak": "md.obsidian.Obsidian"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/obsidian",
+          "macos": "{HOME}/Library/Application Support/obsidian",
+          "linux": "{HOME}/.config/obsidian",
+          "exclude": [
+            "**/Cache/**",
+            "**/GPUCache/**",
+            "**/logs/**"
+          ]
+        }
+      ],
+      "rewrite": [
+        {
+          "file": "obsidian.json",
+          "format": "json",
+          "keys": [
+            "vaults"
+          ]
+        }
+      ],
+      "quiesce": [
+        "obsidian",
+        "Obsidian.exe"
+      ],
+      "grade": "adapted",
+      "note": "The list of vaults is repointed at where those folders landed here. The notes themselves come across as ordinary files."
+    },
+    {
+      "id": "com.getpostman.postman",
+      "name": "Postman",
+      "detect": {
+        "windows": [
+          "Postman",
+          "Postman.Postman"
+        ],
+        "macos": [
+          "com.postmanlabs.mac",
+          "Postman"
+        ],
+        "linux": [
+          "postman"
+        ]
+      },
+      "install": {
+        "winget": "Postman.Postman",
+        "brew": "--cask postman",
+        "pacman": "postman-bin",
+        "nix": "postman",
+        "flatpak": "com.getpostman.Postman",
+        "snap": "postman"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/Postman",
+          "macos": "{HOME}/Library/Application Support/Postman",
+          "linux": "{HOME}/.config/Postman",
+          "exclude": [
+            "**/Cache/**",
+            "**/GPUCache/**",
+            "**/logs/**"
+          ]
+        }
+      ],
+      "quiesce": [
+        "Postman",
+        "postman",
+        "Postman.exe"
+      ],
+      "grade": "adapted"
+    },
+    {
+      "id": "org.putty.putty",
+      "name": "PuTTY",
+      "detect": {
+        "windows": [
+          "PuTTY",
+          "PuTTY.PuTTY"
+        ]
+      },
+      "install": {
+        "winget": "PuTTY.PuTTY"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{HOME}/.putty"
+        }
+      ],
+      "grade": "manual",
+      "note": "PuTTY keeps its sessions in the Windows registry. Export them with \"regedit /e\" before the move; Transmit cannot read them from the filesystem."
+    },
+    {
+      "id": "org.python.pip",
+      "name": "Python packaging settings",
+      "detect": {
+        "windows": [
+          "Python",
+          "Python.Python.3.12"
+        ],
+        "macos": [
+          "python3",
+          "python"
+        ],
+        "linux": [
+          "python3",
+          "python3-pip"
+        ]
+      },
+      "install": {
+        "winget": "Python.Python.3.12",
+        "brew": "python",
+        "apt": "python3-pip",
+        "dnf": "python3-pip",
+        "zypper": "python3-pip",
+        "pacman": "python-pip",
+        "nix": "python3",
+        "apk": "py3-pip",
+        "xbps": "python3-pip"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPDATA}/pip",
+          "macos": "{HOME}/.config/pip",
+          "linux": "{HOME}/.config/pip"
+        },
+        {
+          "role": "config",
+          "windows": "{HOME}/.condarc",
+          "macos": "{HOME}/.condarc",
+          "linux": "{HOME}/.condarc"
+        }
+      ],
+      "grade": "adapted",
+      "note": "Virtual environments contain compiled binaries and are excluded; recreate them from your requirements file."
+    },
+    {
+      "id": "org.qbittorrent.qbittorrent",
+      "name": "qBittorrent",
+      "detect": {
+        "windows": [
+          "qBittorrent",
+          "qBittorrent.qBittorrent"
+        ],
+        "macos": [
+          "org.qbittorrent.qBittorrent",
+          "qbittorrent"
+        ],
+        "linux": [
+          "qbittorrent"
+        ]
+      },
+      "install": {
+        "winget": "qBittorrent.qBittorrent",
+        "brew": "--cask qbittorrent",
+        "apt": "qbittorrent",
+        "dnf": "qbittorrent",
+        "zypper": "qbittorrent",
+        "pacman": "qbittorrent",
+        "nix": "qbittorrent",
+        "flatpak": "org.qbittorrent.qBittorrent"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/qBittorrent",
+          "macos": "{HOME}/Library/Application Support/qBittorrent",
+          "linux": "{HOME}/.config/qBittorrent"
+        }
+      ],
+      "rewrite": [
+        {
+          "file": "qBittorrent.conf",
+          "format": "ini",
+          "keys": [
+            "Preferences/Downloads\\SavePath",
+            "Preferences/Downloads\\TempPath",
+            "BitTorrent/Session\\DefaultSavePath"
+          ]
+        }
+      ],
+      "quiesce": [
+        "qbittorrent",
+        "qbittorrent.exe"
+      ],
+      "grade": "adapted"
+    },
+    {
+      "id": "com.rclone.rclone",
+      "name": "rclone",
+      "detect": {
+        "windows": [
+          "rclone",
+          "Rclone.Rclone"
+        ],
+        "macos": [
+          "rclone"
+        ],
+        "linux": [
+          "rclone"
+        ]
+      },
+      "install": {
+        "winget": "Rclone.Rclone",
+        "brew": "rclone",
+        "apt": "rclone",
+        "dnf": "rclone",
+        "zypper": "rclone",
+        "pacman": "rclone",
+        "nix": "rclone",
+        "apk": "rclone",
+        "xbps": "rclone"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/rclone",
+          "macos": "{HOME}/.config/rclone",
+          "linux": "{HOME}/.config/rclone"
+        }
+      ],
+      "grade": "adapted",
+      "note": "Remote definitions include access tokens. They are carried as written, so treat the archive accordingly."
+    },
+    {
+      "id": "org.remmina.remmina",
+      "name": "Remmina",
+      "detect": {
+        "linux": [
+          "remmina"
+        ]
+      },
+      "install": {
+        "apt": "remmina",
+        "dnf": "remmina",
+        "zypper": "remmina",
+        "pacman": "remmina",
+        "nix": "remmina",
+        "flatpak": "org.remmina.Remmina"
+      },
+      "state": [
+        {
+          "role": "config",
+          "linux": "{HOME}/.config/remmina"
+        },
+        {
+          "role": "data",
+          "linux": "{HOME}/.local/share/remmina"
+        }
+      ],
+      "grade": "adapted"
+    },
+    {
+      "id": "com.rustup.rustup",
+      "name": "Rust toolchain settings",
+      "detect": {
+        "windows": [
+          "Rustup",
+          "Rustlang.Rustup"
+        ],
+        "macos": [
+          "rustup",
+          "rust"
+        ],
+        "linux": [
+          "rustup",
+          "rust"
+        ]
+      },
+      "install": {
+        "winget": "Rustlang.Rustup",
+        "brew": "rustup",
+        "apt": "rustup",
+        "dnf": "rustup",
+        "pacman": "rustup",
+        "nix": "rustup",
+        "apk": "rustup",
+        "xbps": "rustup"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{HOME}/.cargo/config.toml",
+          "macos": "{HOME}/.cargo/config.toml",
+          "linux": "{HOME}/.cargo/config.toml"
+        }
+      ],
+      "grade": "adapted",
+      "note": "The configuration travels; run rustup again on the new machine to fetch the toolchains, which are compiled for the old one."
+    },
+    {
+      "id": "org.signal.desktop",
+      "name": "Signal Desktop",
+      "detect": {
+        "windows": [
+          "Signal",
+          "OpenWhisperSystems.Signal"
+        ],
+        "macos": [
+          "org.whispersystems.signal-desktop",
+          "Signal"
+        ],
+        "linux": [
+          "signal-desktop"
+        ]
+      },
+      "install": {
+        "winget": "OpenWhisperSystems.Signal",
+        "brew": "--cask signal",
+        "apt": "signal-desktop",
+        "pacman": "signal-desktop",
+        "nix": "signal-desktop",
+        "flatpak": "org.signal.Signal"
+      },
+      "state": [
+        {
+          "role": "data",
+          "windows": "{APPCONFIG}/Signal",
+          "macos": "{HOME}/Library/Application Support/Signal",
+          "linux": "{HOME}/.config/Signal",
+          "exclude": [
+            "**/Cache/**",
+            "**/GPUCache/**",
+            "**/logs/**"
+          ]
+        }
+      ],
+      "quiesce": [
+        "signal-desktop",
+        "Signal",
+        "Signal.exe"
+      ],
+      "grade": "manual",
+      "note": "Signal encrypts its message database with a key held by the operating system's keychain, so the history usually cannot follow. Re-link the desktop app from your phone instead."
+    },
+    {
+      "id": "com.slack.slack",
+      "name": "Slack",
+      "detect": {
+        "windows": [
+          "Slack",
+          "SlackTechnologies.Slack"
+        ],
+        "macos": [
+          "com.tinyspeck.slackmacgap",
+          "Slack"
+        ],
+        "linux": [
+          "slack-desktop",
+          "slack"
+        ]
+      },
+      "install": {
+        "winget": "SlackTechnologies.Slack",
+        "brew": "--cask slack",
+        "apt": "slack-desktop",
+        "dnf": "slack",
+        "pacman": "slack-desktop",
+        "nix": "slack",
+        "flatpak": "com.slack.Slack",
+        "snap": "slack"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/Slack",
+          "macos": "{HOME}/Library/Application Support/Slack",
+          "linux": "{HOME}/.config/Slack",
+          "exclude": [
+            "**/Cache/**",
+            "**/Code Cache/**",
+            "**/GPUCache/**",
+            "**/logs/**",
+            "**/Service Worker/CacheStorage/**"
+          ]
+        }
+      ],
+      "quiesce": [
+        "slack",
+        "slack.exe",
+        "Slack"
+      ],
+      "grade": "adapted",
+      "note": "You will be asked to sign in again: the session token is tied to the machine it was issued on."
+    },
+    {
+      "id": "com.spotify.client",
+      "name": "Spotify",
+      "detect": {
+        "windows": [
+          "Spotify",
+          "Spotify.Spotify"
+        ],
+        "macos": [
+          "com.spotify.client",
+          "Spotify"
+        ],
+        "linux": [
+          "spotify-client",
+          "spotify"
+        ]
+      },
+      "install": {
+        "winget": "Spotify.Spotify",
+        "brew": "--cask spotify",
+        "apt": "spotify-client",
+        "pacman": "spotify",
+        "nix": "spotify",
+        "flatpak": "com.spotify.Client",
+        "snap": "spotify"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPDATA}/Spotify",
+          "macos": "{HOME}/Library/Application Support/Spotify",
+          "linux": "{HOME}/.config/spotify",
+          "exclude": [
+            "**/Data/**",
+            "**/Browser/**",
+            "**/PersistentCache/**",
+            "**/Storage/**"
+          ]
+        }
+      ],
+      "quiesce": [
+        "spotify",
+        "Spotify.exe"
+      ],
+      "grade": "adapted",
+      "note": "Playlists live in your account, not on the machine, so they are there when you sign in. Downloaded offline tracks stay behind."
+    },
+    {
+      "id": "org.openssh.client",
+      "name": "SSH keys and configuration",
+      "detect": {
+        "windows": [
+          "OpenSSH",
+          "Microsoft.OpenSSH"
+        ],
+        "macos": [
+          "openssh"
+        ],
+        "linux": [
+          "openssh-client",
+          "openssh"
+        ]
+      },
+      "install": {
+        "winget": "Microsoft.OpenSSH.Beta",
+        "brew": "openssh",
+        "apt": "openssh-client",
+        "dnf": "openssh-clients",
+        "zypper": "openssh",
+        "pacman": "openssh",
+        "emerge": "net-misc/openssh",
+        "nix": "openssh",
+        "apk": "openssh-client",
+        "xbps": "openssh"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{HOME}/.ssh",
+          "macos": "{HOME}/.ssh",
+          "linux": "{HOME}/.ssh",
+          "exclude": [
+            "**/known_hosts.old",
+            "**/*.sock"
+          ]
+        }
+      ],
+      "rewrite": [
+        {
+          "file": "config",
+          "format": "text",
+          "pattern": "(?i)^\\s*IdentityFile\\s+(\\S+)",
+          "group": 1
+        }
+      ],
+      "grade": "adapted",
+      "note": "Private keys are only readable by you, and Transmit restores that. On Windows the permission model differs, so check the keys are accepted before relying on them."
+    },
+    {
+      "id": "com.starship.starship",
+      "name": "Starship prompt",
+      "detect": {
+        "windows": [
+          "Starship",
+          "Starship.Starship"
+        ],
+        "macos": [
+          "starship"
+        ],
+        "linux": [
+          "starship"
+        ]
+      },
+      "install": {
+        "winget": "Starship.Starship",
+        "brew": "starship",
+        "apt": "starship",
+        "dnf": "starship",
+        "pacman": "starship",
+        "nix": "starship",
+        "apk": "starship",
+        "xbps": "starship"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/starship.toml",
+          "macos": "{HOME}/.config/starship.toml",
+          "linux": "{HOME}/.config/starship.toml"
+        }
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "com.valvesoftware.steam",
+      "name": "Steam",
+      "detect": {
+        "windows": [
+          "Steam",
+          "Valve.Steam"
+        ],
+        "macos": [
+          "com.valvesoftware.steam",
+          "Steam"
+        ],
+        "linux": [
+          "steam",
+          "steam-installer"
+        ]
+      },
+      "install": {
+        "winget": "Valve.Steam",
+        "brew": "--cask steam",
+        "apt": "steam",
+        "dnf": "steam",
+        "pacman": "steam",
+        "nix": "steam",
+        "flatpak": "com.valvesoftware.Steam"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPDATA}/Steam/userdata",
+          "macos": "{HOME}/Library/Application Support/Steam/userdata",
+          "linux": "{HOME}/.local/share/Steam/userdata",
+          "exclude": [
+            "**/remotecache.vdf",
+            "**/*.tmp"
+          ]
+        }
+      ],
+      "quiesce": [
+        "steam",
+        "steam.exe"
+      ],
+      "grade": "manual",
+      "note": "Local settings and cloud-save staging travel. The games themselves are platform-specific and must be downloaded again from your library."
+    },
+    {
+      "id": "com.sublimetext.text",
+      "name": "Sublime Text",
+      "detect": {
+        "windows": [
+          "Sublime Text",
+          "SublimeHQ.SublimeText.4"
+        ],
+        "macos": [
+          "com.sublimetext.4",
+          "Sublime Text"
+        ],
+        "linux": [
+          "sublime-text"
+        ]
+      },
+      "install": {
+        "winget": "SublimeHQ.SublimeText.4",
+        "brew": "--cask sublime-text",
+        "apt": "sublime-text",
+        "dnf": "sublime-text",
+        "pacman": "sublime-text-4",
+        "nix": "sublime4"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/Sublime Text/Packages/User",
+          "macos": "{HOME}/Library/Application Support/Sublime Text/Packages/User",
+          "linux": "{HOME}/.config/sublime-text/Packages/User",
+          "exclude": [
+            "**/Cache/**"
+          ]
+        }
+      ],
+      "quiesce": [
+        "sublime_text",
+        "sublime_text.exe"
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "net.syncthing.syncthing",
+      "name": "Syncthing",
+      "detect": {
+        "windows": [
+          "Syncthing",
+          "Syncthing.Syncthing"
+        ],
+        "macos": [
+          "syncthing"
+        ],
+        "linux": [
+          "syncthing"
+        ]
+      },
+      "install": {
+        "winget": "Syncthing.Syncthing",
+        "brew": "syncthing",
+        "apt": "syncthing",
+        "dnf": "syncthing",
+        "zypper": "syncthing",
+        "pacman": "syncthing",
+        "nix": "syncthing",
+        "apk": "syncthing",
+        "xbps": "syncthing"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPDATA}/Syncthing",
+          "macos": "{HOME}/Library/Application Support/Syncthing",
+          "linux": "{HOME}/.local/state/syncthing",
+          "exclude": [
+            "**/index-*/**",
+            "**/*.log"
+          ]
+        }
+      ],
+      "rewrite": [
+        {
+          "file": "config.xml",
+          "format": "text",
+          "pattern": "<folder [^>]*path=\"([^\"]*)\"",
+          "group": 1
+        }
+      ],
+      "quiesce": [
+        "syncthing",
+        "syncthing.exe"
+      ],
+      "grade": "adapted",
+      "note": "The device identity travels, so your other devices still recognise this one. Folder paths are repointed at where those folders landed here."
+    },
+    {
+      "id": "org.telegram.desktop",
+      "name": "Telegram Desktop",
+      "detect": {
+        "windows": [
+          "Telegram Desktop",
+          "Telegram.TelegramDesktop"
+        ],
+        "macos": [
+          "ru.keepcoder.Telegram",
+          "Telegram"
+        ],
+        "linux": [
+          "telegram-desktop"
+        ]
+      },
+      "install": {
+        "winget": "Telegram.TelegramDesktop",
+        "brew": "--cask telegram",
+        "apt": "telegram-desktop",
+        "dnf": "telegram-desktop",
+        "zypper": "telegram-desktop",
+        "pacman": "telegram-desktop",
+        "nix": "telegram-desktop",
+        "apk": "telegram-desktop",
+        "flatpak": "org.telegram.desktop"
+      },
+      "state": [
+        {
+          "role": "data",
+          "windows": "{APPDATA}/Telegram Desktop/tdata",
+          "macos": "{HOME}/Library/Application Support/Telegram Desktop/tdata",
+          "linux": "{HOME}/.local/share/TelegramDesktop/tdata",
+          "exclude": [
+            "**/user_data/cache/**",
+            "**/emoji/**"
+          ]
+        }
+      ],
+      "quiesce": [
+        "telegram-desktop",
+        "Telegram",
+        "Telegram.exe"
+      ],
+      "grade": "full",
+      "note": "The signed-in session travels with the data directory, so you stay logged in."
+    },
+    {
+      "id": "org.mozilla.thunderbird",
+      "name": "Thunderbird",
+      "detect": {
+        "windows": [
+          "Mozilla Thunderbird",
+          "Mozilla.Thunderbird"
+        ],
+        "macos": [
+          "org.mozilla.thunderbird",
+          "Thunderbird"
+        ],
+        "linux": [
+          "thunderbird"
+        ]
+      },
+      "install": {
+        "winget": "Mozilla.Thunderbird",
+        "brew": "--cask thunderbird",
+        "apt": "thunderbird",
+        "dnf": "thunderbird",
+        "zypper": "MozillaThunderbird",
+        "pacman": "thunderbird",
+        "emerge": "mail-client/thunderbird",
+        "nix": "thunderbird",
+        "apk": "thunderbird",
+        "flatpak": "org.mozilla.Thunderbird"
+      },
+      "state": [
+        {
+          "role": "profile",
+          "windows": "{APPCONFIG}/Thunderbird",
+          "macos": "{HOME}/Library/Thunderbird",
+          "linux": "{HOME}/.thunderbird",
+          "exclude": [
+            "**/cache2/**",
+            "**/*.tmp",
+            "**/lock",
+            "**/.parentlock",
+            "**/crashes/**"
+          ]
+        }
+      ],
+      "rewrite": [
+        {
+          "file": "profiles.ini",
+          "format": "ini",
+          "keys": [
+            "Path",
+            "Default"
+          ]
+        },
+        {
+          "file": "**/prefs.js",
+          "format": "text",
+          "pattern": "user_pref\\(\"mail\\.server\\.[^.]+\\.directory\", \"([^\"]*)\"\\)",
+          "group": 1
+        },
+        {
+          "file": "**/prefs.js",
+          "format": "text",
+          "pattern": "user_pref\\(\"browser\\.download\\.dir\", \"([^\"]*)\"\\)",
+          "group": 1
+        }
+      ],
+      "quiesce": [
+        "thunderbird",
+        "thunderbird-bin",
+        "thunderbird.exe"
+      ],
+      "grade": "adapted",
+      "note": "Local mail folders are carried across. The account passwords live in the profile for Thunderbird, so they survive the move."
+    },
+    {
+      "id": "sh.tmux",
+      "name": "tmux",
+      "detect": {
+        "macos": [
+          "tmux"
+        ],
+        "linux": [
+          "tmux"
+        ]
+      },
+      "install": {
+        "brew": "tmux",
+        "apt": "tmux",
+        "dnf": "tmux",
+        "zypper": "tmux",
+        "pacman": "tmux",
+        "emerge": "app-misc/tmux",
+        "nix": "tmux",
+        "apk": "tmux",
+        "xbps": "tmux"
+      },
+      "state": [
+        {
+          "role": "config",
+          "macos": "{HOME}/.tmux.conf",
+          "linux": "{HOME}/.tmux.conf"
+        },
+        {
+          "role": "config",
+          "macos": "{HOME}/.config/tmux",
+          "linux": "{HOME}/.config/tmux"
+        }
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "org.torproject.torbrowser",
+      "name": "Tor Browser",
+      "detect": {
+        "windows": [
+          "Tor Browser",
+          "TorProject.TorBrowser"
+        ],
+        "macos": [
+          "org.torproject.torbrowser",
+          "Tor Browser"
+        ],
+        "linux": [
+          "torbrowser-launcher"
+        ]
+      },
+      "install": {
+        "winget": "TorProject.TorBrowser",
+        "brew": "--cask tor-browser",
+        "apt": "torbrowser-launcher",
+        "pacman": "torbrowser-launcher",
+        "flatpak": "com.github.micahflee.torbrowser-launcher"
+      },
+      "state": [
+        {
+          "role": "config",
+          "linux": "{HOME}/.local/share/torbrowser"
+        }
+      ],
+      "grade": "manual",
+      "note": "Tor Browser is deliberately built to leave no portable identity. Install it fresh rather than carrying its profile over."
+    },
+    {
+      "id": "com.transmissionbt.transmission",
+      "name": "Transmission",
+      "detect": {
+        "windows": [
+          "Transmission"
+        ],
+        "macos": [
+          "org.m0k.transmission",
+          "Transmission"
+        ],
+        "linux": [
+          "transmission-gtk",
+          "transmission-qt",
+          "transmission"
+        ]
+      },
+      "install": {
+        "brew": "--cask transmission",
+        "apt": "transmission-gtk",
+        "dnf": "transmission-gtk",
+        "pacman": "transmission-gtk",
+        "nix": "transmission",
+        "flatpak": "com.transmissionbt.Transmission"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPDATA}/Transmission",
+          "macos": "{HOME}/Library/Application Support/Transmission",
+          "linux": "{HOME}/.config/transmission"
+        }
+      ],
+      "rewrite": [
+        {
+          "file": "settings.json",
+          "format": "json",
+          "keys": [
+            "download-dir",
+            "incomplete-dir",
+            "watch-dir"
+          ]
+        }
+      ],
+      "grade": "adapted"
+    },
+    {
+      "id": "org.vim.vim",
+      "name": "Vim",
+      "detect": {
+        "windows": [
+          "Vim",
+          "vim.vim"
+        ],
+        "macos": [
+          "vim"
+        ],
+        "linux": [
+          "vim",
+          "vim-gtk3",
+          "vim-nox"
+        ]
+      },
+      "install": {
+        "winget": "vim.vim",
+        "brew": "vim",
+        "apt": "vim",
+        "dnf": "vim-enhanced",
+        "zypper": "vim",
+        "pacman": "vim",
+        "emerge": "app-editors/vim",
+        "nix": "vim",
+        "apk": "vim",
+        "xbps": "vim"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{HOME}/_vimrc",
+          "macos": "{HOME}/.vimrc",
+          "linux": "{HOME}/.vimrc"
+        },
+        {
+          "role": "data",
+          "windows": "{HOME}/vimfiles",
+          "macos": "{HOME}/.vim",
+          "linux": "{HOME}/.vim",
+          "exclude": [
+            "**/swap/**",
+            "**/undo/**",
+            "**/.netrwhist"
+          ]
+        }
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "org.virtualbox.virtualbox",
+      "name": "VirtualBox",
+      "detect": {
+        "windows": [
+          "Oracle VM VirtualBox",
+          "Oracle.VirtualBox"
+        ],
+        "macos": [
+          "org.virtualbox.app.VirtualBox",
+          "VirtualBox"
+        ],
+        "linux": [
+          "virtualbox"
+        ]
+      },
+      "install": {
+        "winget": "Oracle.VirtualBox",
+        "brew": "--cask virtualbox",
+        "apt": "virtualbox",
+        "dnf": "VirtualBox",
+        "zypper": "virtualbox",
+        "pacman": "virtualbox",
+        "nix": "virtualbox"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{HOME}/.VirtualBox",
+          "macos": "{HOME}/Library/VirtualBox",
+          "linux": "{HOME}/.config/VirtualBox",
+          "exclude": [
+            "**/*.log",
+            "**/*.log.*"
+          ]
+        }
+      ],
+      "grade": "manual",
+      "note": "Only the preferences travel. Virtual machine disks are very large and are excluded by default; copy them yourself if you need them."
+    },
+    {
+      "id": "com.microsoft.vscode",
+      "name": "Visual Studio Code",
+      "detect": {
+        "windows": [
+          "Microsoft Visual Studio Code",
+          "Microsoft.VisualStudioCode"
+        ],
+        "macos": [
+          "com.microsoft.VSCode",
+          "Visual Studio Code"
+        ],
+        "linux": [
+          "code",
+          "visual-studio-code-bin"
+        ]
+      },
+      "install": {
+        "winget": "Microsoft.VisualStudioCode",
+        "brew": "--cask visual-studio-code",
+        "apt": "code",
+        "dnf": "code",
+        "zypper": "code",
+        "pacman": "code",
+        "nix": "vscode",
+        "flatpak": "com.visualstudio.code",
+        "snap": "code"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/Code/User",
+          "macos": "{HOME}/Library/Application Support/Code/User",
+          "linux": "{HOME}/.config/Code/User",
+          "exclude": [
+            "**/workspaceStorage/**/state.vscdb.backup",
+            "**/globalStorage/**/Cache/**",
+            "**/History/**"
+          ]
+        },
+        {
+          "role": "data",
+          "windows": "{HOME}/.vscode/extensions",
+          "macos": "{HOME}/.vscode/extensions",
+          "linux": "{HOME}/.vscode/extensions",
+          "exclude": [
+            "**/.obsolete",
+            "**/node_modules/.cache/**"
+          ]
+        }
+      ],
+      "rewrite": [
+        {
+          "file": "settings.json",
+          "format": "json",
+          "keys": [
+            "python.defaultInterpreterPath",
+            "terminal.integrated.cwd",
+            "files.exclude",
+            "git.defaultCloneDirectory",
+            "C_Cpp.default.compilerPath"
+          ]
+        }
+      ],
+      "quiesce": [
+        "code",
+        "Code",
+        "code.exe"
+      ],
+      "grade": "adapted",
+      "note": "Extensions are carried across as files. Any that ship compiled native components will need reinstalling on a different operating system."
+    },
+    {
+      "id": "com.vivaldi.browser",
+      "name": "Vivaldi",
+      "detect": {
+        "windows": [
+          "Vivaldi",
+          "VivaldiTechnologies.Vivaldi"
+        ],
+        "macos": [
+          "com.vivaldi.Vivaldi",
+          "Vivaldi"
+        ],
+        "linux": [
+          "vivaldi-stable",
+          "vivaldi"
+        ]
+      },
+      "install": {
+        "winget": "VivaldiTechnologies.Vivaldi",
+        "brew": "--cask vivaldi",
+        "apt": "vivaldi-stable",
+        "dnf": "vivaldi-stable",
+        "pacman": "vivaldi",
+        "nix": "vivaldi"
+      },
+      "state": [
+        {
+          "role": "profile",
+          "windows": "{APPDATA}/Vivaldi/User Data",
+          "macos": "{HOME}/Library/Application Support/Vivaldi",
+          "linux": "{HOME}/.config/vivaldi",
+          "exclude": [
+            "**/Cache/**",
+            "**/Code Cache/**",
+            "**/GPUCache/**"
+          ]
+        }
+      ],
+      "quiesce": [
+        "vivaldi",
+        "vivaldi-bin",
+        "vivaldi.exe"
+      ],
+      "grade": "adapted"
+    },
+    {
+      "id": "org.videolan.vlc",
+      "name": "VLC",
+      "detect": {
+        "windows": [
+          "VLC media player",
+          "VideoLAN.VLC"
+        ],
+        "macos": [
+          "org.videolan.vlc",
+          "VLC"
+        ],
+        "linux": [
+          "vlc"
+        ]
+      },
+      "install": {
+        "winget": "VideoLAN.VLC",
+        "brew": "--cask vlc",
+        "apt": "vlc",
+        "dnf": "vlc",
+        "zypper": "vlc",
+        "pacman": "vlc",
+        "emerge": "media-video/vlc",
+        "nix": "vlc",
+        "apk": "vlc",
+        "xbps": "vlc",
+        "flatpak": "org.videolan.VLC"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/vlc",
+          "macos": "{HOME}/Library/Preferences/org.videolan.vlc",
+          "linux": "{HOME}/.config/vlc",
+          "exclude": [
+            "**/art/**",
+            "**/ml.xspf"
+          ]
+        }
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "com.wez.wezterm",
+      "name": "WezTerm",
+      "detect": {
+        "windows": [
+          "WezTerm",
+          "wez.wezterm"
+        ],
+        "macos": [
+          "com.github.wez.wezterm",
+          "WezTerm"
+        ],
+        "linux": [
+          "wezterm"
+        ]
+      },
+      "install": {
+        "winget": "wez.wezterm",
+        "brew": "--cask wezterm",
+        "pacman": "wezterm",
+        "nix": "wezterm",
+        "flatpak": "org.wezfurlong.wezterm"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{HOME}/.wezterm.lua",
+          "macos": "{HOME}/.wezterm.lua",
+          "linux": "{HOME}/.wezterm.lua"
+        },
+        {
+          "role": "config",
+          "windows": "{APPCONFIG}/wezterm",
+          "macos": "{HOME}/.config/wezterm",
+          "linux": "{HOME}/.config/wezterm"
+        }
+      ],
+      "grade": "adapted"
+    },
+    {
+      "id": "com.microsoft.windowsterminal",
+      "name": "Windows Terminal",
+      "detect": {
+        "windows": [
+          "Windows Terminal",
+          "Microsoft.WindowsTerminal"
+        ]
+      },
+      "install": {
+        "winget": "Microsoft.WindowsTerminal"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPDATA}/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState"
+        }
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "org.wireshark.wireshark",
+      "name": "Wireshark",
+      "detect": {
+        "windows": [
+          "Wireshark",
+          "WiresharkFoundation.Wireshark"
+        ],
+        "macos": [
+          "org.wireshark.Wireshark",
+          "Wireshark"
+        ],
+        "linux": [
+          "wireshark",
+          "wireshark-qt"
+        ]
+      },
+      "install": {
+        "winget": "WiresharkFoundation.Wireshark",
+        "brew": "--cask wireshark",
+        "apt": "wireshark",
+        "dnf": "wireshark",
+        "zypper": "wireshark",
+        "pacman": "wireshark-qt",
+        "nix": "wireshark",
+        "flatpak": "org.wireshark.Wireshark"
+      },
+      "state": [
+        {
+          "role": "config",
+          "windows": "{APPDATA}/Wireshark",
+          "macos": "{HOME}/.config/wireshark",
+          "linux": "{HOME}/.config/wireshark"
+        }
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "org.zotero.zotero",
+      "name": "Zotero",
+      "detect": {
+        "windows": [
+          "Zotero",
+          "Zotero.Zotero"
+        ],
+        "macos": [
+          "org.zotero.zotero",
+          "Zotero"
+        ],
+        "linux": [
+          "zotero"
+        ]
+      },
+      "install": {
+        "winget": "Zotero.Zotero",
+        "brew": "--cask zotero",
+        "pacman": "zotero",
+        "nix": "zotero",
+        "flatpak": "org.zotero.Zotero"
+      },
+      "state": [
+        {
+          "role": "data",
+          "windows": "{HOME}/Zotero",
+          "macos": "{HOME}/Zotero",
+          "linux": "{HOME}/Zotero",
+          "exclude": [
+            "**/cache/**",
+            "**/*.tmp"
+          ]
+        }
+      ],
+      "quiesce": [
+        "zotero",
+        "zotero.exe"
+      ],
+      "grade": "full"
+    },
+    {
+      "id": "org.zsh.ohmyzsh",
+      "name": "Zsh and Oh My Zsh",
+      "detect": {
+        "macos": [
+          "zsh"
+        ],
+        "linux": [
+          "zsh"
+        ]
+      },
+      "install": {
+        "brew": "zsh",
+        "apt": "zsh",
+        "dnf": "zsh",
+        "zypper": "zsh",
+        "pacman": "zsh",
+        "emerge": "app-shells/zsh",
+        "nix": "zsh",
+        "apk": "zsh",
+        "xbps": "zsh"
+      },
+      "state": [
+        {
+          "role": "config",
+          "macos": "{HOME}/.zshrc",
+          "linux": "{HOME}/.zshrc"
+        },
+        {
+          "role": "config",
+          "macos": "{HOME}/.zprofile",
+          "linux": "{HOME}/.zprofile"
+        },
+        {
+          "role": "data",
+          "macos": "{HOME}/.oh-my-zsh",
+          "linux": "{HOME}/.oh-my-zsh",
+          "exclude": [
+            "**/.git/objects/**",
+            "**/cache/**",
+            "**/log/**"
+          ]
+        }
+      ],
+      "grade": "adapted",
+      "note": "Shell configuration often names paths and tools that exist only on the old machine; those lines are reported so you can adjust them."
+    }
+  ]
+}

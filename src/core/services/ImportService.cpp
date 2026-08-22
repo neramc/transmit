@@ -6,8 +6,14 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QSaveFile>
+#include <QTemporaryDir>
 #include <optional>
 
+#include "core/recipe/AppInventoryPayload.h"
+#include "core/recipe/RecipeCatalog.h"
+#include "core/recipe/StateRelocator.h"
+#include "core/rewrite/PathRewriter.h"
+#include "core/rewrite/PathTranslator.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
 #include "format/NameSanitizer.h"
@@ -170,6 +176,100 @@ format::PathTokenMap ImportService::targetTokens(const ImportRequest& request) c
     return platform_.knownFolders();
 }
 
+void ImportService::previewRewrites(format::ArchiveReader& reader,
+                                    const format::Manifest& manifest,
+                                    const ImportRequest& request,
+                                    const format::PathTokenMap& targetFolders, OsFamily targetOs,
+                                    ImportReport& report) const {
+    const auto* inventory = manifest.findPayload(DomainId::AppInventory, "apps.v1");
+    if (inventory == nullptr) {
+        return;
+    }
+
+    QTemporaryDir scratch;
+    if (!scratch.isValid()) {
+        return;
+    }
+
+    // A folder table rooted in the scratch directory, mirroring the shape the
+    // real restore would produce.
+    format::PathTokenMap scratchFolders(targetOs);
+    for (const format::PathTokenId token : format::allTokens()) {
+        if (token == format::PathTokenId::Absolute) {
+            continue;
+        }
+        scratchFolders.setBase(token, format::joinPath(toUtf8(scratch.path()),
+                                                       std::string(format::tokenName(token))));
+    }
+
+    format::NameSanitizer sanitizer(format::SanitizeOptions::forTarget(targetOs));
+    const QList<InventoryEntry> entries = decodeAppInventory(inventory->data);
+    const StateRelocator relocator(entries, manifest.source.os, targetOs);
+    int unpacked = 0;
+
+    for (const format::ManifestEntry& entry : manifest.entries) {
+        if (entry.domain != DomainId::AppState || entry.type != format::EntryType::File) {
+            continue;
+        }
+        const format::TokenizedPath placed = relocator.relocate(entry.path);
+        const format::TokenizedPath safePath{placed.token,
+                                             sanitizer.sanitizeRelativePath(placed.relative)};
+        const auto resolved = scratchFolders.resolve(safePath);
+        if (!resolved) {
+            continue;
+        }
+
+        auto content = reader.readEntry(entry);
+        if (!content) {
+            continue;
+        }
+
+        const QString target = fromUtf8(*resolved);
+        QDir().mkpath(QFileInfo(target).absolutePath());
+
+        QString error;
+        if (writeFileContents(target, *content, error)) {
+            ++unpacked;
+        }
+    }
+
+    if (unpacked == 0) {
+        return;
+    }
+
+    // The translator still points at where the files would really land, so the
+    // reported values are the ones a real restore would write.
+    PathTranslator translator(manifest.source, targetFolders, targetOs);
+    translator.setRenames(report.renames);
+    translator.setRelocator(&relocator);
+
+    const PathRewriter rewriter(translator);
+    RewritePlan plan;
+
+    for (const InventoryEntry& entry : entries) {
+        const AppRecipe recipe = entry.toRecipe();
+        for (const RecipeStatePath& state : recipe.state) {
+            const QString tokenised = state.forOs(targetOs).isEmpty()
+                                          ? state.forOs(manifest.source.os)
+                                          : state.forOs(targetOs);
+            if (tokenised.isEmpty()) {
+                continue;
+            }
+            const QString stateRoot = RecipeCatalog::resolveStatePath(tokenised, scratchFolders);
+            if (!stateRoot.isEmpty()) {
+                rewriter.planFor(recipe, stateRoot, plan);
+            }
+        }
+    }
+
+    // Report the real destinations rather than the scratch copies.
+    for (ContinuityNote note : plan.toNotes()) {
+        note.subject.replace(scratch.path(), QString());
+        report.notes.push_back(note);
+    }
+    Q_UNUSED(request);
+}
+
 ImportReport ImportService::run(const ImportRequest& request, CancelToken& cancelToken,
                                 const ProgressCallback& progress) {
     ImportReport report;
@@ -247,6 +347,32 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                      fromUtf8(format::osFamilyName(targetOs)))});
     }
 
+    // An application looks for its settings in a different place on each
+    // operating system, so state captured on one is moved to where the program
+    // will actually find it here.
+    QList<InventoryEntry> inventoryEntries;
+    if (const auto* payload = manifest.findPayload(DomainId::AppInventory, "apps.v1")) {
+        inventoryEntries = decodeAppInventory(payload->data);
+    }
+    const StateRelocator relocator(inventoryEntries, manifest.source.os, targetOs);
+
+    if (relocator.hasRelocations()) {
+        QStringList moved;
+        for (const StateRelocator::Rule& rule : relocator.rules()) {
+            moved << QStringLiteral("%1 (%2 to %3)")
+                         .arg(rule.displayName, fromUtf8(rule.from.toDisplayString()),
+                              fromUtf8(rule.to.toDisplayString()));
+        }
+        report.notes.push_back(ContinuityNote{
+            ContinuityGrade::Adapted, DomainId::AppState,
+            QCoreApplication::translate("Import", "Moved to where this system keeps them"),
+            QCoreApplication::translate(
+                "Import",
+                "These programs keep their settings somewhere else on this system, so their "
+                "data was placed where they will look for it: %1")
+                .arg(moved.join(QStringLiteral("; ")))});
+    }
+
     // Directories first, so a file never arrives before its parent exists.
     QList<const format::ManifestEntry*> ordered;
     ordered.reserve(static_cast<qsizetype>(manifest.entries.size()));
@@ -276,10 +402,14 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
         }
         const format::ManifestEntry& entry = *entryPtr;
 
+        const format::TokenizedPath placed = entry.domain == DomainId::AppState
+                                                 ? relocator.relocate(entry.path)
+                                                 : entry.path;
+
         // Sanitising the relative part only: the known-folder base is already
         // valid on this machine.
-        const std::string safeRelative = sanitizer.sanitizeRelativePath(entry.path.relative);
-        const format::TokenizedPath safePath{entry.path.token, safeRelative};
+        const std::string safeRelative = sanitizer.sanitizeRelativePath(placed.relative);
+        const format::TokenizedPath safePath{placed.token, safeRelative};
 
         const auto resolved = tokens.resolve(safePath);
         if (!resolved) {
@@ -295,7 +425,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
         item.sourcePath = fromUtf8(entry.path.toDisplayString());
         item.targetPath = targetPath;
 
-        if (safeRelative != entry.path.relative) {
+        if (safeRelative != placed.relative) {
             item.grade = ContinuityGrade::Adapted;
             item.note = QCoreApplication::translate(
                 "Import", "Renamed so the name is valid on this system.");
@@ -452,6 +582,67 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
 
     for (const format::RenameRecord& rename : sanitizer.renames()) {
         report.renames.push_back({fromUtf8(rename.original), fromUtf8(rename.applied)});
+    }
+
+    // ------------------------------------------- repoint restored settings
+    // Restoring an application's settings verbatim leaves it pointing at
+    // directories from the old machine. The archive carries the recipe that
+    // says which files hold those paths, so they can be corrected here.
+    if (request.domains.isEmpty() ||
+        request.domains.contains(static_cast<int>(DomainId::AppState))) {
+        const auto* inventory = manifest.findPayload(DomainId::AppInventory, "apps.v1");
+
+        if (inventory != nullptr && request.dryRun) {
+            previewRewrites(*reader, manifest, request, tokens, targetOs, report);
+        } else if (inventory != nullptr) {
+            PathTranslator translator(manifest.source, tokens, targetOs);
+            translator.setRenames(report.renames);
+            translator.setRelocator(&relocator);
+
+            const PathRewriter rewriter(translator);
+            RewritePlan plan;
+
+            for (const InventoryEntry& entry : inventoryEntries) {
+                const AppRecipe recipe = entry.toRecipe();
+                for (const RecipeStatePath& state : recipe.state) {
+                    // Where that state landed here, which is what the rewrite
+                    // rules are relative to.
+                    const QString tokenised = state.forOs(targetOs).isEmpty()
+                                                  ? state.forOs(manifest.source.os)
+                                                  : state.forOs(targetOs);
+                    if (tokenised.isEmpty()) {
+                        continue;
+                    }
+                    const QString stateRoot = RecipeCatalog::resolveStatePath(tokenised, tokens);
+                    if (!stateRoot.isEmpty()) {
+                        rewriter.planFor(recipe, stateRoot, plan);
+                    }
+                }
+            }
+
+            if (!plan.isEmpty()) {
+                report.notes += plan.toNotes();
+
+                QStringList errors;
+                const int changed = plan.apply(&errors);
+                qCInfo(logRestore) << "repointed paths inside" << changed << "files";
+
+                for (const QString& error : errors) {
+                    report.notes.push_back(ContinuityNote{
+                        ContinuityGrade::Manual, DomainId::AppState,
+                        QCoreApplication::translate("Import", "Settings file"), error});
+                }
+                if (changed > 0) {
+                    report.notes.push_back(ContinuityNote{
+                        ContinuityGrade::Adapted, DomainId::AppState,
+                        QCoreApplication::translate("Import", "Original settings kept"),
+                        QCoreApplication::translate(
+                            "Import",
+                            "The version of each changed file as it arrived is kept next to it "
+                            "with a .transmit-backup suffix, so these changes can be undone.")});
+                }
+            }
+        }
     }
     if (!report.renames.isEmpty()) {
         report.notes.push_back(ContinuityNote{

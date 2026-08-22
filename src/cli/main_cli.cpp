@@ -479,7 +479,7 @@ int main(int argc, char** argv) {
         QStringLiteral("policy"), QStringLiteral("keep-both"));
     const QCommandLineOption verifyOption(
         QStringLiteral("verify"), QStringLiteral("Check every block before restoring."));
-    const QCommandLineOption verboseOption({QStringLiteral("v"), QStringLiteral("verbose")},
+    const QCommandLineOption verboseOption(QStringLiteral("verbose"),
                                            QStringLiteral("Log what is happening in detail."));
 
     parser.addOptions({outputOption, profileOption, presetOption, splitOption, passphraseOption,

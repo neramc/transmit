@@ -4,6 +4,17 @@
 
 add_library(transmit_core STATIC
     continuity/ContinuityTypes.cpp
+    recipe/RecipeCatalog.cpp
+    recipe/AppInventoryPayload.cpp
+    recipe/StateRelocator.cpp
+    rewrite/PathTranslator.cpp
+    rewrite/RewritePlan.cpp
+    rewrite/PathRewriter.cpp
+    rewrite/formats/TextRewriter.cpp
+    rewrite/formats/IniRewriter.cpp
+    rewrite/formats/JsonRewriter.cpp
+    rewrite/formats/PlistRewriter.cpp
+    rewrite/formats/SqliteRewriter.cpp
     services/ScanService.cpp
     services/ConsistentCopy.cpp
     services/ExportService.cpp
@@ -21,3 +32,10 @@ target_link_libraries(transmit_core
     PRIVATE SQLite::SQLite3)
 
 set_target_properties(transmit_core PROPERTIES AUTOMOC ON)
+
+# The application catalog is compiled in rather than installed alongside, so a
+# single binary always knows how to recognise and place application state.
+qt_add_resources(transmit_core "transmit_catalog"
+    PREFIX "/catalog"
+    BASE "${CMAKE_SOURCE_DIR}/resources"
+    FILES "${CMAKE_SOURCE_DIR}/resources/app-catalog.json")

@@ -2,13 +2,12 @@
 # the cross-OS translation that the unit tests cannot reach from the format
 # layer alone.
 
-add_executable(transmit_integration_tests
-    ContinuityRoundTripTest.cpp)
+foreach(suite ContinuityRoundTrip PathRewrite)
+    add_executable(transmit_${suite}_test ${suite}Test.cpp)
+    target_link_libraries(transmit_${suite}_test
+        PRIVATE Transmit::Core Transmit::Warnings Qt6::Test SQLite::SQLite3)
+    set_target_properties(transmit_${suite}_test PROPERTIES AUTOMOC ON)
 
-target_link_libraries(transmit_integration_tests
-    PRIVATE Transmit::Core Transmit::Warnings Qt6::Test)
-
-set_target_properties(transmit_integration_tests PROPERTIES AUTOMOC ON)
-
-add_test(NAME continuity_round_trip COMMAND transmit_integration_tests)
-set_tests_properties(continuity_round_trip PROPERTIES LABELS integration)
+    add_test(NAME ${suite} COMMAND transmit_${suite}_test)
+    set_tests_properties(${suite} PROPERTIES LABELS integration)
+endforeach()
