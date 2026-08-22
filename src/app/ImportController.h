@@ -1,9 +1,13 @@
 #pragma once
 
 #include <QFutureWatcher>
+#include <QHash>
 #include <QObject>
 #include <QQmlEngine>
+#include <QSet>
 #include <QString>
+#include <QStringList>
+#include <QVariantMap>
 
 #include <memory>
 
@@ -40,6 +44,7 @@ class ImportController : public QObject {
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY finishedChanged)
     Q_PROPERTY(QString summaryText READ summaryText NOTIFY finishedChanged)
     Q_PROPERTY(bool wasDryRun READ wasDryRun NOTIFY finishedChanged)
+    Q_PROPERTY(QVariantMap archiveCounts READ archiveCounts NOTIFY archiveCountsChanged)
 
 public:
     explicit ImportController(QObject* parent = nullptr);
@@ -64,15 +69,29 @@ public:
     [[nodiscard]] QString summaryText() const;
     [[nodiscard]] bool wasDryRun() const { return wasDryRun_; }
 
+    /// Root path to the number of archives found there, for drives that have
+    /// been looked at. A drive missing from the map has not been read yet.
+    [[nodiscard]] QVariantMap archiveCounts() const { return archiveCounts_; }
+
     [[nodiscard]] const core::ImportReport& report() const { return report_; }
 
 public slots:
     /// Reads an archive's header and, if it opens, its manifest.
     void inspect(const QString& archivePath, const QString& passphrase = {});
 
-    /// Searches a folder for archives, returning the paths found. Used to spot
-    /// a capture on a freshly inserted stick.
-    [[nodiscard]] QStringList findArchives(const QString& folder) const;
+    /// Starts reading a folder for archives, off the interface thread.
+    ///
+    /// Listing a directory sounds cheap until the directory is a USB drive
+    /// that has spun down or a network share that has gone away, at which
+    /// point it blocks for as long as the kernel takes to give up. Doing that
+    /// from a binding would freeze the window, so the result arrives later
+    /// through archiveCounts and archivesOn.
+    void scanForArchives(const QString& folder);
+
+    /// What the last scan of this folder found. Empty for a folder that has
+    /// not been scanned, which is why archiveCounts is what the interface
+    /// binds to - it can tell "none" from "not yet".
+    [[nodiscard]] QStringList archivesOn(const QString& folder) const;
 
     /// Runs the restore. With `dryRun` nothing is written and the report says
     /// what would have happened.
@@ -91,11 +110,13 @@ signals:
     void summaryChanged();
     void progressChanged();
     void finishedChanged();
+    void archiveCountsChanged();
     void reportReady();
 
 private:
     void handleProgress(const core::ProgressUpdate& update);
     void handleFinished();
+    void recordScan(const QString& folder, const QStringList& archives);
 
     std::unique_ptr<platform::PlatformService> platform_;
     std::unique_ptr<core::ImportService> service_;
@@ -109,6 +130,10 @@ private:
     bool running_ = false;
     bool finished_ = false;
     bool wasDryRun_ = false;
+
+    QHash<QString, QStringList> archivesByFolder_;
+    QSet<QString> scansInFlight_;
+    QVariantMap archiveCounts_;
 };
 
 }  // namespace transmit::app

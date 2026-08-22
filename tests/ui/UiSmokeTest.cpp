@@ -1,15 +1,18 @@
 #include <QGuiApplication>
 #include <QJSValue>
-#include <QQmlComponent>
 #include <QQmlApplicationEngine>
+#include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlExpression>
 #include <QQuickItem>
-#include <QQuickWindow>
 #include <QQuickStyle>
+#include <QQuickWindow>
 #include <QSignalSpy>
 #include <QStringList>
 #include <QTest>
+
+#include "app/models/ContinuityReportModel.h"
+#include "core/continuity/ContinuityTypes.h"
 
 namespace {
 
@@ -47,6 +50,7 @@ private slots:
     void visitingAPageBuildsItOnceAndKeepsIt();
     void theThemeFollowsTheController();
     void reducedMotionSilencesTheAnimations();
+    void aLongReportRendersWithoutWarnings();
     void confirmingADialogRunsTheAction();
     void dismissingADialogRunsNothing();
 
@@ -147,7 +151,8 @@ void UiSmokeTest::visitingAPageBuildsItOnceAndKeepsIt() {
     for (const QString& page : pages) {
         evaluate(QStringLiteral("AppController.currentPage = '%1'").arg(page));
         settle();
-        QVERIFY2(loadedPages().contains(page), qPrintable(QStringLiteral("%1 never loaded").arg(page)));
+        QVERIFY2(loadedPages().contains(page),
+                 qPrintable(QStringLiteral("%1 never loaded").arg(page)));
         QVERIFY2(g_messages.isEmpty(),
                  qPrintable(QStringLiteral("%1 warned: %2").arg(page, g_messages.join(u'\n'))));
     }
@@ -198,6 +203,47 @@ void UiSmokeTest::reducedMotionSilencesTheAnimations() {
     QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join(u'\n')));
 }
 
+void UiSmokeTest::aLongReportRendersWithoutWarnings() {
+    // The report delegate takes its values as required properties, whose names
+    // have to match the model's roles exactly. A mismatch is invisible until
+    // something actually scrolls past, so this fills the model and looks.
+    auto* const model =
+        engine_->rootObjects().constFirst()->findChild<transmit::app::ContinuityReportModel*>();
+    QVERIFY2(model != nullptr, "the window has no report model");
+
+    QList<transmit::core::ContinuityNote> notes;
+    notes.reserve(500);
+    for (int i = 0; i < 500; ++i) {
+        transmit::core::ContinuityNote note;
+        note.grade = static_cast<transmit::core::ContinuityGrade>(i % 4);
+        note.domain = transmit::format::DomainId::UserData;
+        note.subject = QStringLiteral("/home/someone/Documents/file-%1.txt").arg(i);
+        note.detail = QStringLiteral("Renamed on arrival: the target system reserves this name.");
+        notes.push_back(note);
+    }
+    model->setNotes(notes);
+
+    evaluate(QStringLiteral("AppController.currentPage = 'report'"));
+    settle(300);
+
+    QCOMPARE(model->rowCount(), 500);
+    QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join(u'\n')));
+
+    // Every grade filter has to work on a populated model too - filtering is
+    // where a wrong role name would show up next.
+    for (int grade = -1; grade < 4; ++grade) {
+        model->setGradeFilter(grade);
+        settle(120);
+        QVERIFY2(g_messages.isEmpty(),
+                 qPrintable(QStringLiteral("grade %1 warned: %2")
+                                .arg(QString::number(grade), g_messages.join(u'\n'))));
+    }
+    model->setGradeFilter(-1);
+
+    evaluate(QStringLiteral("AppController.currentPage = 'home'"));
+    settle(120);
+}
+
 void UiSmokeTest::confirmingADialogRunsTheAction() {
     // The callback moves the application somewhere observable rather than
     // setting a flag: what matters is that the action really ran, and a real
@@ -227,8 +273,9 @@ void UiSmokeTest::confirmingADialogRunsTheAction() {
 
 void UiSmokeTest::dismissingADialogRunsNothing() {
     evaluate(QStringLiteral("AppController.currentPage = 'home'"));
-    evaluate(QStringLiteral("dialogs.confirm({ heading: 'Stop?' },"
-                            "                function () { AppController.currentPage = 'export' })"));
+    evaluate(
+        QStringLiteral("dialogs.confirm({ heading: 'Stop?' },"
+                       "                function () { AppController.currentPage = 'export' })"));
     settle(400);
 
     QObject* const dialog = named("confirmDialog");

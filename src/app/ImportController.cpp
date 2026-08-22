@@ -12,6 +12,23 @@ namespace {
 
 using core::formatBytes;
 
+/// Runs on a worker thread, so it touches nothing but its argument.
+QStringList listArchivesIn(const QString& folder) {
+    QStringList found;
+    if (folder.isEmpty()) {
+        return found;
+    }
+
+    // A split archive is offered by its first part only; opening that one finds
+    // the rest of the set.
+    const QDir directory(folder);
+    for (const QString& name : directory.entryList(
+             {QStringLiteral("*.txa"), QStringLiteral("*.txa.001")}, QDir::Files, QDir::Name)) {
+        found.push_back(directory.absoluteFilePath(name));
+    }
+    return found;
+}
+
 core::ConflictPolicy policyFromName(const QString& name) {
     if (name == QLatin1String("skip"))
         return core::ConflictPolicy::Skip;
@@ -91,20 +108,36 @@ void ImportController::inspect(const QString& archivePath, const QString& passph
     emit summaryChanged();
 }
 
-QStringList ImportController::findArchives(const QString& folder) const {
-    QStringList found;
-    if (folder.isEmpty()) {
-        return found;
+void ImportController::scanForArchives(const QString& folder) {
+    if (folder.isEmpty() || scansInFlight_.contains(folder)) {
+        return;
+    }
+    scansInFlight_.insert(folder);
+
+    auto* const watcher = new QFutureWatcher<QStringList>(this);
+    connect(watcher, &QFutureWatcher<QStringList>::finished, this, [this, watcher, folder]() {
+        recordScan(folder, watcher->result());
+        watcher->deleteLater();
+    });
+    watcher->setFuture(QtConcurrent::run(&listArchivesIn, folder));
+}
+
+QStringList ImportController::archivesOn(const QString& folder) const {
+    return archivesByFolder_.value(folder);
+}
+
+void ImportController::recordScan(const QString& folder, const QStringList& archives) {
+    scansInFlight_.remove(folder);
+
+    const auto existing = archivesByFolder_.constFind(folder);
+    if (existing != archivesByFolder_.cend() && *existing == archives) {
+        return;
     }
 
-    // A split archive is offered by its first part only; opening that one finds
-    // the rest of the set.
-    const QDir directory(folder);
-    for (const QString& name : directory.entryList(
-             {QStringLiteral("*.txa"), QStringLiteral("*.txa.001")}, QDir::Files, QDir::Name)) {
-        found.push_back(directory.absoluteFilePath(name));
-    }
-    return found;
+    archivesByFolder_.insert(folder, archives);
+    archiveCounts_.insert(folder, archives.size());
+    qCDebug(logRestore) << "found" << archives.size() << "archive(s) on" << folder;
+    emit archiveCountsChanged();
 }
 
 void ImportController::start(const QString& passphrase, const QString& conflictPolicy, bool dryRun,

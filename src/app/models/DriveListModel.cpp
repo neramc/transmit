@@ -1,5 +1,7 @@
 #include "app/models/DriveListModel.h"
 
+#include <QtConcurrent/QtConcurrentRun>
+
 #include "core/utils/Conversions.h"
 
 using transmit::core::formatBytes;
@@ -19,7 +21,14 @@ DriveListModel::DriveListModel(QObject* parent) : QAbstractListModel(parent) {
 
     watchTimer_.setInterval(kWatchIntervalMs);
     connect(&watchTimer_, &QTimer::timeout, this, &DriveListModel::refresh);
+    connect(&watcher_, &QFutureWatcher<QList<platform::StorageVolume>>::finished, this,
+            &DriveListModel::applyScan);
     refresh();
+}
+
+DriveListModel::~DriveListModel() {
+    // The worker holds a bare pointer to platform_, which is about to go.
+    watcher_.waitForFinished();
 }
 
 int DriveListModel::rowCount(const QModelIndex& parent) const {
@@ -102,7 +111,22 @@ platform::StorageVolume DriveListModel::volumeAt(int row) const {
 }
 
 void DriveListModel::refresh() {
-    QList<platform::StorageVolume> updated = platform_->storageVolumes();
+    // One scan at a time. If a drive is being slow the timer will keep firing,
+    // and queueing those up would only make the backlog worse.
+    if (refreshing_) {
+        return;
+    }
+    refreshing_ = true;
+    emit refreshingChanged();
+
+    platform::PlatformService* const platform = platform_.get();
+    watcher_.setFuture(QtConcurrent::run([platform]() { return platform->storageVolumes(); }));
+}
+
+void DriveListModel::applyScan() {
+    QList<platform::StorageVolume> updated = watcher_.result();
+    refreshing_ = false;
+    emit refreshingChanged();
 
     // Rebuilding the model on every tick would drop the user's selection, so
     // an unchanged list is left completely alone.

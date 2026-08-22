@@ -1,5 +1,6 @@
 #include "core/utils/Logging.h"
 
+#include <QByteArray>
 #include <QLoggingCategory>
 
 Q_LOGGING_CATEGORY(logApp, "transmit.app")
@@ -21,10 +22,22 @@ void configureLogging(bool verbose) {
     // Progress belongs on screen, not in the log, so informational output is
     // off by default; a capture of a million files would otherwise bury the
     // messages that matter.
-    QLoggingCategory::setFilterRules(verbose ? QStringLiteral("transmit.*.debug=true\n"
-                                                              "transmit.*.info=true")
-                                             : QStringLiteral("transmit.*.debug=false\n"
-                                                              "transmit.*.info=false"));
+    QString rules = verbose ? QStringLiteral(
+                                  "transmit.*.debug=true\n"
+                                  "transmit.*.info=true\n")
+                            : QStringLiteral(
+                                  "transmit.*.debug=false\n"
+                                  "transmit.*.info=false\n");
+
+    // setFilterRules wins over QT_LOGGING_RULES, so the environment is
+    // appended here instead of being silently overruled - otherwise asking for
+    // one category would quietly do nothing.
+    const QByteArray fromEnvironment = qgetenv("QT_LOGGING_RULES");
+    if (!fromEnvironment.isEmpty()) {
+        rules += QString::fromLocal8Bit(fromEnvironment).replace(u';', u'\n');
+    }
+
+    QLoggingCategory::setFilterRules(rules);
 }
 
 }  // namespace transmit::core

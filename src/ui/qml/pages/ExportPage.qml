@@ -237,9 +237,17 @@ Item {
                     AppEmptyState {
                         anchors.centerIn: parent
                         width: parent.width * 0.7
-                        visible: driveList.count === 0
+                        // "None" is only true once the first scan has answered;
+                        // saying it before that is a lie that corrects itself.
+                        visible: driveList.count === 0 && !drives.refreshing
                         title: qsTr("No drives found")
                         body: qsTr("Plug in a USB drive, or choose a folder below.")
+                    }
+
+                    AppSpinner {
+                        anchors.centerIn: parent
+                        running: driveList.count === 0 && drives.refreshing
+                        size: Sizing.iconSizeLarge
                     }
                 }
 

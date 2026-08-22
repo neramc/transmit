@@ -84,7 +84,23 @@ ColumnLayout {
         spacing: Spacing.sm
         model: page.reportModel
 
+        // A restore of a large home folder produces thousands of notes, so
+        // this is the one list in the application long enough for scrolling to
+        // cost anything. Reused delegates are re-bound rather than rebuilt.
+        reuseItems: true
+        cacheBuffer: 400
+
         delegate: AppCard {
+            id: note
+
+            // Required properties rather than the injected context ones: the
+            // engine then binds them directly instead of giving every delegate
+            // its own context object to look names up in.
+            required property int grade
+            required property string gradeName
+            required property string subject
+            required property string detail
+
             width: noteList.width
             implicitHeight: noteLayout.implicitHeight + Spacing.lg * 2
 
@@ -99,15 +115,15 @@ ColumnLayout {
                     spacing: Spacing.sm
 
                     AppBadge {
-                        text: gradeName
-                        tone: grade === 0 ? "success"
-                            : grade === 1 ? "info"
-                            : grade === 2 ? "warning" : "error"
+                        text: note.gradeName
+                        tone: note.grade === 0 ? "success"
+                            : note.grade === 1 ? "info"
+                            : note.grade === 2 ? "warning" : "error"
                     }
 
                     Text {
                         Layout.fillWidth: true
-                        text: subject
+                        text: note.subject
                         color: Colors.textPrimary
                         font.family: Typography.family
                         font.pixelSize: Typography.body
@@ -118,7 +134,7 @@ ColumnLayout {
 
                 Text {
                     Layout.fillWidth: true
-                    text: detail
+                    text: note.detail
                     color: Colors.textSecondary
                     font.family: Typography.family
                     font.pixelSize: Typography.small

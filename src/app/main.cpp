@@ -1,12 +1,19 @@
+#include <QElapsedTimer>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
+#include <QQuickWindow>
 #include <QUrl>
 
 #include "core/utils/Logging.h"
 
 int main(int argc, char** argv) {
+    // Started before anything else so the number below is the whole cost of
+    // launching, not the part after the expensive bit.
+    QElapsedTimer startup;
+    startup.start();
+
     QGuiApplication app(argc, argv);
 
     QGuiApplication::setApplicationName(QStringLiteral("Transmit"));
@@ -42,5 +49,26 @@ int main(int argc, char** argv) {
     if (engine.rootObjects().isEmpty()) {
         return 1;
     }
+
+    // Measurement before optimisation, so the two numbers that matter are
+    // reported rather than guessed at. Enable them with
+    // QT_LOGGING_RULES="transmit.performance.debug=true"; setting
+    // TRANSMIT_STARTUP_BENCHMARK as well quits once the window has painted,
+    // which is what makes it cheap enough to run a launch fifty times over.
+    const bool benchmarking = qEnvironmentVariableIsSet("TRANSMIT_STARTUP_BENCHMARK");
+    qCDebug(logPerformance) << "window built after" << startup.elapsed() << "ms";
+
+    if (auto* const window = qobject_cast<QQuickWindow*>(engine.rootObjects().constFirst())) {
+        QObject::connect(
+            window, &QQuickWindow::frameSwapped, window,
+            [&startup, benchmarking]() {
+                qCDebug(logPerformance) << "first frame after" << startup.elapsed() << "ms";
+                if (benchmarking) {
+                    QCoreApplication::quit();
+                }
+            },
+            Qt::SingleShotConnection);
+    }
+
     return QGuiApplication::exec();
 }

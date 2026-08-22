@@ -64,25 +64,53 @@ Item {
                     Component.onDestruction: drives.setWatching(false)
 
                     delegate: AppSelectableCard {
+                        id: driveCard
                         width: driveList.width
                         title: displayName
-                        description: {
-                            const found = ImportController.findArchives(rootPath)
-                            return found.length === 0
-                                   ? qsTr("No archives here - %1").arg(subtitle)
-                                   : qsTr("%n archive(s) found", "", found.length)
-                        }
+
+                        // Reading the drive happens on a worker thread; until
+                        // it answers, the card says so rather than claiming
+                        // there is nothing there.
+                        readonly property var archiveCount:
+                            ImportController.archiveCounts[rootPath]
+
+                        description: archiveCount === undefined
+                                     ? qsTr("Looking for archives…")
+                                     : archiveCount === 0
+                                       ? qsTr("No archives here - %1").arg(subtitle)
+                                       : qsTr("%n archive(s) found", "", archiveCount)
+
                         badgeText: removable ? qsTr("Removable") : ""
                         badgeTone: removable ? "info" : "neutral"
                         selected: false
+                        enabled: archiveCount !== undefined && archiveCount > 0
+                        opacity: enabled ? 1.0 : 0.6
+
+                        Component.onCompleted: ImportController.scanForArchives(rootPath)
+
                         onClicked: {
-                            const found = ImportController.findArchives(rootPath)
+                            const found = ImportController.archivesOn(rootPath)
                             if (found.length > 0) {
                                 page.archivePath = found[0]
                                 ImportController.inspect(found[0], "")
                                 page.step = 1
                             }
                         }
+                    }
+
+                    AppEmptyState {
+                        anchors.centerIn: parent
+                        width: parent.width * 0.7
+                        visible: driveList.count === 0 && !drives.refreshing
+                        title: qsTr("No drives found")
+                        body: qsTr("Plug in the drive you captured onto, or open the archive "
+                                 + "file directly.")
+                    }
+
+                    AppSpinner {
+                        anchors.centerIn: parent
+                        running: driveList.count === 0 && drives.refreshing
+                        size: Sizing.iconSizeLarge
                     }
                 }
 
