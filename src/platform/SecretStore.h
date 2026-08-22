@@ -3,6 +3,7 @@
 #include <QHash>
 #include <QList>
 #include <QString>
+
 #include <memory>
 
 #include "platform/SettingsProvider.h"
@@ -12,10 +13,10 @@ namespace transmit::platform {
 /// What kind of thing a stored secret is, which decides where it goes on the
 /// far side.
 enum class SecretKind {
-    WifiNetwork,           ///< a wireless network and its passphrase
-    ApplicationPassword,   ///< an entry an application put in the keychain
-    NetworkCredential,     ///< a saved login for a server or share
-    BrowserLogin,          ///< a site login held by a browser
+    WifiNetwork,          ///< a wireless network and its passphrase
+    ApplicationPassword,  ///< an entry an application put in the keychain
+    NetworkCredential,    ///< a saved login for a server or share
+    BrowserLogin,         ///< a site login held by a browser
 };
 
 QString secretKindName(SecretKind kind);
@@ -28,10 +29,10 @@ QString secretKindName(SecretKind kind);
 /// It is never logged, never printed, and never touches a temporary file.
 struct SecretRecord {
     SecretKind kind = SecretKind::ApplicationPassword;
-    QString service;   ///< network name, host or application
-    QString account;   ///< user name, where there is one
+    QString service;  ///< network name, host or application
+    QString account;  ///< user name, where there is one
     QString secret;
-    QString label;     ///< what the user would recognise it as
+    QString label;  ///< what the user would recognise it as
     QHash<QString, QString> attributes;
 
     /// Overwrites the secret in place. Called as soon as it has been handed on.

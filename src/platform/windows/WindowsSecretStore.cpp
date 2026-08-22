@@ -7,8 +7,8 @@
 #include "core/utils/Logging.h"
 
 #ifdef Q_OS_WIN
-#include <windows.h>
 #include <wincred.h>
+#include <windows.h>
 #endif
 
 namespace transmit::platform {
@@ -48,7 +48,8 @@ QList<SecretRecord> WindowsSecretStore::read(bool includeWifi, bool includeAppli
         DWORD count = 0;
         PCREDENTIALW* credentials = nullptr;
 
-        if (CredEnumerateW(nullptr, CRED_ENUMERATE_ALL_CREDENTIALS, &count, &credentials) != FALSE) {
+        if (CredEnumerateW(nullptr, CRED_ENUMERATE_ALL_CREDENTIALS, &count, &credentials) !=
+            FALSE) {
             for (DWORD i = 0; i < count; ++i) {
                 const CREDENTIALW* entry = credentials[i];
                 if (entry == nullptr || entry->CredentialBlobSize == 0) {
@@ -82,9 +83,9 @@ QList<SecretRecord> WindowsSecretStore::read(bool includeWifi, bool includeAppli
 #endif
 
     if (includeWifi) {
-        const QString profiles = run(QStringLiteral("netsh"),
-                                     {QStringLiteral("wlan"), QStringLiteral("show"),
-                                      QStringLiteral("profiles")});
+        const QString profiles =
+            run(QStringLiteral("netsh"),
+                {QStringLiteral("wlan"), QStringLiteral("show"), QStringLiteral("profiles")});
 
         static const QRegularExpression namePattern(
             QStringLiteral("All User Profile\\s*:\\s*(.+)"));
@@ -96,13 +97,12 @@ QList<SecretRecord> WindowsSecretStore::read(bool includeWifi, bool includeAppli
             // key=clear only produces the passphrase for an administrator;
             // otherwise the field is simply absent and the network is reported
             // as needing the user's attention.
-            const QString detail = run(
-                QStringLiteral("netsh"),
-                {QStringLiteral("wlan"), QStringLiteral("show"), QStringLiteral("profile"),
-                 QStringLiteral("name=%1").arg(name), QStringLiteral("key=clear")});
+            const QString detail =
+                run(QStringLiteral("netsh"),
+                    {QStringLiteral("wlan"), QStringLiteral("show"), QStringLiteral("profile"),
+                     QStringLiteral("name=%1").arg(name), QStringLiteral("key=clear")});
 
-            static const QRegularExpression keyPattern(
-                QStringLiteral("Key Content\\s*:\\s*(.+)"));
+            static const QRegularExpression keyPattern(QStringLiteral("Key Content\\s*:\\s*(.+)"));
             const auto key = keyPattern.match(detail);
 
             SecretRecord record;
@@ -141,8 +141,7 @@ ApplyResult WindowsSecretStore::store(const SecretRecord& record) const {
     credential.UserName = user.empty() ? nullptr : user.data();
     credential.Persist = CRED_PERSIST_LOCAL_MACHINE;
     credential.CredentialBlob = reinterpret_cast<LPBYTE>(secret.data());
-    credential.CredentialBlobSize =
-        static_cast<DWORD>(secret.size() * sizeof(wchar_t));
+    credential.CredentialBlobSize = static_cast<DWORD>(secret.size() * sizeof(wchar_t));
 
     const bool written = CredWriteW(&credential, 0) != FALSE;
 
@@ -151,7 +150,8 @@ ApplyResult WindowsSecretStore::store(const SecretRecord& record) const {
 
     return written ? ApplyResult{ApplyOutcome::Applied, {}, {}}
                    : ApplyResult{ApplyOutcome::Failed,
-                                 QStringLiteral("Credential Manager refused the entry"), {}};
+                                 QStringLiteral("Credential Manager refused the entry"),
+                                 {}};
 #else
     return {ApplyOutcome::Unsupported, {}, {}};
 #endif

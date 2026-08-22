@@ -38,7 +38,7 @@ public:
     struct CaptureResult {
         format::ByteBuffer payload;
         int captured = 0;
-        int unreadable = 0;   ///< found, but the system would not reveal the value
+        int unreadable = 0;  ///< found, but the system would not reveal the value
         QList<ContinuityNote> notes;
     };
 

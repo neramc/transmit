@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QtConcurrent/QtConcurrentRun>
 
+#include "core/secrets/SecretsDomain.h"
 #include "core/services/ProfileService.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
@@ -102,9 +103,30 @@ quint64 ExportController::estimateSize(const QString& profileId) {
     return service_->estimateSize(profile.selection, token);
 }
 
+QStringList ExportController::domainsForProfile(const QString& profileId) {
+    const core::CaptureProfile profile = core::ProfileService::profileById(profileId);
+
+    QStringList names;
+    for (const format::DomainId domain : format::allDomains()) {
+        if (profile.selection.includes(domain)) {
+            names << core::fromUtf8(format::domainName(domain));
+        }
+    }
+    return names;
+}
+
+bool ExportController::secretsAvailable() {
+    return core::SecretsDomain(*platform_).isAvailable();
+}
+
+QString ExportController::secretsStoreName() {
+    return core::SecretsDomain(*platform_).describeStore();
+}
+
 void ExportController::start(const QString& profileId, const QString& destinationFolder,
                              const QString& preset, const QString& passphrase, bool splitForFat32,
-                             const QString& label) {
+                             const QString& label, const QStringList& domains,
+                             bool includeSecrets) {
     if (running_) {
         return;
     }
@@ -118,6 +140,19 @@ void ExportController::start(const QString& profileId, const QString& destinatio
     core::ExportRequest request;
     request.label = label;
     request.selection = core::ProfileService::profileById(profileId).selection;
+
+    if (!domains.isEmpty()) {
+        request.selection.domains.clear();
+        for (const QString& name : domains) {
+            if (const auto domain = format::domainFromName(core::toUtf8(name))) {
+                request.selection.domains.insert(static_cast<int>(*domain));
+            }
+        }
+    }
+    if (includeSecrets) {
+        request.selection.domains.insert(static_cast<int>(format::DomainId::Secrets));
+    }
+
     request.passphrase = passphrase;
     request.partSize = splitForFat32 ? format::kFat32SafePartSize : 0;
 

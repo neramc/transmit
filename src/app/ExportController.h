@@ -65,8 +65,24 @@ public:
 public slots:
     /// Starts a capture. `destinationFolder` is where the archive is written;
     /// the file name is derived from the machine name and the date.
+    ///
+    /// `domains` overrides what the profile would include - the interface lets
+    /// the user tick these individually. `includeSecrets` is separate because
+    /// it is the one choice that puts passwords on a removable drive, and it
+    /// requires a passphrase.
     void start(const QString& profileId, const QString& destinationFolder, const QString& preset,
-               const QString& passphrase, bool splitForFat32, const QString& label);
+               const QString& passphrase, bool splitForFat32, const QString& label,
+               const QStringList& domains, bool includeSecrets);
+
+    /// The domains a profile includes, so the interface's tick boxes follow
+    /// the profile the user just chose rather than contradicting it.
+    [[nodiscard]] QStringList domainsForProfile(const QString& profileId);
+
+    /// Whether this system has a credential store worth offering.
+    [[nodiscard]] bool secretsAvailable();
+
+    /// Names the credential store, for the interface's explanation.
+    [[nodiscard]] QString secretsStoreName();
 
     void cancel();
 

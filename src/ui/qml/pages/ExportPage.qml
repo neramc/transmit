@@ -22,8 +22,25 @@ Item {
     property string passphraseConfirm: ""
     property string label: ""
 
+    readonly property bool encryptionRequired: includeSecrets
+    readonly property bool encryptionOn: encrypt || encryptionRequired
     readonly property bool passphraseValid:
-        !encrypt || (passphrase.length >= 8 && passphrase === passphraseConfirm)
+        !encryptionOn || (passphrase.length >= 8 && passphrase === passphraseConfirm)
+
+    property bool includeUserData: true
+    property bool includeAppState: true
+    property bool includeSettings: true
+    property bool includeAppList: true
+    property bool includeSecrets: false
+
+    readonly property var selectedDomains: {
+        const domains = []
+        if (includeUserData) domains.push("userdata")
+        if (includeAppState) domains.push("appstate")
+        if (includeSettings)  domains.push("settings")
+        if (includeAppList)   domains.push("apps")
+        return domains
+    }
 
     readonly property var stepTitles: [qsTr("What to take"), qsTr("Where to put it"),
                                        qsTr("Options"), qsTr("Progress")]
@@ -31,6 +48,18 @@ Item {
     function goTo(next) {
         step = next
     }
+
+    /// Makes the tick boxes agree with the profile just chosen. Without this,
+    /// picking "Files only" would leave the other options still ticked.
+    function adoptProfileDomains(id) {
+        const domains = ExportController.domainsForProfile(id)
+        includeUserData = domains.indexOf("userdata") >= 0
+        includeAppState = domains.indexOf("appstate") >= 0
+        includeSettings = domains.indexOf("settings") >= 0
+        includeAppList  = domains.indexOf("apps") >= 0
+    }
+
+    Component.onCompleted: adoptProfileDomains(profileId)
 
     ColumnLayout {
         anchors.fill: parent
@@ -79,8 +108,88 @@ Item {
                                          + qsTr("Includes: %1").arg(model.domainSummary)
                             trailingText: model.sizeHint
                             selected: page.profileId === model.profileId
-                            onClicked: page.profileId = model.profileId
+                            onClicked: {
+                                page.profileId = model.profileId
+                                page.adoptProfileDomains(model.profileId)
+                            }
                         }
+                    }
+                    AppCard {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Theme.spacingSm
+                        implicitHeight: domainList.implicitHeight + Theme.spacingXl * 2
+
+                        ColumnLayout {
+                            id: domainList
+                            anchors.fill: parent
+                            anchors.margins: Theme.spacingXl
+                            spacing: Theme.spacingMd
+
+                            Text {
+                                text: qsTr("Adjust what that includes")
+                                color: Theme.textPrimary
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSizeBody
+                                font.weight: Theme.weightSemiBold
+                            }
+
+                            AppCheckRow {
+                                label: qsTr("Your files")
+                                description: qsTr("Documents, pictures, music, video, downloads.")
+                                checked: page.includeUserData
+                                onCheckedChanged: page.includeUserData = checked
+                            }
+
+                            AppCheckRow {
+                                label: qsTr("Program data and settings")
+                                description: qsTr("Browser profiles, editor configuration and the "
+                                                + "like. Transmit puts each one where that program "
+                                                + "looks for it on the new system, and corrects "
+                                                + "the folder names recorded inside.")
+                                checked: page.includeAppState
+                                onCheckedChanged: page.includeAppState = checked
+                            }
+
+                            AppCheckRow {
+                                label: qsTr("Desktop preferences")
+                                description: qsTr("Appearance, wallpaper, language, time zone, "
+                                                + "keyboard layouts and accessibility settings.")
+                                checked: page.includeSettings
+                                onCheckedChanged: page.includeSettings = checked
+                            }
+
+                            AppCheckRow {
+                                label: qsTr("The list of programs you have installed")
+                                description: qsTr("Programs cannot be copied between systems. "
+                                                + "Transmit writes you a script that reinstalls "
+                                                + "them, and never runs it itself.")
+                                checked: page.includeAppList
+                                onCheckedChanged: page.includeAppList = checked
+                            }
+
+                            AppCheckRow {
+                                label: qsTr("Saved passwords")
+                                description: ExportController.secretsAvailable()
+                                             ? qsTr("Taken from %1. This needs a passphrase, and "
+                                                  + "it means the drive will hold your passwords.")
+                                               .arg(ExportController.secretsStoreName())
+                                             : qsTr("This computer has no password store Transmit "
+                                                  + "can read.")
+                                checked: page.includeSecrets
+                                enabledControl: ExportController.secretsAvailable()
+                                                && AppController.encryptionAvailable
+                                onCheckedChanged: page.includeSecrets = checked
+                            }
+                        }
+                    }
+
+                    AppInlineMessage {
+                        visible: page.includeSecrets
+                        tone: "warning"
+                        title: qsTr("The drive will contain your passwords")
+                        body: qsTr("Anyone who has the drive and the passphrase can read them. "
+                                 + "Carry the two separately, and erase the drive once you have "
+                                 + "finished with it.")
                     }
                 }
             }
@@ -215,17 +324,20 @@ Item {
 
                     AppCheckRow {
                         label: qsTr("Protect this archive with a passphrase")
-                        description: qsTr("Encrypts everything, including the file names. Without "
-                                        + "the passphrase the archive cannot be opened - there is "
-                                        + "no way to recover it.")
-                        checked: page.encrypt
-                        enabledControl: AppController.encryptionAvailable
+                        description: page.includeSecrets
+                                     ? qsTr("Required, because you chose to include saved "
+                                          + "passwords.")
+                                     : qsTr("Encrypts everything, including the file names. "
+                                          + "Without the passphrase the archive cannot be opened - "
+                                          + "there is no way to recover it.")
+                        checked: page.encrypt || page.includeSecrets
+                        enabledControl: AppController.encryptionAvailable && !page.includeSecrets
                         onCheckedChanged: page.encrypt = checked
                     }
 
                     AppLabelledField {
                         Layout.fillWidth: true
-                        visible: page.encrypt
+                        visible: page.encryptionOn
                         label: qsTr("Passphrase")
                         helperText: page.passphrase.length > 0 && page.passphrase.length < 8
                                     ? qsTr("Use at least 8 characters.")
@@ -242,7 +354,7 @@ Item {
 
                     AppLabelledField {
                         Layout.fillWidth: true
-                        visible: page.encrypt
+                        visible: page.encryptionOn
                         label: qsTr("Passphrase again")
                         helperText: page.passphraseConfirm.length > 0
                                     && page.passphrase !== page.passphraseConfirm
@@ -390,8 +502,9 @@ Item {
                 onClicked: {
                     page.goTo(3)
                     ExportController.start(page.profileId, page.destinationFolder, page.preset,
-                                           page.encrypt ? page.passphrase : "",
-                                           page.destinationRequiresSplit, page.label)
+                                           page.encryptionOn ? page.passphrase : "",
+                                           page.destinationRequiresSplit, page.label,
+                                           page.selectedDomains, page.includeSecrets)
                 }
             }
 

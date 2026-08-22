@@ -112,8 +112,7 @@ QList<SecretRecord> decode(format::ByteView data) {
 
 /// Writes the commands for credentials this system will not let a program add.
 /// The passwords themselves are never written into it: the commands prompt.
-QString writePrivilegedScript(const QStringList& commands, const QString& directory,
-                              OsFamily os) {
+QString writePrivilegedScript(const QStringList& commands, const QString& directory, OsFamily os) {
     if (commands.isEmpty() || directory.isEmpty()) {
         return {};
     }
@@ -173,8 +172,8 @@ SecretsDomain::CaptureResult SecretsDomain::capture(const CaptureOptions& option
         result.notes.push_back(ContinuityNote{
             ContinuityGrade::Impossible, DomainId::Secrets,
             QCoreApplication::translate("Secrets", "Saved passwords"),
-            QCoreApplication::translate(
-                "Secrets", "This system has no credential store Transmit can read.")});
+            QCoreApplication::translate("Secrets",
+                                        "This system has no credential store Transmit can read.")});
         return result;
     }
 
@@ -255,9 +254,8 @@ QList<ContinuityNote> SecretsDomain::restore(format::ByteView payload,
         notes.push_back(ContinuityNote{
             ContinuityGrade::Adapted, DomainId::Secrets,
             QCoreApplication::translate("Secrets", "Saved passwords"),
-            QCoreApplication::translate(
-                "Secrets", "%n password(s) would be added to %1.", nullptr,
-                static_cast<int>(records.size()))
+            QCoreApplication::translate("Secrets", "%n password(s) would be added to %1.", nullptr,
+                                        static_cast<int>(records.size()))
                 .arg(store->describe())});
         for (SecretRecord& record : records) {
             record.clear();
@@ -293,23 +291,23 @@ QList<ContinuityNote> SecretsDomain::restore(format::ByteView payload,
     records.clear();
 
     if (applied > 0) {
-        notes.push_back(ContinuityNote{
-            ContinuityGrade::Full, DomainId::Secrets,
-            QCoreApplication::translate("Secrets", "Saved passwords"),
-            QCoreApplication::translate("Secrets", "%n password(s) were added to %1.", nullptr,
-                                        applied)
-                .arg(store->describe())});
+        notes.push_back(
+            ContinuityNote{ContinuityGrade::Full, DomainId::Secrets,
+                           QCoreApplication::translate("Secrets", "Saved passwords"),
+                           QCoreApplication::translate(
+                               "Secrets", "%n password(s) were added to %1.", nullptr, applied)
+                               .arg(store->describe())});
     }
 
     if (!needingPermission.isEmpty()) {
-        const QString path = writePrivilegedScript(privilegedCommands, scriptDirectory,
-                                                   platform_.environment().os);
+        const QString path =
+            writePrivilegedScript(privilegedCommands, scriptDirectory, platform_.environment().os);
         notes.push_back(ContinuityNote{
             ContinuityGrade::Manual, DomainId::Secrets,
             QCoreApplication::translate("Secrets", "Networks you need to join yourself"),
             path.isEmpty()
-                ? QCoreApplication::translate(
-                      "Secrets", "These need administrator rights to add: %1")
+                ? QCoreApplication::translate("Secrets",
+                                              "These need administrator rights to add: %1")
                       .arg(needingPermission.join(QStringLiteral(", ")))
                 : QCoreApplication::translate(
                       "Secrets",

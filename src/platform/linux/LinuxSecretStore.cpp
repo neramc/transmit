@@ -56,7 +56,9 @@ bool haveSecretTool() {
 
 }  // namespace
 
-bool LinuxSecretStore::isAvailable() const { return haveNetworkManager() || haveSecretTool(); }
+bool LinuxSecretStore::isAvailable() const {
+    return haveNetworkManager() || haveSecretTool();
+}
 
 QString LinuxSecretStore::describe() const {
     QStringList stores;
@@ -75,9 +77,9 @@ QList<SecretRecord> LinuxSecretStore::read(bool includeWifi, bool includeApplica
 
     if (includeWifi && haveNetworkManager()) {
         const QString connections =
-            run(QStringLiteral("nmcli"), {QStringLiteral("-t"), QStringLiteral("-f"),
-                                          QStringLiteral("NAME,TYPE"), QStringLiteral("connection"),
-                                          QStringLiteral("show")});
+            run(QStringLiteral("nmcli"),
+                {QStringLiteral("-t"), QStringLiteral("-f"), QStringLiteral("NAME,TYPE"),
+                 QStringLiteral("connection"), QStringLiteral("show")});
 
         for (const QString& line : connections.split(u'\n', Qt::SkipEmptyParts)) {
             const QStringList columns = line.split(u':');
@@ -89,11 +91,11 @@ QList<SecretRecord> LinuxSecretStore::read(bool includeWifi, bool includeApplica
             // -s asks NetworkManager to include secrets; without the rights to
             // read them it returns an empty value rather than failing, and the
             // network is then reported as needing the user's attention.
-            const QString passphrase = run(
-                QStringLiteral("nmcli"),
-                {QStringLiteral("-s"), QStringLiteral("-g"),
-                 QStringLiteral("802-11-wireless-security.psk"), QStringLiteral("connection"),
-                 QStringLiteral("show"), name});
+            const QString passphrase =
+                run(QStringLiteral("nmcli"),
+                    {QStringLiteral("-s"), QStringLiteral("-g"),
+                     QStringLiteral("802-11-wireless-security.psk"), QStringLiteral("connection"),
+                     QStringLiteral("show"), name});
 
             SecretRecord record;
             record.kind = SecretKind::WifiNetwork;
@@ -120,11 +122,13 @@ ApplyResult LinuxSecretStore::store(const SecretRecord& record) const {
         case SecretKind::WifiNetwork: {
             if (!haveNetworkManager()) {
                 return {ApplyOutcome::Unsupported,
-                        QStringLiteral("NetworkManager is not installed here"), {}};
+                        QStringLiteral("NetworkManager is not installed here"),
+                        {}};
             }
             if (record.secret.isEmpty()) {
                 return {ApplyOutcome::Failed,
-                        QStringLiteral("no passphrase was captured for this network"), {}};
+                        QStringLiteral("no passphrase was captured for this network"),
+                        {}};
             }
 
             // Adding a system connection needs rights Transmit does not ask
@@ -140,18 +144,20 @@ ApplyResult LinuxSecretStore::store(const SecretRecord& record) const {
         case SecretKind::BrowserLogin: {
             if (!haveSecretTool()) {
                 return {ApplyOutcome::Unsupported,
-                        QStringLiteral("no keyring tool is installed here"), {}};
+                        QStringLiteral("no keyring tool is installed here"),
+                        {}};
             }
-            const bool stored = runWithSecretOnStdin(
-                QStringLiteral("secret-tool"),
-                {QStringLiteral("store"), QStringLiteral("--label"), record.label,
-                 QStringLiteral("service"), record.service, QStringLiteral("account"),
-                 record.account},
-                record.secret);
+            const bool stored =
+                runWithSecretOnStdin(QStringLiteral("secret-tool"),
+                                     {QStringLiteral("store"), QStringLiteral("--label"),
+                                      record.label, QStringLiteral("service"), record.service,
+                                      QStringLiteral("account"), record.account},
+                                     record.secret);
 
             return stored ? ApplyResult{ApplyOutcome::Applied, {}, {}}
                           : ApplyResult{ApplyOutcome::Failed,
-                                        QStringLiteral("the keyring refused it, or is locked"), {}};
+                                        QStringLiteral("the keyring refused it, or is locked"),
+                                        {}};
         }
     }
     return {ApplyOutcome::Unsupported, {}, {}};
