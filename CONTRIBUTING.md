@@ -88,6 +88,16 @@ Anything touching `src/core/secrets/`, `src/platform/*SecretStore*` or
 ## Releasing
 
 Bump `VERSION` in `CMakeLists.txt`, note the changes in `CHANGELOG.md`, then
-push a tag that matches: `v0.1.0` for version `0.1.0`. The release workflow
-refuses a tag that disagrees with `CMakeLists.txt`, builds all three platforms,
-tests them, and publishes the installers with their checksums.
+tag the commit `v0.1.0` for version `0.1.0` — either way round works:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0     # the workflow writes the release
+```
+
+or fill in the form under **Releases → Draft a new release**, naming the same
+tag; the workflow uploads into what you wrote.
+
+Either way it refuses a tag that disagrees with `CMakeLists.txt`, builds all
+three platforms, tests them before packaging, and attaches the installers with
+their checksums. **Actions → release → Run workflow** builds the same things
+without publishing anything, for checking a change to the packaging itself.

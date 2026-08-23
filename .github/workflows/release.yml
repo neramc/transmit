@@ -2,12 +2,18 @@ name: release
 
 # Builds what people actually download, and attaches it to the tag.
 #
-# A tag push publishes a GitHub release; a manual run builds the same things
-# and leaves them on the run, so the packaging can be changed and checked
-# without spending a version number on it.
+# Both ways of cutting a release end up here, because both are things people
+# actually do: pushing a tag from a terminal, and filling in the form under
+# Releases. The first fires a push event and this workflow creates the release;
+# the second creates the release first and this workflow uploads into it.
+#
+# A manual run builds the same things and leaves them on the run, so the
+# packaging can be changed and checked without spending a version number.
 on:
   push:
     tags: ['v*']
+  release:
+    types: [published]
   workflow_dispatch:
 
 concurrency:
@@ -25,12 +31,15 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.pick.outputs.version }}
+      tag: ${{ steps.pick.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Pick it
         id: pick
         shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           declared=$(sed -n 's/^ *VERSION \([0-9][0-9.]*\)$/\1/p' CMakeLists.txt | head -1)
           if [ -z "$declared" ]; then
@@ -38,18 +47,25 @@ jobs:
               exit 1
           fi
 
-          if [ "${GITHUB_REF_TYPE}" = tag ]; then
-              tagged=${GITHUB_REF_NAME#v}
-              # A download that reports a different version than the tag it
-              # came from is a support question nobody can answer.
-              if [ "$tagged" != "$declared" ]; then
-                  echo "::error::tag ${GITHUB_REF_NAME} does not match the $declared in CMakeLists.txt"
-                  exit 1
-              fi
+          # Empty for a manual run, which builds without publishing.
+          if [ "${GITHUB_EVENT_NAME}" = release ]; then
+              tag="$RELEASE_TAG"
+          elif [ "${GITHUB_REF_TYPE}" = tag ]; then
+              tag="${GITHUB_REF_NAME}"
+          else
+              tag=""
+          fi
+
+          # A download that reports a different version than the tag it came
+          # from is a support question nobody can answer.
+          if [ -n "$tag" ] && [ "${tag#v}" != "$declared" ]; then
+              echo "::error::tag $tag does not match the $declared in CMakeLists.txt"
+              exit 1
           fi
 
           echo "version=$declared" >> "$GITHUB_OUTPUT"
-          echo "building $declared"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "building $declared${tag:+ for $tag}"
 
   linux:
     name: Linux (AppImage)
@@ -314,7 +330,7 @@ jobs:
   publish:
     name: Publish the release
     needs: [version, linux, macos, windows]
-    if: github.ref_type == 'tag'
+    if: needs.version.outputs.tag != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -360,8 +376,18 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" release/* \
-              --title "Transmit ${GITHUB_REF_NAME}" \
-              --notes-file notes.md \
-              --verify-tag
+          # The release exists already when somebody made it from the Releases
+          # page, and does not when a tag was pushed from a terminal. Uploading
+          # into one that is already written keeps whatever notes they wrote.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+              gh release upload "$TAG" release/* --clobber
+              echo "uploaded into the existing $TAG release"
+          else
+              gh release create "$TAG" release/* \
+                  --title "Transmit $TAG" \
+                  --notes-file notes.md \
+                  --verify-tag
+              echo "created the $TAG release"
+          fi
