@@ -1,0 +1,340 @@
+name: release
+
+# Builds what people actually download, and attaches it to the tag.
+#
+# A tag push publishes a GitHub release; a manual run builds the same things
+# and leaves them on the run, so the packaging can be changed and checked
+# without spending a version number on it.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # The version is worked out once and handed to every job, so the installer,
+  # the disk image and the file names cannot disagree with each other.
+  version:
+    name: Work out the version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.pick.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick it
+        id: pick
+        shell: bash
+        run: |
+          declared=$(sed -n 's/^ *VERSION \([0-9][0-9.]*\)$/\1/p' CMakeLists.txt | head -1)
+          if [ -z "$declared" ]; then
+              echo "::error::could not read the version out of CMakeLists.txt"
+              exit 1
+          fi
+
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then
+              tagged=${GITHUB_REF_NAME#v}
+              # A download that reports a different version than the tag it
+              # came from is a support question nobody can answer.
+              if [ "$tagged" != "$declared" ]; then
+                  echo "::error::tag ${GITHUB_REF_NAME} does not match the $declared in CMakeLists.txt"
+                  exit 1
+              fi
+          fi
+
+          echo "version=$declared" >> "$GITHUB_OUTPUT"
+          echo "building $declared"
+
+  linux:
+    name: Linux (AppImage)
+    needs: version
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          modules: 'qtimageformats'
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libzstd-dev liblzma-dev libssl-dev \
+                                  libsqlite3-dev libsecret-1-dev \
+                                  libgl1-mesa-dev libxkbcommon-x11-0 \
+                                  libfuse2 file
+
+      - name: Build
+        run: |
+          cmake --preset release -DTRANSMIT_BUILD_TESTS=ON
+          cmake --build --preset release
+
+      # A release is the one build nobody gets to re-run, so it is tested
+      # before it is packaged rather than trusted because main was green.
+      - name: Test
+        run: ctest --test-dir build-release --output-on-failure
+
+      - name: Assemble the AppImage
+        env:
+          # The runners have no FUSE for the tools' own AppImages either.
+          APPIMAGE_EXTRACT_AND_RUN: 1
+          QML_SOURCES_PATHS: ${{ github.workspace }}/src/ui/qml
+          EXTRA_QT_MODULES: 'wayland-decoration-client;wayland-graphics-integration-client;wayland-shell-integration'
+        run: |
+          base=https://github.com/linuxdeploy
+          curl -fsSL -o linuxdeploy \
+              "$base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+          curl -fsSL -o linuxdeploy-plugin-qt \
+              "$base/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
+          chmod +x linuxdeploy linuxdeploy-plugin-qt
+
+          # Only xcb is deployed by default, which on a Wayland session with no
+          # XWayland means the window never opens at all. Named from what the
+          # Qt build actually has, so a missing one is a warning here rather
+          # than a plugin the bundle claims and does not carry.
+          plugins=""
+          for plugin in libqwayland-generic.so libqwayland-egl.so libqoffscreen.so; do
+              if [ -e "${QT_ROOT_DIR}/plugins/platforms/$plugin" ]; then
+                  plugins="${plugins}${plugins:+;}$plugin"
+              else
+                  echo "::warning::this Qt build has no $plugin"
+              fi
+          done
+          export EXTRA_PLATFORM_PLUGINS="$plugins"
+          echo "extra platform plugins: $EXTRA_PLATFORM_PLUGINS"
+
+          # The command line tool travels with the interface: they share the
+          # bundled Qt, and somebody restoring onto a headless machine needs it.
+          ./linuxdeploy --appdir AppDir \
+              --executable build-release/transmit \
+              --executable build-release/transmit-cli \
+              --desktop-file resources/transmit.desktop \
+              --icon-file resources/icons/transmit.svg \
+              --plugin qt \
+              --output appimage
+
+          mkdir -p artifacts
+          mv Transmit*.AppImage \
+             "artifacts/Transmit-${{ needs.version.outputs.version }}-linux-x86_64.AppImage"
+
+      # Packaging is where a QML module goes missing without anything failing
+      # to build, so the bundle is started rather than merely produced.
+      - name: Check it runs
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          chmod +x artifacts/*.AppImage
+          ./artifacts/*.AppImage --appimage-extract >/dev/null
+
+          if [ ! -x squashfs-root/usr/bin/transmit-cli ]; then
+              echo "::error::the command line tool is missing from the bundle"
+              exit 1
+          fi
+
+          # A window with nobody to close it should still be running when the
+          # timeout fires, and `timeout` says so with 124. Grepping the output
+          # for known failures is not enough on its own: an interface that dies
+          # for a reason nobody has seen before prints something else and would
+          # pass.
+          set +e
+          timeout 30 ./squashfs-root/AppRun > started.log 2>&1
+          status=$?
+          set -e
+
+          cat started.log
+          if [ "$status" -ne 124 ]; then
+              echo "::error::the packaged interface exited on its own (status $status)"
+              exit 1
+          fi
+          if grep -qE "is not a type|failed to load|not installed" started.log; then
+              echo "::error::the packaged interface started with QML errors"
+              exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: artifacts/*
+          if-no-files-found: error
+
+  macos:
+    name: macOS (disk image)
+    needs: version
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          modules: 'qtimageformats'
+          cache: true
+
+      - name: Install dependencies
+        run: brew install ninja zstd xz openssl@3 sqlite
+
+      - name: Build
+        run: |
+          cmake --preset release -DTRANSMIT_BUILD_TESTS=ON
+          cmake --build --preset release
+
+      - name: Test
+        run: ctest --test-dir build-release --output-on-failure
+
+      # Unsigned, and said so in the release notes: signing needs credentials
+      # that a public workflow has no business holding.
+      - name: Build the disk image
+        run: packaging/macos/build-dmg.sh build-release
+
+      - name: Collect
+        run: |
+          mkdir -p artifacts
+          mv build-release/Transmit.dmg \
+             "artifacts/Transmit-${{ needs.version.outputs.version }}-macos-arm64.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: artifacts/*
+          if-no-files-found: error
+
+  windows:
+    name: Windows (installer and portable)
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          modules: 'qtimageformats'
+          cache: true
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          vcpkg install zlib:x64-windows zstd:x64-windows liblzma:x64-windows `
+                        openssl:x64-windows sqlite3:x64-windows
+          echo "CMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" >> $env:GITHUB_ENV
+
+      - name: Build
+        run: |
+          cmake --preset release -DTRANSMIT_BUILD_TESTS=ON
+          cmake --build --preset release
+
+      - name: Test
+        run: ctest --test-dir build-release --output-on-failure
+
+      # windeployqt copies the Qt libraries, the QML modules and the platform
+      # plugins next to the executables; the vcpkg DLLs are already beside them
+      # from the build.
+      - name: Stage the files
+        shell: pwsh
+        run: |
+          $staging = "packaging/windows/staging"
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+          Copy-Item build-release/transmit.exe, build-release/transmit-cli.exe $staging
+          Copy-Item build-release/*.dll $staging -ErrorAction SilentlyContinue
+          windeployqt --qmldir src/ui/qml --release "$staging/transmit.exe"
+          windeployqt --release "$staging/transmit-cli.exe"
+
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          # NSIS ships with the runner image but is not always on PATH, and a
+          # release that fails for that reason is not worth the surprise.
+          $makensis = "C:\Program Files (x86)\NSIS\makensis.exe"
+          if (-not (Test-Path $makensis)) {
+              choco install nsis -y --no-progress
+          }
+          & $makensis /DVERSION=${{ needs.version.outputs.version }} packaging/windows/transmit.nsi
+          if ($LASTEXITCODE -ne 0) { throw "makensis failed" }
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Move-Item packaging/windows/TransmitSetup.exe `
+              "artifacts/Transmit-${{ needs.version.outputs.version }}-windows-x64-setup.exe"
+
+      # Not everyone can install software on the machine they are moving to,
+      # which is exactly the situation this program is for.
+      - name: Build the portable archive
+        shell: pwsh
+        run: |
+          Compress-Archive -Path packaging/windows/staging/* `
+              -DestinationPath "artifacts/Transmit-${{ needs.version.outputs.version }}-windows-x64-portable.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: artifacts/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish the release
+    needs: [version, linux, macos, windows]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: downloads
+
+      - name: Gather and checksum
+        run: |
+          mkdir -p release
+          find downloads -type f -exec mv {} release/ \;
+          cd release
+          sha256sum * > SHA256SUMS
+          ls -l
+
+      - name: Write the notes
+        run: |
+          version=${{ needs.version.outputs.version }}
+          cat > notes.md <<EOF
+          ## Downloads
+
+          | File | For |
+          | --- | --- |
+          | \`Transmit-$version-linux-x86_64.AppImage\` | Linux. \`chmod +x\` it and run it. |
+          | \`Transmit-$version-macos-arm64.dmg\` | macOS 14 and later, Apple silicon. |
+          | \`Transmit-$version-windows-x64-setup.exe\` | Windows 10 1809 and later. |
+          | \`Transmit-$version-windows-x64-portable.zip\` | Windows, without installing anything. |
+
+          Every file's SHA-256 is in \`SHA256SUMS\`.
+
+          The macOS disk image and the Windows installer are **not signed**.
+          macOS will refuse the first launch: open it from the Finder's context
+          menu and choose Open. Windows SmartScreen will warn once.
+
+          Each build carries both programs: the window, and \`transmit-cli\`
+          for machines with no display.
+          EOF
+          cat notes.md
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" release/* \
+              --title "Transmit ${GITHUB_REF_NAME}" \
+              --notes-file notes.md \
+              --verify-tag

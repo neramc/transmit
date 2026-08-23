@@ -15,10 +15,10 @@
 #include <io.h>
 #include <stdio.h>
 #else
+#include <iostream>
+
 #include <termios.h>
 #include <unistd.h>
-
-#include <iostream>
 #endif
 
 namespace transmit::cli {

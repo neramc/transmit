@@ -1,0 +1,20 @@
+# Normalise line endings on the way in, and decide them on the way out, so a
+# checkout on Windows does not turn every file in a review into a change.
+* text=auto eol=lf
+
+# Windows tooling that does not take LF happily.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+*.nsi  text eol=crlf
+
+# Shell scripts must keep LF wherever they are checked out.
+*.sh   text eol=lf
+
+*.png  binary
+*.ico  binary
+*.dmg  binary
+*.txa  binary
+
+# Keeps the language bar describing the project rather than its packaging.
+packaging/** linguist-vendored

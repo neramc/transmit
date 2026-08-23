@@ -17,6 +17,30 @@ transmit-cli import /media/usb/laptop.txa --passphrase-file pw
 
 ---
 
+## Getting it
+
+Built for each release on the [releases page](https://github.com/neramc/transmit/releases):
+
+| File | For |
+| --- | --- |
+| `Transmit-*-linux-x86_64.AppImage` | Any modern Linux. `chmod +x` it and run it. |
+| `Transmit-*-macos-arm64.dmg` | macOS 14 and later, Apple silicon. |
+| `Transmit-*-windows-x64-setup.exe` | Windows 10 1809 and later. |
+| `Transmit-*-windows-x64-portable.zip` | Windows, without installing anything. |
+
+Each one carries both programs: the window, and `transmit-cli` for machines
+with no display. Check what you downloaded against `SHA256SUMS` on the same
+page.
+
+The macOS and Windows builds are **not signed** — signing needs credentials a
+public build has no business holding. macOS will refuse the first launch:
+right-click the application and choose Open. Windows SmartScreen warns once.
+
+Distribution packages are in `packaging/`, and building from source is
+[below](#building).
+
+---
+
 ## Why this is not just a zip file
 
 Copying files between operating systems is easy. Making them *mean the same
@@ -205,6 +229,19 @@ transmit-cli import ARCHIVE [--into DIR] [--dry-run] [--verify]
                     [--emulate-os windows|macos|linux]
 transmit-cli rollback UNDO-POINT  # reverse a restore
 ```
+
+A passphrase can come from three places. `--passphrase-file FILE` reads it from
+a file; `--ask-passphrase` asks the terminal for it without showing it, which
+is also what happens by itself when one is needed and none was given.
+`--passphrase TEXT` exists for scripts that have nowhere else to put it, and
+should be avoided: every other user on the machine can read it out of the
+process list.
+
+Ctrl-C stops a capture where it can clear up after itself, and exits 130 the
+way a shell expects. It removes the part-written archive, because one that
+stops half way cannot be restored from and looks exactly like a finished one
+until somebody carries it to another machine and tries. A second Ctrl-C kills
+the process outright, part-written file and all.
 
 Before a restore replaces anything, it saves what it is about to replace and
 notes what it is about to add. `transmit-cli rollback` puts the first back and

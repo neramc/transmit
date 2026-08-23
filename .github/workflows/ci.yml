@@ -138,9 +138,23 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           export QT_QPA_PLATFORM=offscreen
-          output=$(timeout 20 ./build/transmit 2>&1 || true)
-          if echo "$output" | grep -qE "is not a type|failed to load|not installed"; then
-            echo "$output"
+
+          # A window with nobody to close it should still be running when the
+          # timeout fires, and `timeout` says so with 124. Grepping the output
+          # is not enough on its own: an interface that dies for a reason
+          # nobody has seen before prints something else and would pass.
+          set +e
+          timeout 20 ./build/transmit > started.log 2>&1
+          status=$?
+          set -e
+
+          cat started.log
+          if [ "$status" -ne 124 ]; then
+            echo "::error::the interface exited on its own (status $status)"
+            exit 1
+          fi
+          if grep -qE "is not a type|failed to load|not installed" started.log; then
+            echo "::error::the interface started with QML errors"
             exit 1
           fi
 
