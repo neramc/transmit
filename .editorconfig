@@ -1,0 +1,29 @@
+# Matches .clang-format for C++ and the house style for everything else, so an
+# editor gets it right before clang-format is ever run.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+[*.{yml,yaml,json,qrc,desktop}]
+indent_size = 2
+
+[*.qml]
+indent_size = 4
+
+[*.md]
+# Two trailing spaces are a line break in Markdown.
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab
+
+# Windows tooling reads these as Windows files.
+[*.{bat,cmd,ps1,nsi}]
+end_of_line = crlf

@@ -4,6 +4,12 @@
 
 !include "MUI2.nsh"
 
+; Passed in by the release workflow as /DVERSION=x.y.z. The fallback is only
+; for building the installer by hand.
+!ifndef VERSION
+    !define VERSION "0.1.0"
+!endif
+
 Name "Transmit"
 OutFile "TransmitSetup.exe"
 Unicode true
@@ -23,6 +29,14 @@ RequestExecutionLevel admin
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "English"
 
+; What the file's Properties dialog shows. Windows wants four parts here.
+VIProductVersion "${VERSION}.0"
+VIAddVersionKey "ProductName" "Transmit"
+VIAddVersionKey "ProductVersion" "${VERSION}"
+VIAddVersionKey "FileVersion" "${VERSION}"
+VIAddVersionKey "FileDescription" "Moves a computer's environment to another one"
+VIAddVersionKey "LegalCopyright" "Transmit contributors"
+
 Section "Transmit"
     SetOutPath "$INSTDIR"
     File /r "staging\*.*"
@@ -33,7 +47,7 @@ Section "Transmit"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Transmit" \
         "DisplayName" "Transmit"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Transmit" \
-        "DisplayVersion" "0.1.0"
+        "DisplayVersion" "${VERSION}"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Transmit" \
         "UninstallString" "$INSTDIR\uninstall.exe"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Transmit" \

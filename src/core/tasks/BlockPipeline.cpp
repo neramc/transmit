@@ -93,15 +93,36 @@ format::Result<quint32> BlockPipeline::submit(format::ByteView raw) {
 
     Pending entry;
     entry.blockId = blockId;
-    entry.future = QtConcurrent::run(
-        pool_.get(), [writer, blockId, owned]() { return writer->prepare(blockId, *owned); });
+    entry.future = QtConcurrent::run(pool_.get(), [writer, blockId, owned, abort = abort_]() {
+        return writer->prepare(blockId, *owned, abort);
+    });
     pending_.push_back(std::move(entry));
     return blockId;
 }
 
-format::Status BlockPipeline::drain() {
+format::Status BlockPipeline::drain(const std::function<bool()>& isCancelled) {
+    const auto stop = [this]() {
+        // Drop what has not started yet; the destructor waits for the rest.
+        // The caller is left with an archive holding fewer blocks than it
+        // submitted, which is exactly why it must not go on to finish it.
+        pool_->clear();
+        qCInfo(logCapture) << "compression stopped with" << pending_.size()
+                           << "blocks still outstanding";
+        return format::ok();
+    };
+
     while (!pending_.empty()) {
-        TRANSMIT_CHECK(writeFront());
+        if (isCancelled && isCancelled()) {
+            return stop();
+        }
+        if (const auto status = writeFront(); !status) {
+            // A block whose compression was stopped part way is the same news
+            // as the check above, arriving a moment later.
+            if (status.error().code == format::ErrorCode::Cancelled) {
+                return stop();
+            }
+            return status.error();
+        }
     }
     return format::ok();
 }

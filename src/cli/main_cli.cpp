@@ -23,6 +23,8 @@
 #include "core/utils/Logging.h"
 #include "platform/PlatformService.h"
 
+#include "cli/Terminal.h"
+
 namespace {
 
 using namespace transmit;
@@ -60,6 +62,38 @@ QString readPassphrase(const QCommandLineParser& parser, const QCommandLineOptio
     return parser.value(valueOption);
 }
 
+/// The passphrase to use, from whichever source the run actually has.
+///
+/// `needed` says the command cannot go ahead without one - credentials are
+/// being captured, or the archive is locked - and is what turns a terminal
+/// into a prompt. Without a terminal nothing is asked: a script piping input
+/// would hang on a question nobody can see, so it gets the empty string and
+/// the caller's own error message instead.
+QString resolvePassphrase(const QCommandLineParser& parser, const QCommandLineOption& fileOption,
+                          const QCommandLineOption& valueOption,
+                          const QCommandLineOption& askOption, bool needed, bool confirm) {
+    if (parser.isSet(fileOption) || parser.isSet(valueOption)) {
+        return readPassphrase(parser, fileOption, valueOption);
+    }
+    if (!parser.isSet(askOption) && !needed) {
+        return {};
+    }
+    return cli::askForPassphrase(QStringLiteral("Passphrase"), confirm).value_or(QString());
+}
+
+/// Whether the archive at this path is locked.
+///
+/// Opening reads the header rather than the contents, so this costs about as
+/// much as a stat - cheap enough to ask before deciding whether to prompt.
+bool archiveIsEncrypted(const QString& archivePath) {
+    auto reader = format::ArchiveReader::open(format::toFsPath(toUtf8(archivePath)));
+    return reader && (*reader)->isEncrypted();
+}
+
+/// The shell's convention for "killed by SIGINT", which is what a Ctrl-C at
+/// the prompt should look like to whatever ran us.
+constexpr int kInterruptedExitCode = 130;
+
 void printProgress(const core::ProgressUpdate& update) {
     static qint64 lastLength = 0;
     QString line = update.stage;
@@ -92,6 +126,7 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
               const QCommandLineOption& profileOption, const QCommandLineOption& presetOption,
               const QCommandLineOption& splitOption, const QCommandLineOption& passphraseOption,
               const QCommandLineOption& passphraseFileOption,
+              const QCommandLineOption& askPassphraseOption,
               const QCommandLineOption& domainsOption, const QCommandLineOption& labelOption) {
     if (!parser.isSet(outputOption)) {
         return reportError(QStringLiteral("--out is required"));
@@ -149,24 +184,38 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
         request.partSize = value * multiplier;
     }
 
-    request.passphrase = readPassphrase(parser, passphraseFileOption, passphraseOption);
-    if (request.selection.domains.contains(static_cast<int>(format::DomainId::Secrets))) {
-        if (request.passphrase.isEmpty()) {
-            return reportError(QStringLiteral(
-                "capturing saved passwords requires a passphrase; pass --passphrase-file"));
-        }
-        // Worth saying out loud before it happens, not only in the report.
+    const bool capturingSecrets =
+        request.selection.domains.contains(static_cast<int>(format::DomainId::Secrets));
+    if (capturingSecrets) {
+        // Said before the passphrase is asked for rather than in the report
+        // afterwards, so that it can still change somebody's mind.
         err() << QStringLiteral(
                      "note: saved passwords will be written into this archive. Keep the drive "
                      "and the passphrase apart.")
               << Qt::endl;
     }
 
+    request.passphrase = resolvePassphrase(parser, passphraseFileOption, passphraseOption,
+                                           askPassphraseOption, capturingSecrets, true);
+    if (capturingSecrets && request.passphrase.isEmpty()) {
+        return reportError(
+            QStringLiteral("capturing saved passwords requires a passphrase; run this from a "
+                           "terminal or pass --passphrase-file"));
+    }
+
     CancelToken cancelToken;
+    const cli::InterruptHandler interrupts(cancelToken);
     const core::ExportReport report = service.run(request, cancelToken, printProgress);
     out() << Qt::endl;
 
     if (!report.succeeded) {
+        if (cli::InterruptHandler::wasInterrupted()) {
+            err() << QStringLiteral(
+                         "stopped. The part-written archive was removed: one that stops half way "
+                         "cannot be restored from.")
+                  << Qt::endl;
+            return kInterruptedExitCode;
+        }
         return reportError(report.errorMessage);
     }
 
@@ -217,8 +266,8 @@ int runInspect(const QString& archivePath, const QString& passphrase) {
     if (!summary.unlocked) {
         out() << Qt::endl
               << QStringLiteral(
-                     "This archive is locked. Pass --passphrase-file to see what is "
-                     "inside it.")
+                     "This archive is locked. Run this from a terminal to be asked for the "
+                     "passphrase, or pass --passphrase-file.")
               << Qt::endl;
         return 0;
     }
@@ -248,6 +297,7 @@ int runInspect(const QString& archivePath, const QString& passphrase) {
 int runImport(QCommandLineParser& parser, const QString& archivePath,
               const QCommandLineOption& intoOption, const QCommandLineOption& passphraseOption,
               const QCommandLineOption& passphraseFileOption,
+              const QCommandLineOption& askPassphraseOption,
               const QCommandLineOption& emulateOption, const QCommandLineOption& dryRunOption,
               const QCommandLineOption& conflictOption, const QCommandLineOption& domainsOption,
               const QCommandLineOption& verifyOption) {
@@ -257,7 +307,9 @@ int runImport(QCommandLineParser& parser, const QString& archivePath,
     core::ImportRequest request;
     request.archivePath = archivePath;
     request.destinationOverride = parser.value(intoOption);
-    request.passphrase = readPassphrase(parser, passphraseFileOption, passphraseOption);
+    request.passphrase =
+        resolvePassphrase(parser, passphraseFileOption, passphraseOption, askPassphraseOption,
+                          archiveIsEncrypted(archivePath), false);
     request.dryRun = parser.isSet(dryRunOption);
     request.verifyFirst = parser.isSet(verifyOption);
 
@@ -296,10 +348,22 @@ int runImport(QCommandLineParser& parser, const QString& archivePath,
     }
 
     CancelToken cancelToken;
+    const cli::InterruptHandler interrupts(cancelToken);
     const core::ImportReport report = service.run(request, cancelToken, printProgress);
     out() << Qt::endl;
 
     if (!report.succeeded) {
+        if (cli::InterruptHandler::wasInterrupted()) {
+            err() << QStringLiteral("stopped part way through.") << Qt::endl;
+            if (!report.rollbackArchivePath.isEmpty()) {
+                err() << QStringLiteral(
+                             "What was restored so far can be undone: transmit-cli "
+                             "rollback %1")
+                             .arg(report.rollbackArchivePath)
+                      << Qt::endl;
+            }
+            return kInterruptedExitCode;
+        }
         return reportError(report.errorMessage);
     }
 
@@ -339,6 +403,9 @@ int runImport(QCommandLineParser& parser, const QString& archivePath,
 }
 
 int runVerify(const QString& archivePath, const QString& passphrase) {
+    CancelToken cancelToken;
+    const cli::InterruptHandler interrupts(cancelToken);
+
     auto readerResult = format::ArchiveReader::open(format::toFsPath(toUtf8(archivePath)));
     if (!readerResult) {
         return reportError(core::describeError(readerResult.error()));
@@ -347,21 +414,28 @@ int runVerify(const QString& archivePath, const QString& passphrase) {
 
     if (reader->isEncrypted()) {
         if (passphrase.isEmpty()) {
-            return reportError(QStringLiteral("this archive is encrypted; pass --passphrase-file"));
+            return reportError(
+                QStringLiteral("this archive is encrypted; run this from a terminal to be asked "
+                               "for the passphrase, or pass --passphrase-file"));
         }
         if (const auto status = reader->unlock(toUtf8(passphrase)); !status) {
             return reportError(core::describeError(status.error()));
         }
     }
 
-    const auto status = reader->verifyAllBlocks([](std::size_t done, std::size_t total) {
-        out() << QStringLiteral("\rchecking block %1 of %2").arg(done).arg(total);
-        out().flush();
-        return true;
-    });
+    const auto status =
+        reader->verifyAllBlocks([&cancelToken](std::size_t done, std::size_t total) {
+            out() << QStringLiteral("\rchecking block %1 of %2").arg(done).arg(total);
+            out().flush();
+            return !cancelToken.isCancelled();
+        });
     out() << Qt::endl;
 
     if (!status) {
+        if (cli::InterruptHandler::wasInterrupted()) {
+            err() << QStringLiteral("stopped before every block had been checked.") << Qt::endl;
+            return kInterruptedExitCode;
+        }
         return reportError(core::describeError(status.error()));
     }
     out() << QStringLiteral("Every block matches its recorded hash.") << Qt::endl;
@@ -499,10 +573,16 @@ int main(int argc, char** argv) {
         QStringLiteral("size"));
     const QCommandLineOption passphraseOption(
         QStringLiteral("passphrase"),
-        QStringLiteral("Encryption passphrase. Prefer --passphrase-file."), QStringLiteral("text"));
+        QStringLiteral("Encryption passphrase. Every user on this machine can read it from the "
+                       "process list, so prefer being asked for it."),
+        QStringLiteral("text"));
     const QCommandLineOption passphraseFileOption(
         QStringLiteral("passphrase-file"), QStringLiteral("Read the passphrase from this file."),
         QStringLiteral("path"));
+    const QCommandLineOption askPassphraseOption(
+        QStringLiteral("ask-passphrase"),
+        QStringLiteral("Ask for the passphrase on the terminal, without showing it. Happens by "
+                       "itself when one is needed and none was given."));
     const QCommandLineOption domainsOption(
         QStringLiteral("domains"),
         QStringLiteral("Comma-separated: userdata, appstate, settings, secrets, apps."),
@@ -530,8 +610,9 @@ int main(int argc, char** argv) {
                                            QStringLiteral("Log what is happening in detail."));
 
     parser.addOptions({outputOption, profileOption, presetOption, splitOption, passphraseOption,
-                       passphraseFileOption, domainsOption, labelOption, intoOption, emulateOption,
-                       dryRunOption, conflictOption, verifyOption, verboseOption});
+                       passphraseFileOption, askPassphraseOption, domainsOption, labelOption,
+                       intoOption, emulateOption, dryRunOption, conflictOption, verifyOption,
+                       verboseOption});
     parser.process(app);
 
     core::configureLogging(parser.isSet(verboseOption));
@@ -543,30 +624,40 @@ int main(int argc, char** argv) {
 
     const QString command = positional.first();
     const QString archive = positional.size() > 1 ? positional.at(1) : QString();
-    const QString passphrase = readPassphrase(parser, passphraseFileOption, passphraseOption);
 
     if (command == QLatin1String("export")) {
         return runExport(parser, outputOption, profileOption, presetOption, splitOption,
-                         passphraseOption, passphraseFileOption, domainsOption, labelOption);
+                         passphraseOption, passphraseFileOption, askPassphraseOption, domainsOption,
+                         labelOption);
     }
     if (command == QLatin1String("import")) {
         if (archive.isEmpty()) {
             return reportError(QStringLiteral("import needs an archive path"));
         }
         return runImport(parser, archive, intoOption, passphraseOption, passphraseFileOption,
-                         emulateOption, dryRunOption, conflictOption, domainsOption, verifyOption);
+                         askPassphraseOption, emulateOption, dryRunOption, conflictOption,
+                         domainsOption, verifyOption);
     }
+
+    // The reading commands only need a passphrase when the archive has one,
+    // which is why this is resolved here rather than for every command: asking
+    // before `profiles` or `drives` would be nonsense.
+    const auto passphraseFor = [&](const QString& path) {
+        return resolvePassphrase(parser, passphraseFileOption, passphraseOption,
+                                 askPassphraseOption, archiveIsEncrypted(path), false);
+    };
+
     if (command == QLatin1String("inspect")) {
         if (archive.isEmpty()) {
             return reportError(QStringLiteral("inspect needs an archive path"));
         }
-        return runInspect(archive, passphrase);
+        return runInspect(archive, passphraseFor(archive));
     }
     if (command == QLatin1String("verify")) {
         if (archive.isEmpty()) {
             return reportError(QStringLiteral("verify needs an archive path"));
         }
-        return runVerify(archive, passphrase);
+        return runVerify(archive, passphraseFor(archive));
     }
     if (command == QLatin1String("rollback")) {
         if (archive.isEmpty()) {

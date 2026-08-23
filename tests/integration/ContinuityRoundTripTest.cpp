@@ -33,6 +33,8 @@ private slots:
     void renamesFilesThatCollideOnACaseBlindTarget();
     void reportsWhatARestoreWouldDoWithoutWriting();
     void honoursTheSkipConflictPolicy();
+    void aCancelledCaptureLeavesNoArchiveBehind();
+    void theArchiveFolderIsMadeButNotInvented();
     void aRestoreCanBeUndone();
     void settingsOfAnUnknownProgramStillTravel();
     void overlappingRootsCaptureAFileOnlyOnce();
@@ -430,6 +432,62 @@ void ContinuityRoundTripTest::honoursTheSkipConflictPolicy() {
     QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
     QCOMPARE(report.filesSkipped, documentFileCount_);
     QCOMPARE(report.bytesWritten, 0u);
+}
+
+/// An archive that stops half way cannot be restored from, and looks exactly
+/// like a good one until somebody carries it to another machine and finds out.
+void ContinuityRoundTripTest::aCancelledCaptureLeavesNoArchiveBehind() {
+    core::ExportService exporter(*platform_);
+
+    core::ExportRequest request;
+    request.destinationPath = archivePath("cancelled.txa");
+    request.selection = documentsSelection();
+    request.preset = format::CompressionPreset::Fast;
+
+    // Cancelled from the progress callback rather than up front, and only once
+    // the run says it is transferring: by then the archive exists on disk and
+    // has been written into. Cancelling any earlier would prove nothing, since
+    // there would be no file to leave behind.
+    core::CancelToken token;
+    bool cancelledWhileWriting = false;
+    const core::ExportReport report = exporter.run(
+        request, token, [&token, &cancelledWhileWriting](const core::ProgressUpdate& update) {
+            if (update.phase == core::ProgressPhase::Transferring) {
+                cancelledWhileWriting = true;
+                token.cancel();
+            }
+        });
+
+    QVERIFY2(cancelledWhileWriting,
+             "the capture never reported a transfer, so nothing was cancelled mid-write");
+    QVERIFY2(!report.succeeded, "a cancelled capture must not report success");
+    QVERIFY2(!QFileInfo::exists(request.destinationPath),
+             qPrintable(QStringLiteral("a partly written archive was left at %1")
+                            .arg(request.destinationPath)));
+}
+
+/// Naming a folder that is not there yet is how somebody says where they want
+/// the archive; naming three that are not is a typo.
+void ContinuityRoundTripTest::theArchiveFolderIsMadeButNotInvented() {
+    core::ExportService exporter(*platform_);
+    core::CancelToken token;
+
+    core::ExportRequest request;
+    request.selection = documentsSelection();
+    request.preset = format::CompressionPreset::Fast;
+
+    request.destinationPath = workspace_.filePath(QStringLiteral("backups/laptop.txa"));
+    const core::ExportReport made = exporter.run(request, token);
+    QVERIFY2(made.succeeded, qPrintable(made.errorMessage));
+    QVERIFY(QFileInfo::exists(request.destinationPath));
+
+    request.destinationPath = workspace_.filePath(QStringLiteral("nowhere/near/here/laptop.txa"));
+    const core::ExportReport refused = exporter.run(request, token);
+    QVERIFY2(!refused.succeeded, "a path of folders that do not exist should not be built out");
+    QVERIFY2(refused.errorMessage.contains(QStringLiteral("nowhere")),
+             qPrintable(QStringLiteral("the message should name the folder that is missing: %1")
+                            .arg(refused.errorMessage)));
+    QVERIFY(!QFileInfo::exists(workspace_.filePath(QStringLiteral("nowhere"))));
 }
 
 /// A restore writes into the places a person actually keeps things, so it has

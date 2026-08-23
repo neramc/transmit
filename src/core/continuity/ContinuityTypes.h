@@ -90,6 +90,21 @@ struct ExportRequest {
     quint64 solidBlockSize = format::kDefaultSolidBlockSize;
 };
 
+/// Which part of a run an update comes from.
+///
+/// `ProgressUpdate::stage` says the same thing in words, but those words are
+/// translated and written for a person to read. A caller that needs to *act*
+/// on the phase - a view that shows a different layout while data is moving,
+/// a test that has to wait until the archive exists - reads this instead of
+/// matching on prose.
+enum class ProgressPhase {
+    Preparing,     ///< Before anything is read or written.
+    Scanning,      ///< Working out what the run will touch.
+    Verifying,     ///< Checking data that is already there.
+    Transferring,  ///< Moving the actual contents.
+    Finishing      ///< Everything after the last item.
+};
+
 /// Emitted while a capture or restore runs. Throttled by the job so the UI
 /// thread is not flooded.
 struct ProgressUpdate {
@@ -100,6 +115,7 @@ struct ProgressUpdate {
     quint64 bytesStored = 0;
     QString currentItem;
     QString stage;
+    ProgressPhase phase = ProgressPhase::Preparing;
 };
 
 struct ExportReport {

@@ -28,8 +28,6 @@ ui_*.h
 *.qmlc
 *.jsc
 Makefile*
-*build-*
-build/
 *.qm
 *.prl
 *.qmlls.ini
@@ -57,3 +55,9 @@ compile_commands.json
 
 # Build Output
 .squashfs
+
+# Build directories, wherever the presets put them. Anchored, and directories
+# only, on purpose: a bare "*build-*" also matched packaging/macos/build-dmg.sh
+# and quietly kept the whole macOS packaging directory out of the repository.
+/build/
+/build-*/

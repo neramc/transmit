@@ -74,6 +74,64 @@ TEST_P(CodecRoundTrip, HandlesIncompressibleInput) {
     EXPECT_EQ(restored, original);
 }
 
+/// A capture that is asked to stop should not have to wait for every worker to
+/// finish compressing a block that nobody wants any more.
+TEST_P(CodecRoundTrip, StopsWhenAskedTo) {
+    const CodecId id = GetParam();
+    const ICodec* codec = findCodec(id);
+    if (codec == nullptr) {
+        GTEST_SKIP() << "the " << codecName(id) << " codec is not in this build";
+    }
+
+    // Big enough to span several slices, so there is a check to answer before
+    // the work is done anyway.
+    const ByteBuffer original = compressibleData(12 * 1024 * 1024);
+    const CompressionProfile profile{id, 6, false};
+
+    ByteBuffer compressed;
+    const auto status = codec->compress(original, profile, compressed, [] { return true; });
+
+    if (id == CodecId::Store) {
+        // A copy, with nothing to interrupt.
+        EXPECT_TRUE(status);
+        return;
+    }
+    ASSERT_FALSE(status);
+    EXPECT_EQ(status.error().code, ErrorCode::Cancelled);
+}
+
+/// The abort check is asked, not obeyed blindly: a run that is not cancelled
+/// must come out byte for byte as it would have without one.
+TEST_P(CodecRoundTrip, AnAbortThatSaysNoChangesNothing) {
+    const CodecId id = GetParam();
+    const ICodec* codec = findCodec(id);
+    if (codec == nullptr) {
+        GTEST_SKIP() << "the " << codecName(id) << " codec is not in this build";
+    }
+
+    const ByteBuffer original = compressibleData(6 * 1024 * 1024);
+    const CompressionProfile profile{id, 6, false};
+
+    ByteBuffer withoutCheck;
+    ASSERT_TRUE(codec->compress(original, profile, withoutCheck));
+
+    int asked = 0;
+    ByteBuffer withCheck;
+    ASSERT_TRUE(codec->compress(original, profile, withCheck, [&asked] {
+        ++asked;
+        return false;
+    }));
+
+    EXPECT_EQ(withCheck, withoutCheck);
+    if (id != CodecId::Store) {
+        EXPECT_GT(asked, 1) << "a multi-slice input should be checked more than once";
+    }
+
+    ByteBuffer restored;
+    ASSERT_TRUE(codec->decompress(withCheck, original.size(), restored));
+    EXPECT_EQ(restored, original);
+}
+
 INSTANTIATE_TEST_SUITE_P(AllCodecs, CodecRoundTrip,
                          testing::Values(CodecId::Store, CodecId::Deflate, CodecId::Zstd,
                                          CodecId::Xz),

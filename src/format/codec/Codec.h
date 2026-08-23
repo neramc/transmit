@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string_view>
 #include <vector>
@@ -41,6 +42,16 @@ struct CompressionProfile {
 std::string_view presetName(CompressionPreset preset) noexcept;
 Result<CompressionPreset> presetFromName(std::string_view name);
 
+/// Asked now and then while a block is being compressed. Returning true stops
+/// the work with ErrorCode::Cancelled.
+///
+/// A solid block is 64 MiB, and at the Maximum preset that is tens of seconds
+/// of one codec call. Without a way in, a capture asked to stop would keep
+/// every worker busy until each of them finished a block nobody wants any
+/// more. It is called from the compression worker threads, so whatever it
+/// reads has to be safe to read from several of them at once.
+using AbortCheck = std::function<bool()>;
+
 class ICodec {
 public:
     virtual ~ICodec() = default;
@@ -50,8 +61,8 @@ public:
     /// Compresses `input` into `output`, which is resized to the exact size of
     /// the compressed payload. Implementations must be safe to call from
     /// several worker threads at once.
-    virtual Status compress(ByteView input, const CompressionProfile& profile,
-                            ByteBuffer& output) const = 0;
+    virtual Status compress(ByteView input, const CompressionProfile& profile, ByteBuffer& output,
+                            const AbortCheck& abort = {}) const = 0;
 
     /// Decompresses into `output`, which is resized to `rawSize` first. The
     /// caller always knows the uncompressed size from the block header.

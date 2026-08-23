@@ -9,8 +9,8 @@ namespace transmit::format {
 class StoreCodec final : public ICodec {
 public:
     [[nodiscard]] CodecId id() const noexcept override { return CodecId::Store; }
-    Status compress(ByteView input, const CompressionProfile& profile,
-                    ByteBuffer& output) const override;
+    Status compress(ByteView input, const CompressionProfile& profile, ByteBuffer& output,
+                    const AbortCheck& abort) const override;
     Status decompress(ByteView input, std::size_t rawSize, ByteBuffer& output) const override;
 };
 

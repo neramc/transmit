@@ -306,6 +306,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
         if (progress) {
             ProgressUpdate update;
             update.stage = QCoreApplication::translate("Import", "Checking the archive");
+            update.phase = ProgressPhase::Verifying;
             progress(update);
         }
         const auto status = reader->verifyAllBlocks(
@@ -627,6 +628,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
             update.stage = request.dryRun ? QCoreApplication::translate(
                                                 "Import", "Working out what would happen")
                                           : QCoreApplication::translate("Import", "Restoring");
+            update.phase = ProgressPhase::Transferring;
             progress(update);
         }
     }
