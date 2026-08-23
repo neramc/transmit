@@ -2,6 +2,7 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QDir>
 #include <QElapsedTimer>
 #include <QFileInfo>
 
@@ -305,6 +306,27 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     options.partSize = request.partSize;
     options.passphrase = toUtf8(request.passphrase);
     options.solidBlockSize = request.solidBlockSize;
+
+    // A folder that is not there yet is not a refusal: somebody who typed
+    // "/media/usb/backups/laptop.txa" has said where they want it.
+    const QDir folder = QFileInfo(request.destinationPath).absoluteDir();
+    if (!folder.exists()) {
+        // Only one level is made, and only inside a folder that already
+        // exists, so a mistyped path still fails instead of being built out.
+        // Taken apart as a string rather than with cdUp(), which refuses to
+        // move to a directory that is not there - which is the case being
+        // reported on.
+        const QDir parent(QFileInfo(folder.absolutePath()).absolutePath());
+        if (!parent.exists()) {
+            return fail(QCoreApplication::translate(
+                            "Export", "There is no folder at %1 to write the archive into.")
+                            .arg(QDir::toNativeSeparators(parent.absolutePath())));
+        }
+        if (!parent.mkdir(folder.dirName())) {
+            return fail(QCoreApplication::translate("Export", "Could not make the folder %1.")
+                            .arg(QDir::toNativeSeparators(folder.absolutePath())));
+        }
+    }
 
     auto writerResult =
         format::ArchiveWriter::create(format::toFsPath(toUtf8(request.destinationPath)), options);

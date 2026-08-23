@@ -34,6 +34,7 @@ private slots:
     void reportsWhatARestoreWouldDoWithoutWriting();
     void honoursTheSkipConflictPolicy();
     void aCancelledCaptureLeavesNoArchiveBehind();
+    void theArchiveFolderIsMadeButNotInvented();
     void aRestoreCanBeUndone();
     void settingsOfAnUnknownProgramStillTravel();
     void overlappingRootsCaptureAFileOnlyOnce();
@@ -463,6 +464,30 @@ void ContinuityRoundTripTest::aCancelledCaptureLeavesNoArchiveBehind() {
     QVERIFY2(!QFileInfo::exists(request.destinationPath),
              qPrintable(QStringLiteral("a partly written archive was left at %1")
                             .arg(request.destinationPath)));
+}
+
+/// Naming a folder that is not there yet is how somebody says where they want
+/// the archive; naming three that are not is a typo.
+void ContinuityRoundTripTest::theArchiveFolderIsMadeButNotInvented() {
+    core::ExportService exporter(*platform_);
+    core::CancelToken token;
+
+    core::ExportRequest request;
+    request.selection = documentsSelection();
+    request.preset = format::CompressionPreset::Fast;
+
+    request.destinationPath = workspace_.filePath(QStringLiteral("backups/laptop.txa"));
+    const core::ExportReport made = exporter.run(request, token);
+    QVERIFY2(made.succeeded, qPrintable(made.errorMessage));
+    QVERIFY(QFileInfo::exists(request.destinationPath));
+
+    request.destinationPath = workspace_.filePath(QStringLiteral("nowhere/near/here/laptop.txa"));
+    const core::ExportReport refused = exporter.run(request, token);
+    QVERIFY2(!refused.succeeded, "a path of folders that do not exist should not be built out");
+    QVERIFY2(refused.errorMessage.contains(QStringLiteral("nowhere")),
+             qPrintable(QStringLiteral("the message should name the folder that is missing: %1")
+                            .arg(refused.errorMessage)));
+    QVERIFY(!QFileInfo::exists(workspace_.filePath(QStringLiteral("nowhere"))));
 }
 
 /// A restore writes into the places a person actually keeps things, so it has
