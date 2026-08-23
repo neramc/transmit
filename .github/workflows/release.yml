@@ -194,7 +194,25 @@ jobs:
       # Unsigned, and said so in the release notes: signing needs credentials
       # that a public workflow has no business holding.
       - name: Build the disk image
-        run: packaging/macos/build-dmg.sh build-release
+        run: |
+          # build-dmg.sh only warns when macdeployqt is missing, so that it
+          # stays useful on a machine with Qt installed. Here that warning
+          # would ship a disk image that runs on the runner and nowhere else.
+          if ! command -v macdeployqt >/dev/null 2>&1; then
+              echo "::error::macdeployqt is not on PATH"
+              exit 1
+          fi
+
+          packaging/macos/build-dmg.sh build-release
+
+          for needed in Contents/Frameworks/QtCore.framework \
+                        Contents/Resources/qml \
+                        Contents/MacOS/transmit-cli; do
+              if [ ! -e "build-release/transmit.app/$needed" ]; then
+                  echo "::error::the bundle is missing $needed"
+                  exit 1
+              fi
+          done
 
       - name: Collect
         run: |
@@ -254,6 +272,14 @@ jobs:
           Copy-Item build-release/*.dll $staging -ErrorAction SilentlyContinue
           windeployqt --qmldir src/ui/qml --release "$staging/transmit.exe"
           windeployqt --release "$staging/transmit-cli.exe"
+
+          # An installer built from an incomplete staging directory installs
+          # cleanly and then fails to start, which is the worst way to find out.
+          foreach ($needed in "Qt6Core.dll", "Qt6Quick.dll", "platforms/qwindows.dll", "qml") {
+              if (-not (Test-Path "$staging/$needed")) {
+                  throw "windeployqt did not produce $needed"
+              }
+          }
 
       - name: Build the installer
         shell: pwsh

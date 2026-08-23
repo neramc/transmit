@@ -266,8 +266,8 @@ int runInspect(const QString& archivePath, const QString& passphrase) {
     if (!summary.unlocked) {
         out() << Qt::endl
               << QStringLiteral(
-                     "This archive is locked. Pass --passphrase-file to see what is "
-                     "inside it.")
+                     "This archive is locked. Run this from a terminal to be asked for the "
+                     "passphrase, or pass --passphrase-file.")
               << Qt::endl;
         return 0;
     }
@@ -414,7 +414,9 @@ int runVerify(const QString& archivePath, const QString& passphrase) {
 
     if (reader->isEncrypted()) {
         if (passphrase.isEmpty()) {
-            return reportError(QStringLiteral("this archive is encrypted; pass --passphrase-file"));
+            return reportError(
+                QStringLiteral("this archive is encrypted; run this from a terminal to be asked "
+                               "for the passphrase, or pass --passphrase-file"));
         }
         if (const auto status = reader->unlock(toUtf8(passphrase)); !status) {
             return reportError(core::describeError(status.error()));
