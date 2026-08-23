@@ -47,7 +47,10 @@ First release. Everything below is new.
 - `transmit`, a wizard in each direction, which shows a restore in full before
   it touches anything.
 - `transmit-cli` for machines with no display, including `--emulate-os` to
-  report what a restore onto another system would do from this one.
+  report what a restore onto another system would do from this one. It asks
+  the terminal for a passphrase rather than taking one on the command line
+  where anyone can read it, and Ctrl-C stops a capture where it can still
+  clear up after itself.
 
 ### Packaging
 
