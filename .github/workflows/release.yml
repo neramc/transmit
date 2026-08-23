@@ -207,6 +207,7 @@ jobs:
 
           for needed in Contents/Frameworks/QtCore.framework \
                         Contents/Resources/qml \
+                        Contents/Resources/transmit.icns \
                         Contents/MacOS/transmit-cli; do
               if [ ! -e "build-release/transmit.app/$needed" ]; then
                   echo "::error::the bundle is missing $needed"

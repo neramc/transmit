@@ -35,3 +35,16 @@ modules:
       - type: git
         url: https://github.com/neramc/transmit.git
         tag: v0.1.0
+    post-install:
+      # Flatpak exports a desktop file and its icons only when they are named
+      # after the application id. Installed under their plain names, as every
+      # other packaging here wants them, they would sit inside the sandbox
+      # where nothing outside it ever sees them - no launcher entry, no icon.
+      - mv /app/share/applications/transmit.desktop
+        /app/share/applications/io.github.neramc.Transmit.desktop
+      - sed -i 's/^Icon=transmit$/Icon=io.github.neramc.Transmit/'
+        /app/share/applications/io.github.neramc.Transmit.desktop
+      - for dir in /app/share/icons/hicolor/*/apps; do
+        mv "$dir/transmit.png" "$dir/io.github.neramc.Transmit.png" 2>/dev/null || true;
+        mv "$dir/transmit.svg" "$dir/io.github.neramc.Transmit.svg" 2>/dev/null || true;
+        done

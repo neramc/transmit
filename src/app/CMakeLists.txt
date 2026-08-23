@@ -31,12 +31,27 @@ add_subdirectory("${CMAKE_SOURCE_DIR}/src/ui/qml" "${CMAKE_BINARY_DIR}/src/ui/qm
 
 qt_add_executable(transmit main.cpp)
 
+# Every size the window icon offers. A window manager asks for one of these
+# and gets pixels drawn for it, rather than a single large image squeezed down
+# to a 16-pixel title bar.
+set(TRANSMIT_ICON_SIZES 16 32 48 64 128 256)
+set(TRANSMIT_ICON_FILES "${CMAKE_SOURCE_DIR}/resources/icons/transmit.svg")
+foreach(size ${TRANSMIT_ICON_SIZES})
+    list(APPEND TRANSMIT_ICON_FILES
+        "${CMAKE_SOURCE_DIR}/resources/icons/transmit-${size}.png")
+endforeach()
+
 qt_add_resources(transmit "transmit_icons"
     PREFIX "/icons"
     BASE "${CMAKE_SOURCE_DIR}/resources/icons"
-    FILES
-        "${CMAKE_SOURCE_DIR}/resources/icons/transmit-256.png"
-        "${CMAKE_SOURCE_DIR}/resources/icons/transmit.svg")
+    FILES ${TRANSMIT_ICON_FILES})
+
+# The same list the resource was built from, so main.cpp cannot ask for a size
+# that is not in the binary. A QIcon given a path that does not resolve stays
+# empty and says nothing about it.
+string(JOIN "," TRANSMIT_ICON_SIZE_LIST ${TRANSMIT_ICON_SIZES})
+target_compile_definitions(transmit PRIVATE
+    TRANSMIT_ICON_SIZES=${TRANSMIT_ICON_SIZE_LIST})
 
 target_link_libraries(transmit PRIVATE
     Transmit::Core Transmit::Warnings
@@ -53,11 +68,24 @@ target_link_libraries(transmit PRIVATE
 # into the executable; without this the modules exist but resolve as unknown.
 qt_import_qml_plugins(transmit)
 
+# The icon a system shows before the program is running: Finder and the Dock
+# read it from the bundle, Explorer and the taskbar from a resource compiled
+# into the executable. Neither of them looks at anything Qt does at startup.
+if(APPLE)
+    set(TRANSMIT_BUNDLE_ICON "${CMAKE_SOURCE_DIR}/resources/icons/transmit.icns")
+    target_sources(transmit PRIVATE "${TRANSMIT_BUNDLE_ICON}")
+    set_source_files_properties("${TRANSMIT_BUNDLE_ICON}"
+        PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+elseif(WIN32)
+    target_sources(transmit PRIVATE "${CMAKE_SOURCE_DIR}/resources/transmit.rc")
+endif()
+
 set_target_properties(transmit PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     WIN32_EXECUTABLE TRUE
     MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_GUI_IDENTIFIER "com.transmit.app"
+    MACOSX_BUNDLE_ICON_FILE "transmit.icns"
     MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
 
@@ -68,10 +96,6 @@ install(TARGETS transmit
     BUNDLE  DESTINATION .
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 
-if(TARGET transmit-cli)
-    install(TARGETS transmit-cli RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
-endif()
-
 if(UNIX AND NOT APPLE)
     install(FILES "${CMAKE_SOURCE_DIR}/resources/transmit.desktop"
         DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications")
@@ -79,7 +103,7 @@ if(UNIX AND NOT APPLE)
     install(FILES "${CMAKE_SOURCE_DIR}/resources/icons/transmit.svg"
         DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/scalable/apps")
 
-    foreach(size 16 32 48 64 128 256)
+    foreach(size ${TRANSMIT_ICON_SIZES})
         install(FILES "${CMAKE_SOURCE_DIR}/resources/icons/transmit-${size}.png"
             DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/${size}x${size}/apps"
             RENAME transmit.png)

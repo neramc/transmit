@@ -21,7 +21,16 @@ int main(int argc, char** argv) {
     QGuiApplication::setApplicationVersion(QStringLiteral(TRANSMIT_VERSION));
     QGuiApplication::setOrganizationName(QStringLiteral("Transmit"));
     QGuiApplication::setOrganizationDomain(QStringLiteral("transmit.local"));
-    QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/icons/transmit-256.png")));
+    // Every size, rather than one large image for the window manager to
+    // squeeze into a title bar: at 16 pixels a scaled-down 256 is mush, and
+    // the drawn-for-16 version is not. The sizes come from the build, which is
+    // where the resource was filled from - a QIcon handed a path that does not
+    // resolve stays empty and says nothing about it.
+    QIcon icon;
+    for (const int size : {TRANSMIT_ICON_SIZES}) {
+        icon.addFile(QStringLiteral(":/icons/transmit-%1.png").arg(size));
+    }
+    QGuiApplication::setWindowIcon(icon);
 
     // The Basic style is the one that honours a custom design system; the
     // native styles override colours and defeat the point of having one.

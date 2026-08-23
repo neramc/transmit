@@ -69,6 +69,16 @@ would make before making any of them.
 Users can override or extend the catalog from
 `~/.config/Transmit/catalog.d/` without rebuilding.
 
+## Icons
+
+`resources/icons/transmit-512.png` is the master. Everything else the build
+uses - the theme sizes, the `.icns` for the macOS bundle - is generated from it
+by `scripts/make-icons.sh` and committed, so building Transmit needs no image
+tooling. Change the artwork, run the script, commit what it writes.
+
+The Windows `.ico` and the two README banners are drawn separately and are not
+generated.
+
 ## Security-sensitive changes
 
 Credential handling has rules that are not negotiable: see `SECURITY.md`.

@@ -1,0 +1,7 @@
+// What Explorer, the taskbar and the Alt-Tab list show for transmit.exe.
+//
+// Windows reads this out of the executable itself, before anything of Qt's has
+// run, so the icon the program sets at startup does not cover it. The first
+// icon in the file is the one Explorer picks, which is why this is the only
+// one here.
+IDI_ICON1 ICON "icons/transmit.ico"
