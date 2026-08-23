@@ -202,7 +202,8 @@ Result<std::unique_ptr<ArchiveWriter>> ArchiveWriter::create(const std::filesyst
     return writer;
 }
 
-Result<PreparedBlock> ArchiveWriter::prepare(std::uint32_t blockId, ByteView raw) const {
+Result<PreparedBlock> ArchiveWriter::prepare(std::uint32_t blockId, ByteView raw,
+                                             const AbortCheck& abort) const {
     PreparedBlock block;
     block.blockId = blockId;
     block.rawSize = raw.size();
@@ -214,7 +215,7 @@ Result<PreparedBlock> ArchiveWriter::prepare(std::uint32_t blockId, ByteView raw
     }
 
     ByteBuffer compressed;
-    TRANSMIT_CHECK(codec->compress(raw, profile_, compressed));
+    TRANSMIT_CHECK(codec->compress(raw, profile_, compressed, abort));
 
     // Storing beats compressing when the codec barely helped: it costs nothing
     // to decompress later and avoids inflating already-compressed payloads.

@@ -6,6 +6,9 @@
 #include <QFileInfo>
 
 #include <algorithm>
+#include <filesystem>
+#include <system_error>
+#include <vector>
 
 #include "core/recipe/AppInventoryPayload.h"
 #include "core/recipe/RecipeCatalog.h"
@@ -101,10 +104,44 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     QElapsedTimer timer;
     timer.start();
 
-    const auto fail = [&report, &timer](const QString& message) {
+    // Clears away what a failed capture wrote.
+    //
+    // A capture that stops half way leaves an archive that cannot be restored
+    // from, and one that looks exactly like a good one until somebody carries
+    // it to another machine and tries. Two things decide when removing it is
+    // safe, and both are why this is a guard rather than a few lines inside
+    // `fail`:
+    //
+    //   - Not before the writer exists. Until then the destination may still
+    //     hold a perfectly good archive from an earlier run that this one has
+    //     not touched; creating the writer is what truncates it.
+    //   - Not while the writer exists. Windows refuses to delete a file that
+    //     is still open, so removing from inside `fail` - with the writer
+    //     alive until `run` returns - would leave behind exactly the
+    //     half-written archive it means to clear away. Declared before the
+    //     writer, this runs after it.
+    struct PartialArchiveCleanup {
+        std::vector<std::filesystem::path> parts;
+
+        ~PartialArchiveCleanup() {
+            for (const std::filesystem::path& part : parts) {
+                std::error_code ignored;
+                std::filesystem::remove(part, ignored);
+            }
+        }
+    } cleanup;
+
+    const std::vector<std::filesystem::path>* writtenParts = nullptr;
+
+    const auto fail = [&report, &timer, &writtenParts, &cleanup](const QString& message) {
         report.succeeded = false;
         report.errorMessage = message;
         report.elapsedMilliseconds = timer.elapsed();
+
+        if (writtenParts != nullptr) {
+            cleanup.parts = *writtenParts;
+        }
+
         qCWarning(logCapture) << "capture failed:" << message;
         return report;
     };
@@ -134,6 +171,7 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         if (progress) {
             ProgressUpdate update;
             update.stage = QCoreApplication::translate("Export", "Looking at your programs");
+            update.phase = ProgressPhase::Preparing;
             progress(update);
         }
 
@@ -183,6 +221,7 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         if (progress) {
             ProgressUpdate update;
             update.stage = QCoreApplication::translate("Export", "Collecting saved passwords");
+            update.phase = ProgressPhase::Preparing;
             progress(update);
         }
 
@@ -230,6 +269,7 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     if (progress) {
         ProgressUpdate update;
         update.stage = QCoreApplication::translate("Export", "Looking through your files");
+        update.phase = ProgressPhase::Scanning;
         progress(update);
     }
 
@@ -272,8 +312,10 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         return fail(describeError(writerResult.error()));
     }
     auto writer = std::move(writerResult).value();
+    writtenParts = &writer->parts();
 
     BlockPipeline pipeline(*writer);
+    pipeline.setAbortCheck([&cancelToken] { return cancelToken.isCancelled(); });
     format::BlockPacker packer(request.solidBlockSize,
                                [&pipeline](format::ByteView raw) -> format::Result<quint32> {
                                    return pipeline.submit(raw);
@@ -327,6 +369,7 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     quint64 nextId = 1;
     quint64 bytesDone = 0;
     quint64 filesDone = 0;
+    bool reportedProgress = false;
 
     for (const ScannedItem& item : scan.items) {
         if (cancelToken.isCancelled()) {
@@ -366,8 +409,13 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
 
         manifest.entries.push_back(std::move(entry));
 
-        if (progress && throttle.elapsed() >= kProgressIntervalMs) {
+        // The first item reports straight away: the throttle would otherwise
+        // hold every update back by an interval, which on a small capture is
+        // long enough for the whole run to finish while the window still says
+        // it is looking through files.
+        if (progress && (!reportedProgress || throttle.elapsed() >= kProgressIntervalMs)) {
             throttle.restart();
+            reportedProgress = true;
             ProgressUpdate update;
             update.filesDone = filesDone;
             update.filesTotal = scan.fileCount;
@@ -376,6 +424,7 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
             update.bytesStored = writer->storedBytes();
             update.currentItem = item.absolutePath;
             update.stage = QCoreApplication::translate("Export", "Compressing");
+            update.phase = ProgressPhase::Transferring;
             progress(update);
         }
     }
@@ -383,8 +432,15 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     if (const auto status = packer.flush(); !status) {
         return fail(describeError(status.error()));
     }
-    if (const auto status = pipeline.drain(); !status) {
+    if (const auto status = pipeline.drain([&cancelToken] { return cancelToken.isCancelled(); });
+        !status) {
         return fail(describeError(status.error()));
+    }
+    // A drain that stopped early leaves blocks the manifest would point at but
+    // the archive does not hold, so this is checked before anything is written
+    // that would make the file look complete.
+    if (cancelToken.isCancelled()) {
+        return fail(QCoreApplication::translate("Export", "Cancelled."));
     }
 
     // Block ids are only final once their block has been written, so the

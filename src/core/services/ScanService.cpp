@@ -297,6 +297,7 @@ void ScanService::scanRoot(const CaptureRoot& root, const CaptureSelection& sele
             update.bytesTotal = result.totalBytes;
             update.currentItem = absolute;
             update.stage = QObject::tr("Looking through your files");
+            update.phase = ProgressPhase::Scanning;
             progress(update);
         }
     };

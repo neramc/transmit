@@ -2,7 +2,9 @@
 
 namespace transmit::format {
 
-Status StoreCodec::compress(ByteView input, const CompressionProfile&, ByteBuffer& output) const {
+Status StoreCodec::compress(ByteView input, const CompressionProfile&, ByteBuffer& output,
+                            const AbortCheck&) const {
+    // A copy, with nothing to interrupt.
     output.assign(input.begin(), input.end());
     return ok();
 }

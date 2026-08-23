@@ -104,8 +104,9 @@ public:
     [[nodiscard]] std::uint32_t nextBlockId() noexcept { return nextBlockId_++; }
 
     /// Compresses and encrypts without touching the output; callable from any
-    /// thread.
-    [[nodiscard]] Result<PreparedBlock> prepare(std::uint32_t blockId, ByteView raw) const;
+    /// thread. `abort`, when given, can stop a long compression part way.
+    [[nodiscard]] Result<PreparedBlock> prepare(std::uint32_t blockId, ByteView raw,
+                                                const AbortCheck& abort = {}) const;
 
     /// Appends a prepared block. Must be called from the writer thread only.
     Status writePrepared(const PreparedBlock& block);

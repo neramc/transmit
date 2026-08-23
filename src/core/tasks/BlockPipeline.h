@@ -4,7 +4,9 @@
 #include <QThreadPool>
 
 #include <deque>
+#include <functional>
 #include <memory>
+#include <utility>
 
 #include "format/Container.h"
 #include "format/Result.h"
@@ -28,6 +30,11 @@ class BlockPipeline {
 public:
     /// `workers` of 0 picks a thread count from the machine and the preset.
     BlockPipeline(format::ArchiveWriter& writer, int workers = 0, int maxInFlight = 0);
+
+    /// Lets a run stop part way through compressing a block as well as between
+    /// blocks. Read from the worker threads, so it must be safe to call from
+    /// several at once; set it before the first submit().
+    void setAbortCheck(format::AbortCheck abort) { abort_ = std::move(abort); }
     ~BlockPipeline();
 
     BlockPipeline(const BlockPipeline&) = delete;
@@ -39,7 +46,14 @@ public:
 
     /// Waits for every outstanding block and writes it. Call before finishing
     /// the archive.
-    format::Status drain();
+    ///
+    /// `isCancelled`, when given, is asked between blocks. A capture spends
+    /// nearly all of its time here, so a stop that only took effect once the
+    /// backlog had been compressed and written would look, to the person who
+    /// asked for it, like no stop at all. Blocks already in a worker still
+    /// finish - a codec call cannot be interrupted part way - but nothing
+    /// further is started, and nothing more is written.
+    format::Status drain(const std::function<bool()>& isCancelled = {});
 
     [[nodiscard]] int workerCount() const noexcept { return workers_; }
 
@@ -52,6 +66,7 @@ private:
     format::Status writeFront();
 
     format::ArchiveWriter& writer_;
+    format::AbortCheck abort_;
     std::unique_ptr<QThreadPool> pool_;
     std::deque<Pending> pending_;
     int workers_ = 1;

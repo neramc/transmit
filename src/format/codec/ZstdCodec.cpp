@@ -1,6 +1,7 @@
 #include "format/codec/ZstdCodec.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <memory>
 #include <string>
 
@@ -12,6 +13,10 @@ namespace {
 /// Window log used by the Maximum preset. 2^27 = 128 MiB, which lets the solid
 /// blocks find matches across an entire block instead of only nearby files.
 constexpr int kLongWindowLog = 27;
+
+/// How much is handed to the codec between two abort checks. Small enough to
+/// stop promptly, large enough that the per-call overhead does not show.
+constexpr std::size_t kSliceBytes = 4ULL * 1024 * 1024;
 
 struct CCtxDeleter {
     void operator()(ZSTD_CCtx* ctx) const noexcept { ZSTD_freeCCtx(ctx); }
@@ -30,8 +35,8 @@ int ZstdCodec::maxLevel() noexcept {
     return ZSTD_maxCLevel();
 }
 
-Status ZstdCodec::compress(ByteView input, const CompressionProfile& profile,
-                           ByteBuffer& output) const {
+Status ZstdCodec::compress(ByteView input, const CompressionProfile& profile, ByteBuffer& output,
+                           const AbortCheck& abort) const {
     const std::unique_ptr<ZSTD_CCtx, CCtxDeleter> ctx(ZSTD_createCCtx());
     if (!ctx) {
         return makeError(ErrorCode::OutOfMemory, "could not create a zstd compression context");
@@ -56,15 +61,47 @@ Status ZstdCodec::compress(ByteView input, const CompressionProfile& profile,
         }
     }
 
+    // Declared up front so the frame carries the content size and zstd can size
+    // its window from it, exactly as the one-shot call would.
+    rc = ZSTD_CCtx_setPledgedSrcSize(ctx.get(), input.size());
+    if (ZSTD_isError(rc)) {
+        return zstdError(rc, "could not declare the zstd input size");
+    }
+
     const std::size_t bound = ZSTD_compressBound(input.size());
     output.resize(bound);
 
-    const std::size_t produced =
-        ZSTD_compress2(ctx.get(), output.data(), output.size(), input.data(), input.size());
-    if (ZSTD_isError(produced)) {
-        return zstdError(produced, "zstd compression failed");
+    // Handed over in slices rather than in one call, so that `abort` gets a
+    // say. This produces the same frame as compressing in one go; the only
+    // difference is that there is somewhere to stop.
+    ZSTD_outBuffer out{output.data(), output.size(), 0};
+    std::size_t consumed = 0;
+
+    while (true) {
+        if (abort && abort()) {
+            return Error(ErrorCode::Cancelled);
+        }
+
+        const std::size_t slice = std::min(kSliceBytes, input.size() - consumed);
+        const bool last = consumed + slice == input.size();
+        ZSTD_inBuffer in{input.data() + consumed, slice, 0};
+        consumed += slice;
+
+        std::size_t remaining = 0;
+        do {
+            remaining =
+                ZSTD_compressStream2(ctx.get(), &out, &in, last ? ZSTD_e_end : ZSTD_e_continue);
+            if (ZSTD_isError(remaining)) {
+                return zstdError(remaining, "zstd compression failed");
+            }
+        } while (in.pos < in.size || (last && remaining != 0));
+
+        if (last) {
+            break;
+        }
     }
-    output.resize(produced);
+
+    output.resize(out.pos);
     return ok();
 }
 
