@@ -6,6 +6,9 @@
 #include <QSettings>
 #include <QSysInfo>
 
+#include <algorithm>
+#include <cmath>
+
 #include "core/utils/Logging.h"
 
 #ifdef Q_OS_WIN
@@ -23,6 +26,11 @@ constexpr const char* kAccessibility = "HKEY_CURRENT_USER\\Control Panel\\Access
 constexpr const char* kExplorerAdvanced =
     "HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced";
 constexpr const char* kDwm = "HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\DWM";
+constexpr const char* kTextScale = "HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Accessibility";
+
+/// The range the Windows text-size slider offers, as percentages.
+constexpr long kMinimumTextScale = 100;
+constexpr long kMaximumTextScale = 225;
 
 QString registryString(const char* path, const QString& key) {
     QSettings settings(QString::fromLatin1(path), QSettings::NativeFormat);
@@ -110,14 +118,29 @@ QList<SettingValue> WindowsSettingsProvider::readAll() const {
     }());
 
     record(SettingKey::AccessibilityHighContrast, [] {
-        const QString flags = registryString(kAccessibility, QStringLiteral("HighContrast"));
-        Q_UNUSED(flags);
         QSettings settings(
             QStringLiteral("HKEY_CURRENT_USER\\Control Panel\\Accessibility\\HighContrast"),
             QSettings::NativeFormat);
         const quint32 value = settings.value(QStringLiteral("Flags")).toUInt();
         return (value & 0x01u) != 0 ? QStringLiteral("true") : QStringLiteral("false");
     }());
+
+    record(SettingKey::AccessibilityTextScale, [] {
+        QSettings settings(QString::fromLatin1(kTextScale), QSettings::NativeFormat);
+        const quint32 percent = settings.value(QStringLiteral("TextScaleFactor")).toUInt();
+        // Absent means the slider was never moved, which is 100%.
+        return QString::number(percent == 0 ? 1.0 : percent / 100.0);
+    }());
+
+#ifdef Q_OS_WIN
+    // Windows records whether animations are on; the setting travels the other
+    // way round, as whether they should be held back.
+    BOOL animations = TRUE;
+    if (SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animations, 0) != 0) {
+        record(SettingKey::AccessibilityReduceMotion,
+               animations != 0 ? QStringLiteral("false") : QStringLiteral("true"));
+    }
+#endif
 
     record(SettingKey::ShowHiddenFiles,
            registryString(kExplorerAdvanced, QStringLiteral("Hidden")) == QLatin1String("1")
@@ -201,16 +224,89 @@ ApplyResult WindowsSettingsProvider::apply(const SettingValue& value) const {
                     QStringLiteral("keyboard layouts are added through Settings"),
                     QStringLiteral("start ms-settings:regionlanguage")};
 
-        case SettingKey::AppearanceAccent:
-        case SettingKey::AccessibilityHighContrast:
-        case SettingKey::AccessibilityTextScale:
+        case SettingKey::AccessibilityTextScale: {
+            bool ok = false;
+            const double multiplier = value.value.toDouble(&ok);
+            if (!ok || multiplier <= 0.0) {
+                return {ApplyOutcome::Failed, QStringLiteral("not a scale factor"), {}};
+            }
+
+            const long asked = std::lround(multiplier * 100.0);
+            const long clamped = std::clamp(asked, kMinimumTextScale, kMaximumTextScale);
+            if (!registrySetDword(kTextScale, QStringLiteral("TextScaleFactor"),
+                                  static_cast<quint32>(clamped))) {
+                return {ApplyOutcome::Failed, QStringLiteral("the registry refused the value"), {}};
+            }
+            if (clamped == asked) {
+                return {ApplyOutcome::Applied, {}, {}};
+            }
+            return {ApplyOutcome::Approximated,
+                    QStringLiteral("Windows scales text between %1% and %2%")
+                        .arg(kMinimumTextScale)
+                        .arg(kMaximumTextScale),
+                    {}};
+        }
+
         case SettingKey::AccessibilityReduceMotion:
-        case SettingKey::MouseNaturalScroll:
-        case SettingKey::PowerSleepMinutes:
-        case SettingKey::PowerScreenOffMinutes:
+            // Read above through SPI_GETCLIENTAREAANIMATION, which documents
+            // its parameter plainly. The matching setter does not: whether it
+            // wants the flag by value or by address is written both ways in
+            // different places, and getting it wrong either sets the opposite
+            // of what was asked or dereferences a number. Not worth guessing
+            // when the setting is one page away.
+            return {ApplyOutcome::NeedsPrivilege,
+                    QStringLiteral("animations are turned off from Settings"),
+                    QStringLiteral("start ms-settings:easeofaccess-display")};
+
+        case SettingKey::AppearanceAccent:
+            // The registry holds the colour, but Windows derives a whole
+            // palette from it at sign-in and paints from that until then.
+            // Writing it here would look applied and change nothing.
+            return {ApplyOutcome::NeedsPrivilege,
+                    QStringLiteral("Windows builds its accent palette when you pick the colour"),
+                    QStringLiteral("start ms-settings:colors")};
+
+        case SettingKey::AccessibilityHighContrast:
+            // Turning it on needs a theme to turn on, named from a set that
+            // differs between Windows versions.
+            return {ApplyOutcome::NeedsPrivilege,
+                    QStringLiteral("the high contrast theme is chosen in Settings"),
+                    QStringLiteral("start ms-settings:easeofaccess-highcontrast")};
+
         case SettingKey::DefaultMailClient:
+            // Signed with the same per-user hash as the browser choice.
+            return {ApplyOutcome::NeedsPrivilege,
+                    QStringLiteral("Windows only accepts this change from its Settings app"),
+                    QStringLiteral("start ms-settings:defaultapps")};
+
         case SettingKey::LocaleFormats:
-            break;
+            // The commands go into apply-settings.ps1, so they are written as
+            // PowerShell rather than wrapped in another shell.
+            return {ApplyOutcome::NeedsPrivilege,
+                    QStringLiteral("the format locale is applied to the whole account"),
+                    QStringLiteral("Set-Culture %1").arg(value.value)};
+
+        case SettingKey::PowerSleepMinutes:
+            return {ApplyOutcome::NeedsPrivilege,
+                    QStringLiteral("power plans belong to the computer, not the account"),
+                    QStringLiteral("powercfg /change standby-timeout-ac %1").arg(value.value)};
+
+        case SettingKey::PowerScreenOffMinutes:
+            return {ApplyOutcome::NeedsPrivilege,
+                    QStringLiteral("power plans belong to the computer, not the account"),
+                    QStringLiteral("powercfg /change monitor-timeout-ac %1").arg(value.value)};
+
+        case SettingKey::MouseNaturalScroll:
+            // Windows has no setting for this: the direction is a property of
+            // each pointing device, under a key only an administrator can
+            // write.
+            return {ApplyOutcome::NeedsPrivilege,
+                    QStringLiteral("scroll direction is set per device, as an administrator"),
+                    QStringLiteral("Get-PnpDevice -Class Mouse -Status OK | ForEach-Object { "
+                                   "Set-ItemProperty -Path "
+                                   "('HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\' + $_.InstanceId + "
+                                   "'\\Device Parameters') -Name FlipFlopWheel -Value %1 }")
+                        .arg(value.value == QLatin1String("true") ? 1 : 0)};
     }
 
     // Everything else is either machine-wide or has no registry equivalent
