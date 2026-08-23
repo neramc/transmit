@@ -1,5 +1,5 @@
-<img src="resources/icons/icon-dark.svg#gh-dark-mode-only" width="512" alt="">
-<img src="resources/icons/icon-light.svg#gh-light-mode-only" width="512" alt="">
+<img src="resources/icons/icon-dark.svg#gh-dark-mode-only" width="670" alt="">
+<img src="resources/icons/icon-light.svg#gh-light-mode-only" width="670" alt="">
 
 # Transmit
 
