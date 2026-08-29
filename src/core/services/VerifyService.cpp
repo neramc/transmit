@@ -178,19 +178,36 @@ VerifyReport VerifyService::run(const VerifyRequest& request, CancelToken& cance
 
         if (!loaded) {
             // The block would not come back, so every file in it is lost with
-            // it. Recorded one by one, because the person reading this wants
-            // to know which of their files it was.
+            // it - unless a repair archive beside this one holds a copy, which
+            // is exactly what one is for. Recorded one by one, because the
+            // person reading this wants to know which of their files it was.
             for (const format::ManifestEntry* entry : entries) {
                 VerifyFileResult result;
                 result.path = fromUtf8(entry->path.toDisplayString());
                 result.appId = fromUtf8(entry->appId);
                 result.size = entry->size;
-                result.status = VerifyStatus::Unreadable;
                 result.attempts = attempts;
+                ++report.filesChecked;
+
+                // readEntry tries this archive first and falls back to the
+                // repair, and checks the hash either way - so a success here
+                // means the bytes are right, wherever they came from.
+                if (reader->hasRepair() && reader->readEntry(*entry)) {
+                    result.status = VerifyStatus::Ok;
+                    result.fromRepair = true;
+                    result.detail = QCoreApplication::translate(
+                        "Verify",
+                        "Read from the repair archive: this archive's own copy is "
+                        "damaged.");
+                    report.failures.push_back(result);
+                    ++report.filesFromRepair;
+                    continue;
+                }
+
+                result.status = VerifyStatus::Unreadable;
                 result.detail = describeError(loaded.error());
                 report.failures.push_back(result);
                 ++report.filesFailed;
-                ++report.filesChecked;
             }
             continue;
         }
@@ -258,6 +275,7 @@ VerifyReport VerifyService::run(const VerifyRequest& request, CancelToken& cance
     // the manifest. A drive that had to be asked twice for the footer is the
     // same drive, and the count is about the drive.
     report.retriedReads = reader->retriedReads();
+    report.usedRepair = reader->hasRepair();
 
     // ------------------------------------------------------------- parts
     for (const std::filesystem::path& part : parts) {

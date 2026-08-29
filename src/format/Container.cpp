@@ -435,6 +435,22 @@ Result<const Manifest*> ArchiveReader::manifest() {
         manifest_.reset();
         return located.error();
     }
+
+    // A repair archive beside this one is picked up without being asked for,
+    // so every reader - verify, inspect, restore - sees the same archive. An
+    // encrypted one needs its passphrase, which this class deliberately does
+    // not keep, so those are attached by the caller that has it.
+    if (!repairChecked_ && !isEncrypted()) {
+        repairChecked_ = true;
+        const std::filesystem::path candidate = repairPathFor(source_->parts().front());
+        std::error_code ec;
+        if (std::filesystem::exists(candidate, ec)) {
+            // Ignored on failure: a repair file that is unreadable, or belongs
+            // to a different capture, is a reason to fall back to the original
+            // rather than a reason to refuse to open it.
+            (void)attachRepair(candidate);
+        }
+    }
     return &manifest_.value();
 }
 
@@ -591,11 +607,97 @@ Result<ByteView> ArchiveReader::readBlock(std::uint32_t blockId) {
     return ByteView(it->second);
 }
 
+std::filesystem::path ArchiveReader::repairPathFor(const std::filesystem::path& archive) {
+    std::filesystem::path repair = archive;
+    repair += ".repair";
+    return repair;
+}
+
+Status ArchiveReader::attachRepair(const std::filesystem::path& repairPath,
+                                   std::string_view passphrase) {
+    TRANSMIT_TRY(loaded, manifest());
+
+    auto opening = ArchiveReader::open(repairPath);
+    if (!opening) {
+        return opening.error();
+    }
+    auto candidate = std::move(opening).value();
+
+    if (candidate->isEncrypted()) {
+        if (passphrase.empty()) {
+            return makeError(ErrorCode::WrongPassphrase,
+                             "the repair archive is encrypted and no passphrase was given");
+        }
+        TRANSMIT_CHECK(candidate->unlock(passphrase));
+    }
+    TRANSMIT_TRY(repaired, candidate->manifest());
+
+    // What the original says about each of its own files. A repair is only
+    // allowed to supply bytes for a path the original already has, hashing to
+    // what the original already recorded - so a repair file that has been
+    // tampered with, or belongs to a different capture, supplies nothing.
+    std::map<std::string, const ManifestEntry*> wanted;
+    for (const ManifestEntry& entry : loaded->entries) {
+        if (entry.hasContent()) {
+            wanted.emplace(entry.path.toDisplayString(), &entry);
+        }
+    }
+
+    std::map<std::string, const ManifestEntry*> accepted;
+    for (const ManifestEntry& entry : repaired->entries) {
+        if (!entry.hasContent()) {
+            continue;
+        }
+        const auto original = wanted.find(entry.path.toDisplayString());
+        if (original == wanted.end()) {
+            continue;
+        }
+        if (entry.contentHash != original->second->contentHash ||
+            entry.size != original->second->size) {
+            continue;
+        }
+        accepted.emplace(entry.path.toDisplayString(), &entry);
+    }
+
+    if (accepted.empty()) {
+        return makeError(ErrorCode::NotFound, "'", fromFsPath(repairPath),
+                         "' holds nothing this archive is missing");
+    }
+
+    repair_ = std::move(candidate);
+    repairs_ = std::move(accepted);
+    return ok();
+}
+
+const ManifestEntry* ArchiveReader::repairFor(const ManifestEntry& entry) const {
+    if (repair_ == nullptr) {
+        return nullptr;
+    }
+    const auto found = repairs_.find(entry.path.toDisplayString());
+    return found == repairs_.end() ? nullptr : found->second;
+}
+
 Result<ByteBuffer> ArchiveReader::readEntry(const ManifestEntry& entry) {
     if (!entry.hasContent()) {
         return ByteBuffer{};
     }
 
+    // The original first, always. A repair archive exists because part of the
+    // drive went bad, and the parts that did not are still the best copy -
+    // reading from the repair by default would quietly hide a drive getting
+    // worse.
+    if (const ManifestEntry* replacement = repairFor(entry); replacement != nullptr) {
+        auto original = readEntryFromThisArchive(entry);
+        if (original) {
+            return original;
+        }
+        return repair_->readEntry(*replacement);
+    }
+
+    return readEntryFromThisArchive(entry);
+}
+
+Result<ByteBuffer> ArchiveReader::readEntryFromThisArchive(const ManifestEntry& entry) {
     TRANSMIT_TRY(block, readBlock(entry.location.blockId));
     if (entry.location.offset + entry.location.length > block.size()) {
         return makeError(ErrorCode::CorruptArchive, "'", entry.path.toDisplayString(),

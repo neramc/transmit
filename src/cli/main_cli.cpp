@@ -23,6 +23,7 @@
 #include "core/services/ExportService.h"
 #include "core/services/ImportService.h"
 #include "core/services/ProfileService.h"
+#include "core/services/RepairService.h"
 #include "core/services/RollbackWriter.h"
 #include "core/services/VerifyService.h"
 #include "core/utils/Conversions.h"
@@ -670,6 +671,8 @@ QJsonObject verifyReportAsJson(const core::VerifyReport& report) {
     // Said out loud rather than left for a script to assume: without it the
     // read-back may have come from memory.
     root.insert(QStringLiteral("readPastTheCache"), report.cacheDropped);
+    root.insert(QStringLiteral("filesFromRepair"), static_cast<qint64>(report.filesFromRepair));
+    root.insert(QStringLiteral("usedRepair"), report.usedRepair);
     if (!report.errorMessage.isEmpty()) {
         root.insert(QStringLiteral("error"), report.errorMessage);
     }
@@ -681,6 +684,9 @@ QJsonObject verifyReportAsJson(const core::VerifyReport& report) {
         entry.insert(QStringLiteral("status"), core::verifyStatusName(failure.status));
         entry.insert(QStringLiteral("size"), static_cast<qint64>(failure.size));
         entry.insert(QStringLiteral("attempts"), failure.attempts);
+        if (failure.fromRepair) {
+            entry.insert(QStringLiteral("fromRepair"), true);
+        }
         if (!failure.appId.isEmpty()) {
             entry.insert(QStringLiteral("appId"), failure.appId);
         }
@@ -802,7 +808,23 @@ int runVerify(const QString& archivePath, const QString& passphrase, bool deep, 
                          .arg(report.retriedReads)
                   << Qt::endl;
         }
+        if (report.filesFromRepair > 0) {
+            out() << QStringLiteral(
+                         "  %1 file(s) came from the repair archive beside this one. The data "
+                         "is there; this archive's own copy of it is not.")
+                         .arg(report.filesFromRepair)
+                  << Qt::endl;
+        }
         for (const core::VerifyFileResult& failure : report.failures) {
+            // A file the repair supplied is in this list because something is
+            // wrong with the archive, not because the file is lost. Saying
+            // "matched" next to it under a heading about failures would read
+            // as the opposite of what happened.
+            if (failure.fromRepair) {
+                out() << QStringLiteral("  %1: read from the repair archive").arg(failure.path)
+                      << Qt::endl;
+                continue;
+            }
             err() << QStringLiteral("  %1: %2")
                          .arg(failure.path, core::verifyStatusName(failure.status))
                   << Qt::endl;
@@ -816,8 +838,114 @@ int runVerify(const QString& archivePath, const QString& passphrase, bool deep, 
         return 0;
     }
     // Some of it came back and some did not, which is a different thing from
-    // an archive that could not be read at all.
-    return report.filesFailed > 0 ? kPartialExitCode : 1;
+    // an archive that could not be read at all. A file the repair supplied
+    // counts as "some of it": the archive is damaged and the data is there.
+    return report.filesFailed > 0 || report.filesFromRepair > 0 ? kPartialExitCode : 1;
+}
+
+/// The paths a `verify --json` report named as damaged.
+///
+/// Taking the machine's own output rather than asking somebody to retype a
+/// list of file names: the two runs are then talking about exactly the same
+/// files, and a path with a space in it cannot be split in half on the way.
+QStringList pathsFromVerifyReport(const QString& reportPath, QString* errorMessage) {
+    QFile file(reportPath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        *errorMessage = QStringLiteral("could not read '%1'").arg(reportPath);
+        return {};
+    }
+
+    QJsonParseError parsed{};
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &parsed);
+    if (parsed.error != QJsonParseError::NoError) {
+        *errorMessage = QStringLiteral("'%1' is not the JSON a verify run writes: %2")
+                            .arg(reportPath, parsed.errorString());
+        return {};
+    }
+
+    QStringList paths;
+    for (const QJsonValue& failure :
+         document.object().value(QStringLiteral("failures")).toArray()) {
+        const QString path = failure.toObject().value(QStringLiteral("path")).toString();
+        if (!path.isEmpty()) {
+            paths.push_back(path);
+        }
+    }
+    return paths;
+}
+
+int runRepair(const QString& archivePath, const QString& passphrase, const QString& fromReport) {
+    CancelToken cancelToken;
+    const cli::InterruptHandler interrupts(cancelToken);
+
+    core::RepairRequest request;
+    request.archivePath = archivePath;
+    request.passphrase = passphrase;
+
+    if (!fromReport.isEmpty()) {
+        QString problem;
+        request.paths = pathsFromVerifyReport(fromReport, &problem);
+        if (!problem.isEmpty()) {
+            return reportError(problem);
+        }
+        if (request.paths.isEmpty()) {
+            out() << QStringLiteral("That report lists no damaged files.") << Qt::endl;
+            return 0;
+        }
+    }
+
+    const auto platform = platform::PlatformService::create();
+    const core::RepairService repairer(*platform);
+    const core::RepairReport report =
+        repairer.run(request, cancelToken, [](const core::ProgressUpdate& update) {
+            if (update.filesTotal == 0) {
+                return;
+            }
+            out() << QStringLiteral("\r%1 %2 of %3")
+                         .arg(update.stage)
+                         .arg(update.filesDone)
+                         .arg(update.filesTotal);
+            out().flush();
+        });
+    out() << Qt::endl;
+
+    if (!report.succeeded) {
+        for (const core::RepairFailure& failure : report.failures) {
+            err() << QStringLiteral("  %1: %2")
+                         .arg(failure.path, core::repairObstacleName(failure.obstacle))
+                  << Qt::endl;
+        }
+        return reportError(report.errorMessage);
+    }
+
+    if (report.filesNeedingRepair == 0) {
+        out() << QStringLiteral("Nothing needed repairing: the archive reads back correctly.")
+              << Qt::endl;
+        return 0;
+    }
+
+    out() << QStringLiteral("Recovered %1 of %2 file(s) into %3")
+                 .arg(report.filesRepaired)
+                 .arg(report.filesNeedingRepair)
+                 .arg(report.repairPath)
+          << Qt::endl;
+    out() << QStringLiteral(
+                 "  The original archive was not modified. Keep the two together - "
+                 "reading the archive picks the repair up on its own.")
+          << Qt::endl;
+
+    for (const core::RepairFailure& failure : report.failures) {
+        err() << QStringLiteral("  %1: %2")
+                     .arg(failure.path, core::repairObstacleName(failure.obstacle))
+              << Qt::endl;
+        if (!failure.detail.isEmpty()) {
+            err() << QStringLiteral("      ") << failure.detail << Qt::endl;
+        }
+    }
+
+    // Some of it recovered and some of it not is its own answer, the same way
+    // a partial restore is.
+    return report.everythingRecovered() ? 0 : kPartialExitCode;
 }
 
 int runRollback(const QString& archivePath) {
@@ -999,10 +1127,12 @@ int main(int argc, char** argv) {
     parser.addVersionOption();
     parser.addPositionalArgument(
         QStringLiteral("command"),
-        QStringLiteral("export, import, inspect, verify, rollback, apps, profiles, drives or "
+        QStringLiteral("export, import, inspect, verify, repair, rollback, apps, profiles, "
+                       "drives or "
                        "environment"));
-    parser.addPositionalArgument(QStringLiteral("archive"),
-                                 QStringLiteral("archive path, for import, inspect and verify"));
+    parser.addPositionalArgument(
+        QStringLiteral("archive"),
+        QStringLiteral("archive path, for import, inspect, verify and repair"));
 
     const QCommandLineOption outputOption({QStringLiteral("o"), QStringLiteral("out")},
                                           QStringLiteral("Archive to write."),
@@ -1115,6 +1245,11 @@ int main(int argc, char** argv) {
                                           "decompresses.")),
         QCommandLineOption(QStringLiteral("json"),
                            QStringLiteral("For `verify`: write the result as JSON.")),
+        QCommandLineOption(QStringLiteral("from-report"),
+                           QStringLiteral("For `repair`: recover the files a "
+                                          "`verify --deep --json` run named, rather than "
+                                          "checking the archive again."),
+                           QStringLiteral("path")),
         QCommandLineOption(QStringLiteral("no-md5"),
                            QStringLiteral("Do not record an MD5 for each file. Saves 18 bytes a "
                                           "file and gives up being able to check the archive "
@@ -1189,6 +1324,13 @@ int main(int argc, char** argv) {
         }
         return runVerify(archive, passphraseFor(archive), parser.isSet(QStringLiteral("deep")),
                          parser.isSet(QStringLiteral("json")));
+    }
+    if (command == QLatin1String("repair")) {
+        if (archive.isEmpty()) {
+            return reportError(QStringLiteral("repair needs an archive path"));
+        }
+        return runRepair(archive, passphraseFor(archive),
+                         parser.value(QStringLiteral("from-report")));
     }
     if (command == QLatin1String("rollback")) {
         if (archive.isEmpty()) {

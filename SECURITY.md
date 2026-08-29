@@ -55,6 +55,13 @@ It is implemented in this repository rather than called through OpenSSL because
 a FIPS-mode build refuses MD5, and a check that quietly becomes optional
 depending on how the runtime was configured is not a check.
 
+**A repair archive cannot change what an archive holds.** `name.txa.repair`
+supplies bytes for files the drive damaged, and every reader picks it up
+without being asked. It may only supply bytes that hash to what the archive's
+own manifest already recorded for that path, so dropping a crafted `.repair`
+file next to somebody's archive changes nothing about what restoring it puts
+on their machine. The original archive is never modified.
+
 **An encrypted archive's `.md5` file does not list its contents.** The point of
 encrypting one is that the names of somebody's files are not readable from the
 drive; a sidecar listing every path beside it would hand them over in plain

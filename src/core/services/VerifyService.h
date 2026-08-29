@@ -35,6 +35,11 @@ struct VerifyFileResult {
     /// from is wiped.
     int attempts = 1;
     QString detail;
+
+    /// The bytes came from the repair archive beside this one rather than
+    /// from the archive itself. The file is readable; the archive is still
+    /// damaged, and both halves of that matter.
+    bool fromRepair = false;
 };
 
 /// What a part of the archive looked like on the way back.
@@ -89,6 +94,13 @@ struct VerifyReport {
 
     /// Reads that needed more than one attempt. Zero on a healthy drive.
     quint64 retriedReads = 0;
+
+    /// Files the archive itself could not give back and a repair archive
+    /// beside it could. They are not failures - the data is there - but an
+    /// archive leaning on a repair is an archive on a drive that has already
+    /// gone wrong once.
+    quint64 filesFromRepair = 0;
+    bool usedRepair = false;
 
     QList<VerifyFileResult> failures;
     QList<VerifyPartResult> parts;

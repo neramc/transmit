@@ -15,9 +15,12 @@
 
 #include "core/services/ExportService.h"
 #include "core/services/ProfileService.h"
+#include "core/services/RepairService.h"
 #include "core/services/VerifyService.h"
 #include "core/utils/Conversions.h"
+#include "format/Container.h"
 #include "format/IoHooks.h"
+#include "format/hash/Blake2b.h"
 #include "platform/PlatformService.h"
 
 using namespace transmit;
@@ -39,6 +42,12 @@ private slots:
     void verificationFailingFailsTheCaptureThatAskedForIt();
     void theCaptureCanBeToldNotToVerify();
 
+    void aDamagedFileIsRecoveredFromTheMachineItCameFrom();
+    void aRepairCannotSubstituteContentTheArchiveNeverClaimed();
+    void aFileThatHasChangedSinceTheCaptureIsNotUsedToRepairIt();
+    void repairingASoundArchiveDoesNothingAndSaysSo();
+    void repairingTwiceFindsNothingLeftToDo();
+
 private:
     /// Captures the fixture home and returns the archive path.
     [[nodiscard]] QString capture(const QString& name, bool verifyAfterWriting = false);
@@ -51,6 +60,11 @@ private:
     /// Flips one bit somewhere in the middle of a file.
     static void damage(const QString& path, qint64 offset);
 
+    /// The documents the captures in here are made of. Called again by the
+    /// test that deliberately rewrites them, so the tests after it are not
+    /// quietly capturing something else.
+    void writeFixture();
+
     QTemporaryDir workspace_;
     std::unique_ptr<platform::PlatformService> platform_;
     QString originalHome_;
@@ -62,9 +76,25 @@ void VerifyServiceTest::initTestCase() {
     QVERIFY(QDir().mkpath(home() + QStringLiteral("/Documents")));
     QVERIFY(QDir().mkpath(workspace_.filePath("archives")));
 
+    writeFixture();
+
+    originalHome_ = qEnvironmentVariable("HOME");
+    qputenv("HOME", home().toUtf8());
+    platform_ = platform::PlatformService::create();
+
+    // Windows resolves its known folders through the shell rather than from
+    // HOME, so the capture below would read the account's real documents.
+    const auto documents = platform_->knownFolders().base(format::PathTokenId::Documents);
+    usable_ = documents && QString::fromStdString(*documents).startsWith(home());
+    if (!usable_) {
+        QSKIP("this platform does not resolve its known folders from HOME");
+    }
+}
+
+void VerifyServiceTest::writeFixture() {
     const auto write = [](const QString& path, const QByteArray& content) {
         QFile file(path);
-        QVERIFY2(file.open(QIODevice::WriteOnly), qPrintable(path));
+        QVERIFY2(file.open(QIODevice::WriteOnly | QIODevice::Truncate), qPrintable(path));
         file.write(content);
     };
     write(home() + QStringLiteral("/Documents/notes.txt"), "a few lines worth keeping\n");
@@ -79,18 +109,6 @@ void VerifyServiceTest::initTestCase() {
         byte = static_cast<char>((state >> 24) & 0xFFu);
     }
     write(home() + QStringLiteral("/Documents/noise.bin"), noise);
-
-    originalHome_ = qEnvironmentVariable("HOME");
-    qputenv("HOME", home().toUtf8());
-    platform_ = platform::PlatformService::create();
-
-    // Windows resolves its known folders through the shell rather than from
-    // HOME, so the capture below would read the account's real documents.
-    const auto documents = platform_->knownFolders().base(format::PathTokenId::Documents);
-    usable_ = documents && QString::fromStdString(*documents).startsWith(home());
-    if (!usable_) {
-        QSKIP("this platform does not resolve its known folders from HOME");
-    }
 }
 
 void VerifyServiceTest::cleanupTestCase() {
@@ -396,6 +414,196 @@ void VerifyServiceTest::theCaptureCanBeToldNotToVerify() {
     const core::ExportReport report = exporter.run(request, token, {});
     QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
     QVERIFY(!report.verificationRan);
+}
+
+// ------------------------------------------------------------- repairing
+
+// The damaged archive is never touched: its footer and part lengths are
+// computed over the whole set, so writing a corrected file back into it would
+// invalidate the thing being fixed. The recovered files go beside it instead,
+// and every reader picks them up on its own.
+void VerifyServiceTest::aDamagedFileIsRecoveredFromTheMachineItCameFrom() {
+    const QString archive = capture(QStringLiteral("repairable.txa"));
+    QVERIFY(!archive.isEmpty());
+
+    const QByteArray before = [&archive] {
+        QFile file(archive);
+        return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+    }();
+    QVERIFY(!before.isEmpty());
+
+    damage(archive, QFileInfo(archive).size() / 2);
+
+    core::CancelToken token;
+    core::RepairRequest request;
+    request.archivePath = archive;
+
+    const core::RepairService repairer(*platform_);
+    const core::RepairReport report = repairer.run(request, token, {});
+
+    QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
+    QVERIFY2(report.filesNeedingRepair > 0, "nothing was found to need repairing");
+    QCOMPARE(report.filesRepaired, report.filesNeedingRepair);
+    QVERIFY(report.failures.isEmpty());
+    QVERIFY(QFileInfo::exists(report.repairPath));
+
+    // The original, byte for byte as the damage left it.
+    QFile after(archive);
+    QVERIFY(after.open(QIODevice::ReadOnly));
+    const QByteArray now = after.readAll();
+    QCOMPARE(now.size(), before.size());
+    QVERIFY2(now != before, "the fixture did not actually damage anything");
+
+    // And the files now read correctly, without anybody asking for the repair.
+    auto reader = format::ArchiveReader::open(format::toFsPath(core::toUtf8(archive)));
+    QVERIFY(reader);
+    const auto manifest = (*reader)->manifest();
+    QVERIFY(manifest);
+    QVERIFY2((*reader)->hasRepair(), "the repair was written and the reader did not pick it up");
+
+    int read = 0;
+    for (const format::ManifestEntry& entry : (*manifest)->entries) {
+        if (entry.hasContent()) {
+            QVERIFY2((*reader)->readEntry(entry),
+                     qPrintable(QString::fromStdString(entry.path.toDisplayString())));
+            ++read;
+        }
+    }
+    QVERIFY(read > 0);
+}
+
+// A repair may only supply bytes that hash to what the archive already
+// recorded for that path. Without that rule, dropping a file called
+// `name.txa.repair` next to somebody's archive would change what restoring it
+// puts on their machine.
+void VerifyServiceTest::aRepairCannotSubstituteContentTheArchiveNeverClaimed() {
+    const QString archive = capture(QStringLiteral("substitute.txa"));
+    QVERIFY(!archive.isEmpty());
+
+    // A perfectly valid archive holding the same paths with different
+    // contents - which is what an attacker, or a muddle, produces.
+    const QString impostorHome = workspace_.filePath(QStringLiteral("impostor"));
+    QVERIFY(QDir().mkpath(impostorHome + QStringLiteral("/Documents")));
+    const QString original = qEnvironmentVariable("HOME");
+    qputenv("HOME", impostorHome.toUtf8());
+    {
+        auto impostorPlatform = platform::PlatformService::create();
+        QFile file(impostorHome + QStringLiteral("/Documents/notes.txt"));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("not the notes that were captured\n");
+        file.close();
+
+        core::ExportService exporter(*impostorPlatform);
+        core::CancelToken token;
+        core::ExportRequest request;
+        request.destinationPath = archive + QStringLiteral(".repair");
+        request.selection =
+            core::ProfileService::profileById(QStringLiteral("documents")).selection;
+        request.packaging.preset = format::CompressionPreset::Fast;
+        request.packaging.verifyAfterWriting = false;
+        const core::ExportReport made = exporter.run(request, token, {});
+        QVERIFY2(made.succeeded, qPrintable(made.errorMessage));
+    }
+    qputenv("HOME", original.toUtf8());
+
+    auto reader = format::ArchiveReader::open(format::toFsPath(core::toUtf8(archive)));
+    QVERIFY(reader);
+    const auto manifest = (*reader)->manifest();
+    QVERIFY(manifest);
+
+    // Nothing in it hashes to what this archive recorded, so nothing is taken
+    // from it. The archive reads exactly as it did before.
+    QVERIFY2(!(*reader)->hasRepair(),
+             "a repair holding different content was accepted as a replacement");
+
+    for (const format::ManifestEntry& entry : (*manifest)->entries) {
+        if (!entry.hasContent()) {
+            continue;
+        }
+        const auto content = (*reader)->readEntry(entry);
+        QVERIFY(content);
+        QCOMPARE(format::Blake2b::hash256(format::ByteView(*content)), entry.contentHash);
+    }
+}
+
+// Putting the new version in would produce an archive that passes every check
+// and does not hold what it says it holds.
+void VerifyServiceTest::aFileThatHasChangedSinceTheCaptureIsNotUsedToRepairIt() {
+    const QString archive = capture(QStringLiteral("moved-on.txa"));
+    QVERIFY(!archive.isEmpty());
+
+    damage(archive, QFileInfo(archive).size() / 2);
+
+    // Everything the capture read is now something else.
+    for (const QString& name :
+         {QStringLiteral("notes.txt"), QStringLiteral("report.txt"), QStringLiteral("noise.bin")}) {
+        QFile file(home() + QStringLiteral("/Documents/") + name);
+        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        file.write("rewritten since the capture\n");
+    }
+
+    core::CancelToken token;
+    core::RepairRequest request;
+    request.archivePath = archive;
+
+    const core::RepairService repairer(*platform_);
+    const core::RepairReport report = repairer.run(request, token, {});
+
+    QVERIFY2(!report.succeeded, "a changed file was accepted as a repair for the old one");
+    QCOMPARE(report.filesRepaired, 0ULL);
+    QVERIFY(!report.failures.isEmpty());
+    for (const core::RepairFailure& failure : report.failures) {
+        QCOMPARE(failure.obstacle, core::RepairObstacle::SourceChanged);
+    }
+    QVERIFY2(!QFileInfo::exists(archive + QStringLiteral(".repair")),
+             "a repair archive was left behind holding nothing usable");
+
+    // Put the fixture back: the tests after this one capture the same folder,
+    // and leaving it rewritten would have them measuring something else.
+    writeFixture();
+}
+
+// A file an existing repair already supplies is reported by verification
+// because the archive is damaged, not because the file is lost. Recovering it
+// again would recover something that is already there and call it work.
+void VerifyServiceTest::repairingTwiceFindsNothingLeftToDo() {
+    const QString archive = capture(QStringLiteral("twice.txa"));
+    QVERIFY(!archive.isEmpty());
+
+    damage(archive, QFileInfo(archive).size() / 2);
+
+    core::CancelToken token;
+    core::RepairRequest request;
+    request.archivePath = archive;
+
+    const core::RepairService repairer(*platform_);
+    const core::RepairReport first = repairer.run(request, token, {});
+    QVERIFY2(first.succeeded, qPrintable(first.errorMessage));
+    QVERIFY(first.filesRepaired > 0);
+
+    const core::RepairReport again = repairer.run(request, token, {});
+    QVERIFY2(again.succeeded, qPrintable(again.errorMessage));
+    QCOMPARE(again.filesNeedingRepair, 0ULL);
+    QCOMPARE(again.filesRepaired, 0ULL);
+}
+
+void VerifyServiceTest::repairingASoundArchiveDoesNothingAndSaysSo() {
+    const QString archive = capture(QStringLiteral("sound.txa"));
+    QVERIFY(!archive.isEmpty());
+
+    core::CancelToken token;
+    core::RepairRequest request;
+    request.archivePath = archive;
+
+    const core::RepairService repairer(*platform_);
+    const core::RepairReport report = repairer.run(request, token, {});
+
+    QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
+    QCOMPARE(report.filesNeedingRepair, 0ULL);
+    QCOMPARE(report.filesRepaired, 0ULL);
+    QVERIFY(report.repairPath.isEmpty());
+    QVERIFY2(!QFileInfo::exists(archive + QStringLiteral(".repair")),
+             "a sound archive was given a repair file it does not need");
 }
 
 QTEST_MAIN(VerifyServiceTest)

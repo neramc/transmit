@@ -172,6 +172,14 @@ splits for automatically.
   The files inside are listed as comments, which `md5sum` skips - except on an
   encrypted archive, where listing every path beside the thing that was
   encrypted to hide them would defeat the point.
+- **Repair.** When a drive damages an archive, `transmit-cli repair` reads the
+  affected files off the machine they came from and writes them into
+  `name.txa.repair`, which every reader picks up on its own. The damaged
+  archive is never modified - its footer and part lengths are computed over the
+  whole set, so writing a corrected file back into it would invalidate the
+  thing being fixed - and a repair may only supply bytes that hash to what the
+  archive already recorded, so a file that has changed since the capture is
+  refused rather than quietly substituted.
 - **Encryption.** Optional, AES-256-GCM with scrypt key derivation. The manifest
   is encrypted too, so file names are protected, not just contents. A wrong
   passphrase is rejected immediately rather than after a failed decryption.
@@ -262,6 +270,8 @@ transmit-cli inspect ARCHIVE      # where it came from and what is inside
 transmit-cli verify ARCHIVE       # check every block against its hash
                     [--deep]      # and every file against its hash and MD5
                     [--json]      # exit 0 all of it, 2 some of it, 1 none of it
+transmit-cli repair ARCHIVE       # recover the damaged files from this machine
+                    [--from-report verify.json]
 transmit-cli import ARCHIVE [--into DIR] [--dry-run] [--verify]
                     [--conflict skip|overwrite|newer|keep-both]
                     [--emulate-os windows|macos|linux]

@@ -178,7 +178,32 @@ public:
     Result<ByteView> readBlock(std::uint32_t blockId);
 
     /// Extracts one entry's bytes and verifies them against the stored hash.
+    ///
+    /// When a repair archive is attached and holds a copy of this entry, the
+    /// copy is used - see attachRepair.
     Result<ByteBuffer> readEntry(const ManifestEntry& entry);
+
+    /// Attaches a repair archive, so files the drive damaged can be read from
+    /// a second, smaller archive written beside the first.
+    ///
+    /// A damaged part cannot be edited in place: the footer and every part
+    /// length are computed over the whole set, so patching one file inside it
+    /// would invalidate the archive it was meant to fix. Writing the recovered
+    /// files into `name.txa.repair` and reading them from there leaves the
+    /// original exactly as it is, which is also what makes the operation safe
+    /// to interrupt.
+    ///
+    /// A repair may only supply bytes that hash to what this archive's own
+    /// manifest already recorded for that path. It cannot introduce content
+    /// the original never claimed - so a repair file that has been tampered
+    /// with, or belongs to a different capture, changes nothing.
+    Status attachRepair(const std::filesystem::path& repairPath, std::string_view passphrase = {});
+
+    /// Whether a repair archive is in use.
+    [[nodiscard]] bool hasRepair() const noexcept { return repair_ != nullptr; }
+
+    /// The name a repair archive takes for this one.
+    [[nodiscard]] static std::filesystem::path repairPathFor(const std::filesystem::path& archive);
 
     [[nodiscard]] const ArchiveUuid& uuid() const noexcept { return header_.uuid; }
     [[nodiscard]] std::int64_t createdUnix() const noexcept { return header_.createdUnix; }
@@ -213,11 +238,25 @@ private:
     /// tries to read one. Run once, when the manifest is first loaded.
     [[nodiscard]] Status validateEntryLocations() const;
 
+    /// The repair archive's entry for this path, or nullptr.
+    [[nodiscard]] const ManifestEntry* repairFor(const ManifestEntry& entry) const;
+
+    /// Reads an entry without considering any attached repair.
+    Result<ByteBuffer> readEntryFromThisArchive(const ManifestEntry& entry);
+
     ArchiveHeader header_;
     ArchiveFooter footer_;
     std::unique_ptr<VolumeSource> source_;
     std::unique_ptr<ArchiveCipher> cipher_;
     std::optional<Manifest> manifest_;
+
+    /// The repair archive, and its entries by the path they stand in for.
+    /// Held by value rather than merged into manifest_ so the original's own
+    /// record of itself is never rewritten by something read off the drive
+    /// beside it.
+    std::unique_ptr<ArchiveReader> repair_;
+    std::map<std::string, const ManifestEntry*> repairs_;
+    bool repairChecked_ = false;
 
     std::map<std::uint32_t, ByteBuffer> blockCache_;
     std::vector<std::uint32_t> cacheOrder_;
