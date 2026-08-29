@@ -43,6 +43,15 @@ public:
     Result<std::uint64_t> tell() const;
     Result<std::uint64_t> size() const;
     Status flush();
+
+    /// Pushes everything written so far all the way to the device, so it
+    /// survives losing power - flush() only hands the bytes to the operating
+    /// system, which may hold them in the page cache for half a minute.
+    ///
+    /// One call costs milliseconds on a USB stick, so it belongs at commit
+    /// points and at bounded intervals, never in the write loop.
+    Status sync();
+
     void close();
 
 private:
@@ -50,12 +59,36 @@ private:
     std::filesystem::path path_;
 };
 
+/// Makes a directory's own contents durable: after a rename, the new name
+/// itself lives in the parent directory, and syncing the file does not save
+/// it. Without this a power cut can leave the target missing even though its
+/// bytes reached the disk.
+///
+/// A no-op on Windows, where a directory handle cannot be flushed and NTFS
+/// orders the metadata itself.
+Status syncDirectory(const std::filesystem::path& directory);
+
 /// Reads a whole file. Intended for small files (recipes, reports); the
 /// capture pipeline streams instead.
 Result<ByteBuffer> readWholeFile(const std::filesystem::path& path);
 
+/// How far a write is pushed before it is called done.
+enum class Durability {
+    /// Buffered. Survives this process dying, not the machine losing power.
+    Buffered,
+    /// The bytes reach the device before the rename, so the target is either
+    /// the old file or the whole new one - never a hole. The new name itself
+    /// may still be pending, so after a power cut the file can be missing.
+    Data,
+    /// The bytes and the name both reach the device. The strongest, and the
+    /// only one that costs a directory flush per file; a caller writing many
+    /// files into one folder wants Data plus one syncDirectory at the end.
+    DataAndName,
+};
+
 /// Writes to a sibling temporary file and renames over the target, so an
 /// interrupted write cannot leave a half-written report or catalog behind.
-Status writeFileAtomically(const std::filesystem::path& path, ByteView data);
+Status writeFileAtomically(const std::filesystem::path& path, ByteView data,
+                           Durability durability = Durability::DataAndName);
 
 }  // namespace transmit::format

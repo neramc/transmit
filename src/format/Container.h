@@ -75,6 +75,12 @@ struct ArchiveOptions {
     std::string passphrase;
 
     std::uint64_t solidBlockSize = kDefaultSolidBlockSize;
+
+    /// How often the payload is pushed to the device while writing. Zero syncs
+    /// only when a part closes and at finish(). Removable media should set it
+    /// - 32 MiB is the usual choice - so a stick that is full or has been
+    /// pulled says so part way through rather than at the very end.
+    std::uint64_t syncIntervalBytes = 0;
 };
 
 /// A block that has been compressed (and encrypted) but not yet written. The

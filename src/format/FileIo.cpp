@@ -7,6 +7,15 @@
 #include <system_error>
 #include <utility>
 
+#if defined(_WIN32)
+#include <windows.h>
+
+#include <io.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
+#endif
+
 namespace transmit::format {
 namespace {
 
@@ -205,6 +214,89 @@ Status FileStream::flush() {
     return ok();
 }
 
+Status FileStream::sync() {
+    if (handle_ == nullptr) {
+        return ok();
+    }
+    // The stdio buffer has to go first: syncing the descriptor says nothing
+    // about bytes still sitting in this process.
+    TRANSMIT_CHECK(flush());
+
+#if defined(_WIN32)
+    const int descriptor = ::_fileno(handle_);
+    if (descriptor < 0) {
+        return errnoError(path_, "could not sync");
+    }
+    const auto native = reinterpret_cast<HANDLE>(::_get_osfhandle(descriptor));
+    if (native == INVALID_HANDLE_VALUE || ::FlushFileBuffers(native) == 0) {
+        return makeError(ErrorCode::IoError, "could not sync '", fromFsPath(path_), "'");
+    }
+    return ok();
+#else
+    const int descriptor = ::fileno(handle_);
+    if (descriptor < 0) {
+        return errnoError(path_, "could not sync");
+    }
+#if defined(__APPLE__)
+    // fsync on macOS only reaches the drive's own write cache. F_FULLFSYNC is
+    // the one that asks the drive to commit to the platter, and it is the
+    // reason a Mac survives a power cut where the same code on Linux does not.
+    // Some filesystems - network mounts especially - refuse it; a plain fsync
+    // is the best that is on offer there.
+    if (::fcntl(descriptor, F_FULLFSYNC) != -1) {
+        return ok();
+    }
+    if (errno != ENOTSUP && errno != EINVAL && errno != ENOTTY) {
+        return errnoError(path_, "could not sync");
+    }
+    if (::fsync(descriptor) != 0) {
+        return errnoError(path_, "could not sync");
+    }
+#elif defined(__linux__)
+    // fdatasync skips the metadata flush when only the size changed, which is
+    // the common case here and measurably cheaper on rotational media.
+    if (::fdatasync(descriptor) != 0) {
+        return errnoError(path_, "could not sync");
+    }
+#else
+    if (::fsync(descriptor) != 0) {
+        return errnoError(path_, "could not sync");
+    }
+#endif
+    return ok();
+#endif
+}
+
+Status syncDirectory(const std::filesystem::path& directory) {
+#if defined(_WIN32)
+    (void)directory;
+    return ok();
+#else
+    const int descriptor = ::open(directory.c_str(), O_RDONLY | O_DIRECTORY);
+    if (descriptor < 0) {
+        // A read-only mount or a filesystem that will not hand out directory
+        // descriptors is not a reason to fail the write that just succeeded.
+        if (errno == EACCES || errno == EPERM || errno == EINVAL || errno == ENOTDIR) {
+            return ok();
+        }
+        return errnoError(directory, "could not open");
+    }
+    const int synced = ::fsync(descriptor);
+    const int syncErrno = errno;
+    ::close(descriptor);
+    if (synced != 0) {
+        // Several filesystems - and every one that has no directory metadata
+        // to speak of - answer EINVAL here. The rename is still ordered.
+        if (syncErrno == EINVAL || syncErrno == ENOTSUP) {
+            return ok();
+        }
+        errno = syncErrno;
+        return errnoError(directory, "could not sync");
+    }
+    return ok();
+#endif
+}
+
 Result<ByteBuffer> readWholeFile(const std::filesystem::path& path) {
     TRANSMIT_TRY(stream, FileStream::open(path, FileStream::Mode::Read));
     TRANSMIT_TRY(byteCount, stream.size());
@@ -213,14 +305,29 @@ Result<ByteBuffer> readWholeFile(const std::filesystem::path& path) {
     return buffer;
 }
 
-Status writeFileAtomically(const std::filesystem::path& path, ByteView data) {
+Status writeFileAtomically(const std::filesystem::path& path, ByteView data,
+                           Durability durability) {
     std::filesystem::path temporary = path;
     temporary += ".transmit-tmp";
 
     {
         TRANSMIT_TRY(stream, FileStream::open(temporary, FileStream::Mode::Write));
-        TRANSMIT_CHECK(stream.write(data));
-        TRANSMIT_CHECK(stream.flush());
+        auto cleanUp = [&temporary] {
+            std::error_code ignored;
+            std::filesystem::remove(temporary, ignored);
+        };
+        if (auto status = stream.write(data); !status) {
+            cleanUp();
+            return status;
+        }
+        // The bytes have to reach the device before the rename, or a power cut
+        // leaves the new name pointing at a file of zeroes - which is worse
+        // than the half-written file this function exists to prevent.
+        if (auto status = durability == Durability::Buffered ? stream.flush() : stream.sync();
+            !status) {
+            cleanUp();
+            return status;
+        }
     }
 
     std::error_code ec;
@@ -229,6 +336,11 @@ Status writeFileAtomically(const std::filesystem::path& path, ByteView data) {
         std::filesystem::remove(temporary, ec);
         return makeError(ErrorCode::IoError, "could not replace '", fromFsPath(path),
                          "': ", ec.message());
+    }
+
+    if (durability == Durability::DataAndName) {
+        const std::filesystem::path parent = path.parent_path();
+        TRANSMIT_CHECK(syncDirectory(parent.empty() ? std::filesystem::path(".") : parent));
     }
     return ok();
 }

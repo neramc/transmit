@@ -9,6 +9,7 @@ add_executable(transmit_format_tests
     CodecTest.cpp
     BlockPackerTest.cpp
     ContainerTest.cpp
+    FileIoTest.cpp
     ManifestTest.cpp)
 
 target_link_libraries(transmit_format_tests

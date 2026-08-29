@@ -5,7 +5,6 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
-#include <QSaveFile>
 #include <QSet>
 #include <QTemporaryDir>
 
@@ -22,6 +21,7 @@
 #include "core/settings/SettingsDomain.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
+#include "format/FileIo.h"
 #include "format/NameSanitizer.h"
 
 #ifndef Q_OS_WIN
@@ -49,22 +49,25 @@ void applyMetadata(const QString& path, const format::ManifestEntry& entry, OsFa
 #endif
 }
 
-bool writeFileContents(const QString& path, const format::ByteBuffer& content, QString& error) {
-    QSaveFile file(path);
-    if (!file.open(QIODevice::WriteOnly)) {
-        error = file.errorString();
-        return false;
-    }
-    if (!content.empty()) {
-        const qint64 written = file.write(reinterpret_cast<const char*>(content.data()),
-                                          static_cast<qint64>(content.size()));
-        if (written != static_cast<qint64>(content.size())) {
-            error = file.errorString();
-            return false;
-        }
-    }
-    if (!file.commit()) {
-        error = file.errorString();
+/// Writes one restored file into place.
+///
+/// QSaveFile, which this used to be, flushes to the operating system and
+/// renames - so a crash is survivable but a power cut is not: ext4 and NTFS
+/// are both free to commit the rename before the data, which leaves a file of
+/// the right name and the wrong length. On a restore that is silent data loss
+/// wearing the shape of success, so the bytes go to the device first.
+///
+/// The parent folder is deliberately not flushed here. The caller collects the
+/// folders it touched and syncs each once, because a restore commonly writes
+/// thousands of files into a handful of directories and one flush per file
+/// would be almost all of the cost for none of the benefit.
+bool writeFileContents(const QString& path, const format::ByteBuffer& content, QString& error,
+                       bool durable) {
+    const auto status = format::writeFileAtomically(
+        format::toFsPath(path.toUtf8().toStdString()), format::ByteView(content),
+        durable ? format::Durability::Data : format::Durability::Buffered);
+    if (!status) {
+        error = describeError(status.error());
         return false;
     }
     return true;
@@ -231,7 +234,7 @@ void ImportService::previewRewrites(format::ArchiveReader& reader, const format:
         QDir().mkpath(QFileInfo(target).absolutePath());
 
         QString error;
-        if (writeFileContents(target, *content, error)) {
+        if (writeFileContents(target, *content, error, false)) {
             ++unpacked;
         }
     }
@@ -401,6 +404,12 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
     // Paths the undo point does not cover, so the write loop must not
     // touch them.
     QSet<QString> unbackedUp;
+
+    // Every folder a file landed in. Their entries are flushed once at the
+    // end rather than once per file: a restore writes thousands of files into
+    // a few dozen folders, so per-file directory flushes would cost most of
+    // the run for none of the safety.
+    QSet<QString> touchedDirectories;
 
     if (request.createRollback && !request.dryRun) {
         QStringList intended;
@@ -617,7 +626,9 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                 break;
             }
             case format::EntryType::File: {
-                QDir().mkpath(QFileInfo(targetPath).absolutePath());
+                const QString parentDirectory = QFileInfo(targetPath).absolutePath();
+                QDir().mkpath(parentDirectory);
+                touchedDirectories.insert(parentDirectory);
 
                 auto content = reader->readEntry(entry);
                 if (!content) {
@@ -630,7 +641,8 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                 }
 
                 QString error;
-                if (!writeFileContents(targetPath, *content, error)) {
+                if (!writeFileContents(targetPath, *content, error,
+                                       request.durableWrites && !request.dryRun)) {
                     report.notes.push_back(ContinuityNote{
                         ContinuityGrade::Manual, entry.domain, targetPath,
                         QCoreApplication::translate("Import", "Could not be written: %1")
@@ -820,6 +832,20 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                     "No package manager here offers these, so install them yourself. Their "
                     "settings are already restored: %1")
                     .arg(installPlan.manual.join(QStringLiteral(", ")))});
+        }
+    }
+
+    // The files are on the device; their names are not yet. One flush per
+    // folder settles that, and it is the last thing the restore does so a
+    // report that says a file is there means the machine agrees.
+    if (request.durableWrites && !request.dryRun) {
+        for (const QString& directory : touchedDirectories) {
+            const auto status =
+                format::syncDirectory(format::toFsPath(directory.toUtf8().toStdString()));
+            if (!status) {
+                qCWarning(logRestore)
+                    << "could not flush" << directory << describeError(status.error());
+            }
         }
     }
 

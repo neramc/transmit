@@ -92,7 +92,7 @@ std::array<Byte, VolumeHeader::kSize> VolumeHeader::encode() const {
     writeLe<std::uint16_t>(MutableByteView(raw).subspan(8), version);
     writeLe<std::uint16_t>(MutableByteView(raw).subspan(10), partIndex);
     writeLe<std::uint16_t>(MutableByteView(raw).subspan(12), partCount);
-    writeLe<std::uint16_t>(MutableByteView(raw).subspan(14), 0);
+    writeLe<std::uint16_t>(MutableByteView(raw).subspan(14), flags);
     std::copy(archiveUuid.begin(), archiveUuid.end(), raw.begin() + 16);
     writeLe<std::uint64_t>(MutableByteView(raw).subspan(32), payloadLength);
     const std::uint32_t checksum = crc32(ByteView(raw).subspan(0, kCrcOffset));
@@ -121,6 +121,10 @@ Result<VolumeHeader> VolumeHeader::decode(ByteView data) {
     }
     header.partIndex = readLe<std::uint16_t>(data.subspan(10));
     header.partCount = readLe<std::uint16_t>(data.subspan(12));
+    // Version 1 wrote a zero here and had no notion of finalising, so a set
+    // from that era has to be taken at its word.
+    header.flags = header.version >= 2 ? readLe<std::uint16_t>(data.subspan(14))
+                                       : static_cast<std::uint16_t>(FlagFinalised);
     std::copy_n(data.begin() + 16, header.archiveUuid.size(), header.archiveUuid.begin());
     header.payloadLength = readLe<std::uint64_t>(data.subspan(32));
     return header;
@@ -136,7 +140,8 @@ VolumeSink::~VolumeSink() = default;
 
 Result<std::unique_ptr<VolumeSink>> VolumeSink::create(const std::filesystem::path& basePath,
                                                        std::uint64_t partSize,
-                                                       const ArchiveUuid& uuid) {
+                                                       const ArchiveUuid& uuid,
+                                                       std::uint64_t syncIntervalBytes) {
     if (partSize > 0 && partSize <= VolumeHeader::kSize) {
         return makeError(ErrorCode::InvalidArgument, "the split size is too small");
     }
@@ -144,6 +149,7 @@ Result<std::unique_ptr<VolumeSink>> VolumeSink::create(const std::filesystem::pa
     auto sink = std::unique_ptr<VolumeSink>(new VolumeSink());
     sink->basePath_ = basePath;
     sink->partSize_ = partSize;
+    sink->syncIntervalBytes_ = syncIntervalBytes;
     sink->uuid_ = uuid;
     TRANSMIT_CHECK(sink->openNextPart());
     return sink;
@@ -172,6 +178,7 @@ Status VolumeSink::openNextPart() {
     TRANSMIT_CHECK(current_.write(ByteView(raw)));
 
     currentPayload_ = 0;
+    sinceSync_ = 0;
     parts_.push_back(path);
     partPayloads_.push_back(0);
     return ok();
@@ -181,9 +188,13 @@ Status VolumeSink::closeCurrentPart() {
     if (!current_.isOpen()) {
         return ok();
     }
-    TRANSMIT_CHECK(current_.flush());
+    // Sync before the handle goes away. fclose only flushes stdio; it makes no
+    // promise about the device, so without this a part can be "closed" while
+    // its last megabytes are still in the page cache.
+    TRANSMIT_CHECK(current_.sync());
     partPayloads_.back() = currentPayload_;
     current_.close();
+    sinceSync_ = 0;
     return ok();
 }
 
@@ -208,6 +219,14 @@ Status VolumeSink::write(ByteView data) {
         currentPayload_ += chunk;
         logicalOffset_ += chunk;
         data = data.subspan(chunk);
+
+        if (syncIntervalBytes_ > 0) {
+            sinceSync_ += chunk;
+            if (sinceSync_ >= syncIntervalBytes_) {
+                TRANSMIT_CHECK(current_.sync());
+                sinceSync_ = 0;
+            }
+        }
     }
     return ok();
 }
@@ -221,19 +240,31 @@ Status VolumeSink::finish() {
 
     // Patch every part header now that the total is known, so a reader can
     // detect a missing part without scanning the directory.
+    //
+    // Last part first. A reader starts at part 1 and believes what it says, so
+    // part 1 must be the last thing that becomes true: stamped in this order,
+    // dying half way through leaves later parts unstamped - which reads as
+    // "unfinished", the truth - instead of leaving part 1 vouching for parts
+    // that were never completed. Each stamp is synced for the same reason;
+    // without that the ordering only exists in the page cache.
     const auto total = static_cast<std::uint16_t>(parts_.size());
-    for (std::size_t i = 0; i < parts_.size(); ++i) {
+    for (std::size_t i = parts_.size(); i-- > 0;) {
         TRANSMIT_TRY(stream, FileStream::open(parts_[i], FileStream::Mode::ReadWrite));
         VolumeHeader header;
         header.partIndex = static_cast<std::uint16_t>(i + 1);
         header.partCount = total;
+        header.flags = VolumeHeader::FlagFinalised;
         header.archiveUuid = uuid_;
         header.payloadLength = partPayloads_[i];
         const auto raw = header.encode();
         TRANSMIT_CHECK(stream.seek(0));
         TRANSMIT_CHECK(stream.write(ByteView(raw)));
-        TRANSMIT_CHECK(stream.flush());
+        TRANSMIT_CHECK(stream.sync());
     }
+
+    // And the names themselves, so the set is still there after a power cut.
+    const std::filesystem::path parent = basePath_.parent_path();
+    TRANSMIT_CHECK(syncDirectory(parent.empty() ? std::filesystem::path(".") : parent));
     return ok();
 }
 
@@ -284,6 +315,7 @@ Result<std::unique_ptr<VolumeSource>> VolumeSource::open(const std::filesystem::
         if (i == 0) {
             source->uuid_ = header.archiveUuid;
             declaredCount = header.partCount;
+            source->finalised_ = header.isFinalised();
         } else if (header.archiveUuid != source->uuid_) {
             return makeError(ErrorCode::VolumeOutOfOrder, "'", fromFsPath(candidates[i]),
                              "' belongs to a different archive");

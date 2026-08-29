@@ -29,13 +29,23 @@ inline constexpr std::uint64_t kFat32SafePartSize = 3584ULL * 1024 * 1024;
 /// ordered even if the files were renamed or copied in the wrong sequence.
 struct VolumeHeader {
     static constexpr std::size_t kSize = 48;
-    static constexpr std::uint16_t kVersion = 1;
+    static constexpr std::uint16_t kVersion = 2;
+
+    enum Flags : std::uint16_t {
+        /// Set on every part only once the whole set is written and synced.
+        /// Parts are stamped last-to-first, so seeing it on part 1 - the one a
+        /// reader opens - means every other part was already finished.
+        FlagFinalised = 1u << 0,
+    };
 
     std::uint16_t version = kVersion;
     std::uint16_t partIndex = 1;  ///< 1-based
     std::uint16_t partCount = 0;  ///< 0 until the write finishes
+    std::uint16_t flags = 0;
     ArchiveUuid archiveUuid{};
     std::uint64_t payloadLength = 0;
+
+    [[nodiscard]] bool isFinalised() const noexcept { return (flags & FlagFinalised) != 0; }
 
     [[nodiscard]] std::array<Byte, kSize> encode() const;
     static Result<VolumeHeader> decode(ByteView data);
@@ -53,9 +63,17 @@ public:
     /// `basePath` is the archive path without a part suffix, for example
     /// "/media/usb/home.txa". With `partSize == 0` a single file of that exact
     /// name is written; otherwise parts are named "home.txa.001", ".002", ...
+    ///
+    /// `syncIntervalBytes` pushes the payload to the device roughly that often
+    /// while writing. Zero syncs only when a part closes and at finish(), which
+    /// is enough for correctness; a non-zero interval bounds how much dirty
+    /// data the operating system is holding, so a full USB stick reports
+    /// itself part way through instead of at close, and unplugging one loses
+    /// less. Removable targets should set it.
     static Result<std::unique_ptr<VolumeSink>> create(const std::filesystem::path& basePath,
                                                       std::uint64_t partSize,
-                                                      const ArchiveUuid& uuid);
+                                                      const ArchiveUuid& uuid,
+                                                      std::uint64_t syncIntervalBytes = 0);
 
     Status write(ByteView data);
 
@@ -63,8 +81,11 @@ public:
     /// recorded in the manifest are in this space.
     [[nodiscard]] std::uint64_t logicalOffset() const noexcept { return logicalOffset_; }
 
-    /// Closes the last part and patches every header with the final part count
-    /// and payload length.
+    /// Closes the last part and patches every header with the final part
+    /// count, payload length and the finalised flag. Parts are stamped from
+    /// last to first with a device sync after each, so an interrupted finish
+    /// can leave later parts unstamped but never leaves part 1 claiming a set
+    /// that was not completed.
     Status finish();
 
     [[nodiscard]] const std::vector<std::filesystem::path>& parts() const noexcept {
@@ -77,6 +98,8 @@ private:
 
     std::filesystem::path basePath_;
     std::uint64_t partSize_ = 0;
+    std::uint64_t syncIntervalBytes_ = 0;
+    std::uint64_t sinceSync_ = 0;
     ArchiveUuid uuid_{};
     FileStream current_;
     std::uint64_t currentPayload_ = 0;
@@ -100,6 +123,11 @@ public:
 
     [[nodiscard]] std::uint64_t logicalSize() const noexcept { return logicalSize_; }
     [[nodiscard]] const ArchiveUuid& uuid() const noexcept { return uuid_; }
+
+    /// False when the write that produced these files never reached finish().
+    /// Always true for a set written before the finalised flag existed, which
+    /// is why the flag lives behind a version bump rather than a bare check.
+    [[nodiscard]] bool finalised() const noexcept { return finalised_; }
     [[nodiscard]] std::size_t partCount() const noexcept { return parts_.size(); }
     [[nodiscard]] const std::vector<std::filesystem::path>& parts() const noexcept {
         return partPaths_;
@@ -116,6 +144,7 @@ private:
     std::vector<std::filesystem::path> partPaths_;
     ArchiveUuid uuid_{};
     std::uint64_t logicalSize_ = 0;
+    bool finalised_ = true;
 };
 
 /// Builds the "name.txa.007" style path for a part index.

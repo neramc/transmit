@@ -175,6 +175,13 @@ struct ImportRequest {
 
     /// Verify every block's hash before writing anything.
     bool verifyFirst = false;
+
+    /// Push each restored file to the device before its name appears, and the
+    /// folders once at the end. Without it a power cut part way through a
+    /// restore can leave files that exist but hold nothing - the one outcome
+    /// worse than a file that was never written. Costs one device flush per
+    /// file, so a dry run into scratch space turns it off.
+    bool durableWrites = true;
 };
 
 struct RestoredItem {

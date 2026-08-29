@@ -193,12 +193,20 @@ TEST_F(ContainerTest, OpensASplitArchiveFromAnyPart) {
     options.preset = CompressionPreset::Fast;
     options.partSize = 32 * 1024;
 
+    // Random bytes, because six runs of one repeated character compress into a
+    // single part and the test would then open a set that never split.
     std::vector<std::pair<std::string, ByteBuffer>> files;
+    std::mt19937 engine(5);
+    std::uniform_int_distribution<unsigned int> distribution(0, 255);
     for (int i = 0; i < 6; ++i) {
-        files.emplace_back("f" + std::to_string(i),
-                           repeatedBytes(20000, static_cast<char>('a' + i)));
+        ByteBuffer content(20000);
+        for (Byte& b : content) {
+            b = static_cast<Byte>(distribution(engine));
+        }
+        files.emplace_back("f" + std::to_string(i), std::move(content));
     }
     writeArchive(path, options, files, 16384);
+    ASSERT_TRUE(std::filesystem::exists(partPathFor(path, 2)));
 
     auto reader = ArchiveReader::open(partPathFor(path, 2));
     ASSERT_TRUE(reader) << reader.error().toString();
@@ -234,6 +242,113 @@ TEST_F(ContainerTest, ReportsAMissingVolume) {
     const auto reader = ArchiveReader::open(partPathFor(path, 1));
     ASSERT_FALSE(reader);
     EXPECT_EQ(reader.error().code, ErrorCode::VolumeMissing);
+}
+
+TEST_F(ContainerTest, StampsEveryPartAsFinished) {
+    const auto path = archivePath();
+    ArchiveOptions options;
+    options.preset = CompressionPreset::Fast;
+    options.partSize = 32 * 1024;
+
+    // Incompressible, so the parts are really needed: a run of one repeated
+    // byte would fit in a single part however small the split size.
+    std::vector<std::pair<std::string, ByteBuffer>> files;
+    std::mt19937 engine(7);
+    std::uniform_int_distribution<unsigned int> distribution(0, 255);
+    for (int i = 0; i < 6; ++i) {
+        ByteBuffer content(20000);
+        for (Byte& b : content) {
+            b = static_cast<Byte>(distribution(engine));
+        }
+        files.emplace_back("f" + std::to_string(i), std::move(content));
+    }
+    writeArchive(path, options, files, 16384);
+
+    std::uint16_t index = 0;
+    while (std::filesystem::exists(partPathFor(path, static_cast<std::uint16_t>(index + 1)))) {
+        ++index;
+        const auto raw = readWholeFile(partPathFor(path, index));
+        ASSERT_TRUE(raw) << raw.error().toString();
+        const auto header = VolumeHeader::decode(*raw);
+        ASSERT_TRUE(header) << header.error().toString();
+        EXPECT_TRUE(header->isFinalised()) << "part " << index << " was not stamped";
+        EXPECT_EQ(header->partIndex, index);
+    }
+    ASSERT_GE(index, 2);
+
+    // Every header agrees on the total, which is what lets a reader notice a
+    // part that never made it off the stick.
+    for (std::uint16_t i = 1; i <= index; ++i) {
+        const auto raw = readWholeFile(partPathFor(path, i));
+        ASSERT_TRUE(raw);
+        const auto header = VolumeHeader::decode(*raw);
+        ASSERT_TRUE(header);
+        EXPECT_EQ(header->partCount, index);
+    }
+}
+
+TEST_F(ContainerTest, RefusesAnArchiveWhoseWriteWasInterrupted) {
+    const auto path = archivePath();
+    ArchiveOptions options;
+    options.preset = CompressionPreset::Fast;
+
+    writeArchive(path, options, {{"notes.txt", textBytes("every byte of this is here")}});
+
+    // The finished archive is perfectly readable first, so the refusal below
+    // is about the stamp and nothing else.
+    ASSERT_TRUE(ArchiveReader::open(path));
+
+    // Now undo the last thing a finished write does: clear the stamp on the
+    // part, exactly as a machine that lost power between the payload and the
+    // finish would have left it.
+    auto raw = readWholeFile(path);
+    ASSERT_TRUE(raw) << raw.error().toString();
+    auto header = VolumeHeader::decode(*raw);
+    ASSERT_TRUE(header) << header.error().toString();
+    header->flags = 0;
+    header->partCount = 0;
+    const auto patched = header->encode();
+
+    auto stream = FileStream::open(path, FileStream::Mode::ReadWrite);
+    ASSERT_TRUE(stream);
+    ASSERT_TRUE(stream->seek(0));
+    ASSERT_TRUE(stream->write(ByteView(patched)));
+    stream->close();
+
+    const auto reader = ArchiveReader::open(path);
+    ASSERT_FALSE(reader) << "an unfinished archive must not read as a whole one";
+    EXPECT_EQ(reader.error().code, ErrorCode::CorruptArchive);
+    EXPECT_NE(reader.error().message.find("never finished"), std::string::npos)
+        << reader.error().message;
+}
+
+TEST_F(ContainerTest, StillReadsAVolumeWrittenBeforeTheStampExisted) {
+    const auto path = archivePath();
+    ArchiveOptions options;
+    options.preset = CompressionPreset::Fast;
+
+    writeArchive(path, options, {{"notes.txt", textBytes("written by an older Transmit")}});
+
+    // Version 1 had no finalised flag and left those bytes zero. Nothing in
+    // such an archive can prove it was finished, so it has to be believed -
+    // the alternative is refusing archives that are in fact fine.
+    auto raw = readWholeFile(path);
+    ASSERT_TRUE(raw);
+    auto header = VolumeHeader::decode(*raw);
+    ASSERT_TRUE(header);
+    header->version = 1;
+    header->flags = 0;
+    const auto patched = header->encode();
+
+    auto stream = FileStream::open(path, FileStream::Mode::ReadWrite);
+    ASSERT_TRUE(stream);
+    ASSERT_TRUE(stream->seek(0));
+    ASSERT_TRUE(stream->write(ByteView(patched)));
+    stream->close();
+
+    const auto reader = ArchiveReader::open(path);
+    ASSERT_TRUE(reader) << reader.error().toString();
+    EXPECT_TRUE((*reader)->manifest());
 }
 
 TEST_F(ContainerTest, DeduplicatesIdenticalFiles) {

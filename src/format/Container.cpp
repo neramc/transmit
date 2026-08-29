@@ -194,7 +194,8 @@ Result<std::unique_ptr<ArchiveWriter>> ArchiveWriter::create(const std::filesyst
         writer->header_.flags |= ArchiveHeader::FlagEncrypted;
     }
 
-    TRANSMIT_TRY(sink, VolumeSink::create(basePath, options.partSize, writer->header_.uuid));
+    TRANSMIT_TRY(sink, VolumeSink::create(basePath, options.partSize, writer->header_.uuid,
+                                          options.syncIntervalBytes));
     writer->sink_ = std::move(sink);
 
     const auto headerBytes = writer->header_.encode();
@@ -335,6 +336,15 @@ Result<std::unique_ptr<ArchiveReader>> ArchiveReader::open(const std::filesystem
 
     TRANSMIT_TRY(source, VolumeSource::open(anyPart));
     reader->source_ = std::move(source);
+
+    // The part headers are stamped last, after every byte is on the device, so
+    // an unstamped set means the write never got there. Reading one would hand
+    // back whatever happened to land, which for a restore is the worst
+    // possible answer: plausible, incomplete, and silent about it.
+    if (!reader->source_->finalised()) {
+        return makeError(ErrorCode::CorruptArchive, "'", fromFsPath(anyPart),
+                         "' was never finished - the capture that wrote it was interrupted");
+    }
 
     if (reader->source_->logicalSize() < ArchiveHeader::kSize + ArchiveFooter::kSize) {
         return makeError(ErrorCode::CorruptArchive, "the archive is too small to be valid");

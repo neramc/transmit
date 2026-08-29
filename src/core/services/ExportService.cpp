@@ -28,6 +28,34 @@ namespace {
 
 constexpr qint64 kProgressIntervalMs = 100;
 
+/// How much payload may sit unwritten in the page cache on removable media.
+/// Small enough that pulling the stick loses seconds rather than minutes, and
+/// that a full stick says so early; large enough that the flush itself is a
+/// rounding error next to the write it follows.
+constexpr quint64 kRemovableSyncIntervalBytes = 32ULL * 1024 * 1024;
+
+/// The volume a path is on, or a default-constructed one when nothing matches
+/// - which is the honest answer for a path on a drive the platform layer does
+/// not enumerate, and treats it as fixed rather than removable.
+platform::StorageVolume volumeFor(const platform::PlatformService& platform, const QString& path) {
+    const QString absolute = QFileInfo(path).absoluteFilePath();
+    platform::StorageVolume best;
+    int bestLength = -1;
+    for (const platform::StorageVolume& volume : platform.storageVolumes()) {
+        const QString root = QDir::cleanPath(volume.rootPath);
+        if (root.isEmpty() || !absolute.startsWith(root)) {
+            continue;
+        }
+        // The longest matching root wins, so "/media/usb" is preferred over
+        // "/" for a path that is under both.
+        if (root.length() > bestLength) {
+            bestLength = root.length();
+            best = volume;
+        }
+    }
+    return best;
+}
+
 /// Orders items so similar content lands in the same solid block. Grouping by
 /// extension first puts all the JSON, all the PNGs and all the source files
 /// together, which is where most of the compression gain comes from; the path
@@ -306,6 +334,17 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     options.partSize = request.partSize;
     options.passphrase = toUtf8(request.passphrase);
     options.solidBlockSize = request.solidBlockSize;
+
+    // On a USB stick the operating system will happily accept gigabytes it has
+    // not written yet, so without this the archive looks finished long before
+    // it is, a full stick reports ENOSPC only at close, and pulling one out
+    // loses far more than the last moment's work. Flushing every 32 MiB costs
+    // a fraction of a second per interval on any stick worth using and keeps
+    // all three of those honest. Internal disks are left alone: there the
+    // page cache is the whole point.
+    if (volumeFor(platform_, request.destinationPath).removable) {
+        options.syncIntervalBytes = kRemovableSyncIntervalBytes;
+    }
 
     // A folder that is not there yet is not a refusal: somebody who typed
     // "/media/usb/backups/laptop.txa" has said where they want it.
