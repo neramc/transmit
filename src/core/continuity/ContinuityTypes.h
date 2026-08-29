@@ -1,11 +1,14 @@
 #pragma once
 
 #include <QDateTime>
+#include <QFileInfo>
 #include <QList>
 #include <QMetaType>
 #include <QSet>
 #include <QString>
 #include <QStringList>
+
+#include <optional>
 
 #include "format/Container.h"
 #include "format/Manifest.h"
@@ -39,6 +42,70 @@ struct ContinuityNote {
     QString detail;   ///< why it got this grade, in words the user can act on
 };
 
+/// Why a file was left out, so the interface can say "412 excluded: 380 over
+/// the size limit, 22 too old, 10 unreadable" rather than only a number.
+enum class SkipReason {
+    TooLarge,
+    TooSmall,
+    WrongExtension,
+    TooOld,
+    TooNew,
+    Excluded,
+    Hidden,
+    Unreadable,
+};
+
+QString skipReasonName(SkipReason reason);
+
+/// Which files, out of everything a folder holds, are wanted.
+///
+/// Every field here was previously either fixed or scattered: the size limit
+/// and the exclude patterns lived on the selection with no way to reach them
+/// from the interface at all, and there was no way to say "only what I have
+/// touched this year" or "not the video files" - which is the difference
+/// between a capture that fits on the stick and one that does not.
+///
+/// A default-constructed rule takes everything.
+struct ScopeRule {
+    /// 0 means no limit. Both ends, because "nothing over 2 GB" and "nothing
+    /// under 1 KB" are both things people want and neither implies the other.
+    quint64 maximumFileSize = 0;
+    quint64 minimumFileSize = 0;
+
+    /// Extensions without the dot, lowercase. An include list, when it is not
+    /// empty, is exclusive: nothing else comes. Matched as a set rather than
+    /// with a pattern because this runs once per file.
+    QSet<QString> includeExtensions;
+    QSet<QString> excludeExtensions;
+
+    /// Invalid means no bound. Compared against the modification time.
+    QDateTime modifiedSince;
+    QDateTime modifiedBefore;
+
+    /// Wildcard patterns matched against the path relative to the root.
+    QStringList excludePatterns;
+
+    /// Symbolic links are recorded as links by default; following them risks
+    /// pulling in the same tree twice or escaping the selection entirely.
+    bool followSymlinks = false;
+
+    /// Hidden files are carried by default: on every system Transmit runs on,
+    /// that is where the settings are.
+    bool includeHidden = true;
+
+    /// True when this rule would accept everything, which lets the scan skip
+    /// the per-file work entirely.
+    [[nodiscard]] bool isUnrestricted() const;
+
+    /// Why this file is not wanted, or nothing when it is. Given the size
+    /// separately because the scan has already read it and a second stat per
+    /// file is measurable over a home directory.
+    [[nodiscard]] std::optional<SkipReason> reject(quint64 size, const QFileInfo& info) const;
+
+    /// Excludes that pay for themselves on almost every machine.
+    static QStringList defaultExcludes();
+};
+
 /// One place to capture from. A selection is a list of these rather than a list
 /// of absolute paths, so the same profile means the right thing on every OS.
 struct CaptureRoot {
@@ -46,8 +113,53 @@ struct CaptureRoot {
     QString relative;  ///< empty captures the whole known folder
     DomainId domain = DomainId::UserData;
     QString appId;  ///< set for application state, so the report can group by app
+
+    /// Which of the application's state roots this is, for the per-application
+    /// choice and for the move rules that name a root.
+    QString stateRootId;
+
     bool recursive = true;
     QStringList excludePatterns;  ///< wildcard patterns matched against the relative path
+
+    /// Narrower than the selection's own rule, for this root alone. Left
+    /// unrestricted, the selection's applies.
+    ScopeRule scope;
+
+    /// True for the broad profile roots - the whole of {APPCONFIG}, say - that
+    /// exist to catch applications with no recipe. A file inside one of those
+    /// belongs to whichever specific root also covers it, if any.
+    bool isFallback = false;
+
+    /// How specific this root is. Higher wins when two roots cover the same
+    /// file, which decides which application the file is credited to.
+    [[nodiscard]] int specificity() const;
+};
+
+/// Whether an application's own data comes along.
+enum class AppSelectionMode {
+    All,       ///< every application whose data can travel
+    None,      ///< record what is installed, carry none of it
+    Explicit,  ///< only the ones named
+};
+
+/// One application's answer.
+struct AppSelection {
+    QString appId;
+
+    /// Carry this application's settings and data.
+    bool captureState = true;
+
+    /// Note that it was installed, so the restore can offer to install it
+    /// again. Independent of the above: somebody may want the list without
+    /// the data, and the list costs nothing.
+    bool recordForReinstall = true;
+
+    /// Empty means every root the recipe has. Named roots let somebody take a
+    /// browser's settings without its site storage.
+    QStringList stateRootIds;
+
+    /// Narrower than the selection's own rule, for this application alone.
+    ScopeRule scope;
 };
 
 /// What a capture should collect.
@@ -55,20 +167,25 @@ struct CaptureSelection {
     QList<CaptureRoot> roots;
     QSet<int> domains{static_cast<int>(DomainId::UserData)};
 
-    /// Applied on top of every root. Defaults cover caches, build output and
-    /// other content that is large, regenerable and not worth carrying.
-    QStringList globalExcludePatterns;
+    /// Applied on top of every root unless the root has a narrower one.
+    ScopeRule scope;
 
-    /// Symbolic links are recorded as links by default; following them risks
-    /// pulling in the same tree twice or escaping the selection entirely.
-    bool followSymlinks = false;
+    AppSelectionMode appMode = AppSelectionMode::All;
 
-    /// 0 means no limit. Used by the UI's "skip files larger than" control.
-    quint64 maximumFileSize = 0;
+    /// Consulted when `appMode` is Explicit, and as an override otherwise: an
+    /// entry here always wins over the mode.
+    QList<AppSelection> apps;
 
     [[nodiscard]] bool includes(DomainId domain) const {
         return domains.contains(static_cast<int>(domain));
     }
+
+    /// The answer for one application, taking the mode and any explicit entry
+    /// into account.
+    [[nodiscard]] AppSelection answerFor(const QString& appId) const;
+
+    /// Whether this application's state should be captured at all.
+    [[nodiscard]] bool capturesStateOf(const QString& appId) const;
 
     /// Excludes that pay for themselves on almost every machine.
     static QStringList defaultExcludes();

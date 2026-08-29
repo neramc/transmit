@@ -212,10 +212,24 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
 
         matchedApps = catalog.match(installed, environment.os);
         matchedApps += catalog.matchByStateOnly(matchedApps, environment.os, folders);
+        catalog.noteWhichHaveState(matchedApps, environment.os, folders);
 
         if (selection.includes(DomainId::AppState)) {
-            selection.roots += catalog.captureRootsFor(matchedApps, environment.os, folders);
+            selection.roots +=
+                catalog.captureRootsFor(matchedApps, environment.os, folders, &selection);
         }
+
+        // What the person chose not to carry is still recorded as installed
+        // unless they said otherwise, because the list costs a few hundred
+        // bytes for the whole machine and is the only thing that makes a
+        // restore able to offer anything at all.
+        QList<MatchedApp> forInventory;
+        for (const MatchedApp& match : matchedApps) {
+            if (selection.answerFor(match.recipe.id).recordForReinstall) {
+                forInventory.push_back(match);
+            }
+        }
+        matchedApps = forInventory;
 
         // Anything holding its files open would be captured mid-write, so the
         // user is told which programs to close rather than having them killed.

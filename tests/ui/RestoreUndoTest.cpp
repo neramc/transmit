@@ -85,8 +85,12 @@ QString RestoreUndoTest::captureSomething() {
 
     core::ExportRequest request;
     request.destinationPath = workspace_->filePath(QStringLiteral("capture.txa"));
-    request.selection.roots.push_back(core::CaptureRoot{
-        format::PathTokenId::Documents, {}, format::DomainId::UserData, {}, true, {}});
+    // Named rather than positional: CaptureRoot has gained fields, and a
+    // brace list would silently put the next new one in the wrong slot.
+    core::CaptureRoot documentsRoot;
+    documentsRoot.token = format::PathTokenId::Documents;
+    documentsRoot.domain = format::DomainId::UserData;
+    request.selection.roots.push_back(documentsRoot);
 
     core::CancelToken token;
     const core::ExportReport report = service.run(request, token, nullptr);

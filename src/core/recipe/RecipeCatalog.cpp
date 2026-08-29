@@ -381,6 +381,11 @@ QList<MatchedApp> RecipeCatalog::match(const QList<platform::InstalledApp>& inst
             MatchedApp result;
             result.recipe = recipe;
             result.installation = app;
+            // Left false here and answered by the caller, which is the only
+            // one that knows this machine's folders. The comment on the field
+            // said it meant "at least one state directory exists here" and
+            // nothing ever set it, so every caller read false.
+            result.hasState = false;
             matched.push_back(result);
             break;  // one installation per recipe is enough
         }
@@ -431,37 +436,77 @@ QList<MatchedApp> RecipeCatalog::matchByStateOnly(const QList<MatchedApp>& alrea
     return extra;
 }
 
+void RecipeCatalog::noteWhichHaveState(QList<MatchedApp>& matched, OsFamily os,
+                                       const format::PathTokenMap& folders) const {
+    for (MatchedApp& match : matched) {
+        match.hasState = false;
+        for (const RecipeStatePath& state : match.recipe.state) {
+            for (const QString& tokenised : state.candidatesForOs(os)) {
+                const QString absolute = resolveStatePath(tokenised, folders);
+                if (!absolute.isEmpty() && QFileInfo::exists(absolute)) {
+                    match.hasState = true;
+                    break;
+                }
+            }
+            if (match.hasState) {
+                break;
+            }
+        }
+    }
+}
+
 QList<CaptureRoot> RecipeCatalog::captureRootsFor(const QList<MatchedApp>& matched, OsFamily os,
-                                                  const format::PathTokenMap& folders) const {
+                                                  const format::PathTokenMap& folders,
+                                                  const CaptureSelection* selection) const {
     QList<CaptureRoot> roots;
 
     for (const MatchedApp& match : matched) {
+        // The person's answer for this application, if they gave one. Asked
+        // here rather than filtered afterwards, because a root that is not
+        // wanted should never be scanned at all - the cost of an application's
+        // data is in walking it, not in deciding about it.
+        const AppSelection answer =
+            selection != nullptr ? selection->answerFor(match.recipe.id) : AppSelection{};
+        if (selection != nullptr && !answer.captureState) {
+            continue;
+        }
+
         for (const RecipeStatePath& state : match.recipe.state) {
-            const QString tokenised = state.forOs(os);
-            if (tokenised.isEmpty()) {
-                continue;  // this application has no state on this platform
+            if (selection != nullptr && !answer.stateRootIds.isEmpty() &&
+                !answer.stateRootIds.contains(state.id)) {
+                continue;  // a narrower choice: this root was not among them
             }
 
-            const SplitStatePath split = splitStatePath(tokenised);
-            if (!split.valid) {
-                qCWarning(logRecipe)
-                    << match.recipe.id << "has an unusable state path" << tokenised;
-                continue;
-            }
+            // Every candidate, first one that exists. A recipe naming both the
+            // native location and the Flatpak one finds whichever this machine
+            // actually has.
+            for (const QString& tokenised : state.candidatesForOs(os)) {
+                const SplitStatePath split = splitStatePath(tokenised);
+                if (!split.valid) {
+                    qCWarning(logRecipe)
+                        << match.recipe.id << "has an unusable state path" << tokenised;
+                    continue;
+                }
 
-            const QString absolute = resolveStatePath(tokenised, folders);
-            if (absolute.isEmpty() || !QFileInfo::exists(absolute)) {
-                continue;  // this machine does not have that directory
-            }
+                const QString absolute = resolveStatePath(tokenised, folders);
+                if (absolute.isEmpty() || !QFileInfo::exists(absolute)) {
+                    continue;  // this machine does not have that directory
+                }
 
-            CaptureRoot root;
-            root.token = split.token;
-            root.relative = split.relative;
-            root.domain = DomainId::AppState;
-            root.appId = match.recipe.id;
-            root.recursive = true;
-            root.excludePatterns = state.excludePatterns;
-            roots.push_back(root);
+                CaptureRoot root;
+                root.token = split.token;
+                root.relative = split.relative;
+                root.domain = DomainId::AppState;
+                root.appId = match.recipe.id;
+                root.stateRootId = state.id;
+                root.recursive = true;
+                root.excludePatterns = state.excludePatterns;
+                if (selection != nullptr) {
+                    root.scope = answer.scope;
+                }
+                roots.push_back(root);
+                break;
+            }
         }
     }
     return roots;

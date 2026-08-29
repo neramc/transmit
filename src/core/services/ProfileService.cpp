@@ -15,7 +15,7 @@ CaptureRoot userRoot(PathTokenId token) {
 
 CaptureSelection baseSelection() {
     CaptureSelection selection;
-    selection.globalExcludePatterns = CaptureSelection::defaultExcludes();
+    selection.scope.excludePatterns = ScopeRule::defaultExcludes();
     return selection;
 }
 

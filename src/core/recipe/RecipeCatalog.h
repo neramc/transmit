@@ -44,11 +44,22 @@ public:
                                                      OsFamily os,
                                                      const format::PathTokenMap& folders) const;
 
-    /// Turns matched applications into capture roots. Directories that do not
-    /// exist here are dropped, so a recipe listing three possible locations
-    /// contributes only the ones that are real.
-    [[nodiscard]] QList<CaptureRoot> captureRootsFor(const QList<MatchedApp>& matched, OsFamily os,
-                                                     const format::PathTokenMap& folders) const;
+    /// Turns matched applications into capture roots. A state root names
+    /// several possible locations and only the first that exists here is
+    /// taken, so a recipe covering both a native and a sandboxed install
+    /// contributes whichever this machine actually has.
+    ///
+    /// With a selection, only the applications and roots it asks for, each
+    /// carrying that application's own scope. Without one, everything.
+    [[nodiscard]] QList<CaptureRoot> captureRootsFor(
+        const QList<MatchedApp>& matched, OsFamily os, const format::PathTokenMap& folders,
+        const CaptureSelection* selection = nullptr) const;
+
+    /// Fills in MatchedApp::hasState by looking for each application's state
+    /// where this machine keeps it. Separate from match() because only the
+    /// caller knows the folder table.
+    void noteWhichHaveState(QList<MatchedApp>& matched, OsFamily os,
+                            const format::PathTokenMap& folders) const;
 
     /// The directory user overlays are read from.
     [[nodiscard]] static QString userCatalogDirectory();

@@ -46,6 +46,10 @@ private slots:
     void foldersAreRestoredBeforeWhatGoesInsideThem();
     void aFolderThatArrivesReadOnlyStillGetsItsContents();
     void aFolderThatCannotBeOpenedIsReportedRatherThanIgnored();
+    void aSizeLimitLeavesTheBigFilesBehindAndSaysWhy();
+    void anExtensionFilterTakesOnlyWhatWasAskedFor();
+    void aDateBoundLeavesTheOldFilesBehind();
+    void theMoreSpecificRootKeepsTheApplicationItBelongsTo();
     void cleanupTestCase();
 
 private:
@@ -786,6 +790,126 @@ void ContinuityRoundTripTest::aFolderThatCannotBeOpenedIsReportedRatherThanIgnor
     QFile::remove(hidden.fileName());
     QDir().rmdir(shut);
 #endif
+}
+
+void ContinuityRoundTripTest::aSizeLimitLeavesTheBigFilesBehindAndSaysWhy() {
+    core::ScanService scanner(*platform_);
+    core::CancelToken token;
+
+    core::CaptureSelection selection = documentsSelection();
+    const core::ScanResult everything = scanner.scan(selection, token, {});
+    QVERIFY(everything.fileCount > 0);
+
+    // random.bin is 30000 bytes and holiday.jpg is 20000; a 10 KiB ceiling
+    // leaves both behind and keeps the small text files.
+    selection.scope.maximumFileSize = 10 * 1024;
+    const core::ScanResult limited = scanner.scan(selection, token, {});
+
+    QVERIFY2(limited.fileCount < everything.fileCount, "the size limit changed nothing");
+    QCOMPARE(limited.skippedByReason.value(static_cast<int>(core::SkipReason::TooLarge)),
+             everything.fileCount - limited.fileCount);
+
+    // Counted by reason, not only totalled. "412 excluded" tells nobody
+    // whether to change anything; "380 over the size limit" tells them what.
+    QVERIFY(limited.skippedByReason.value(static_cast<int>(core::SkipReason::TooOld)) == 0);
+    for (const core::ScannedItem& item : limited.items) {
+        if (item.type == format::EntryType::File) {
+            QVERIFY2(item.size <= 10 * 1024, qPrintable(item.absolutePath));
+        }
+    }
+}
+
+void ContinuityRoundTripTest::anExtensionFilterTakesOnlyWhatWasAskedFor() {
+    core::ScanService scanner(*platform_);
+    core::CancelToken token;
+
+    core::CaptureSelection selection = documentsSelection();
+    selection.scope.includeExtensions = {QStringLiteral("txt")};
+    const core::ScanResult onlyText = scanner.scan(selection, token, {});
+
+    QVERIFY(onlyText.fileCount > 0);
+    for (const core::ScannedItem& item : onlyText.items) {
+        if (item.type == format::EntryType::File) {
+            QVERIFY2(item.absolutePath.endsWith(QStringLiteral(".txt")),
+                     qPrintable(item.absolutePath));
+        }
+    }
+    QVERIFY(onlyText.skippedByReason.value(static_cast<int>(core::SkipReason::WrongExtension)) > 0);
+
+    // And the other way round: excluding one type leaves everything else.
+    core::CaptureSelection without = documentsSelection();
+    without.scope.excludeExtensions = {QStringLiteral("bin")};
+    const core::ScanResult noBinaries = scanner.scan(without, token, {});
+    for (const core::ScannedItem& item : noBinaries.items) {
+        QVERIFY2(!item.absolutePath.endsWith(QStringLiteral(".bin")),
+                 qPrintable(item.absolutePath));
+    }
+}
+
+void ContinuityRoundTripTest::aDateBoundLeavesTheOldFilesBehind() {
+    core::ScanService scanner(*platform_);
+    core::CancelToken token;
+
+    core::CaptureSelection selection = documentsSelection();
+
+    // Everything in the fixture was written moments ago, so a bound in the
+    // future excludes all of it and one in the past excludes none. Both
+    // directions matter: a rule that silently accepted everything would pass
+    // the first half of this and fail the second.
+    selection.scope.modifiedSince = QDateTime::currentDateTime().addDays(1);
+    const core::ScanResult none = scanner.scan(selection, token, {});
+    QCOMPARE(none.fileCount, 0u);
+    QVERIFY(none.skippedByReason.value(static_cast<int>(core::SkipReason::TooOld)) > 0);
+
+    selection.scope.modifiedSince = QDateTime::currentDateTime().addDays(-1);
+    const core::ScanResult all = scanner.scan(selection, token, {});
+    QVERIFY(all.fileCount > 0);
+    QCOMPARE(all.skippedByReason.value(static_cast<int>(core::SkipReason::TooOld)), 0u);
+}
+
+void ContinuityRoundTripTest::theMoreSpecificRootKeepsTheApplicationItBelongsTo() {
+    // A file under an application's own folder is also under the broad sweep
+    // of the configuration tree that folder sits in. It belongs to the
+    // application. Before this the answer was whichever root came first in the
+    // list, so a broad sweep listed early took every file in it and the report
+    // credited them to nobody.
+    core::ScanService scanner(*platform_);
+    core::CancelToken token;
+
+    const QString appConfig = baseFor(format::PathTokenId::AppConfig);
+    const QString appFolder = appConfig + QStringLiteral("/some-obscure-tool");
+
+    core::CaptureSelection selection;
+    selection.domains = {static_cast<int>(format::DomainId::AppState)};
+
+    // The broad one first, which is the order that used to lose the id.
+    core::CaptureRoot sweep;
+    sweep.token = format::PathTokenId::AppConfig;
+    sweep.domain = format::DomainId::AppState;
+    sweep.isFallback = true;
+    selection.roots.push_back(sweep);
+
+    core::CaptureRoot specific;
+    specific.token = format::PathTokenId::AppConfig;
+    specific.relative = QStringLiteral("some-obscure-tool");
+    specific.domain = format::DomainId::AppState;
+    specific.appId = QStringLiteral("com.example.obscure");
+    specific.stateRootId = QStringLiteral("config");
+    selection.roots.push_back(specific);
+
+    QVERIFY2(specific.specificity() > sweep.specificity(),
+             "a root naming an application should outrank a blanket sweep");
+
+    const core::ScanResult result = scanner.scan(selection, token, {});
+
+    bool sawTheFile = false;
+    for (const core::ScannedItem& item : result.items) {
+        if (item.absolutePath == appFolder + QStringLiteral("/settings.json")) {
+            sawTheFile = true;
+            QCOMPARE(item.appId, QStringLiteral("com.example.obscure"));
+        }
+    }
+    QVERIFY2(sawTheFile, "the fixture file was not scanned at all");
 }
 
 QTEST_MAIN(ContinuityRoundTripTest)

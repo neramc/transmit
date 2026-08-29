@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QHash>
 #include <QList>
 #include <QObject>
 #include <QRegularExpression>
@@ -48,6 +49,12 @@ struct ScanResult {
     QStringList unreadableDirectories;
 
     QList<ContinuityNote> notes;
+
+    /// How many files each reason accounted for, so the interface can say
+    /// "412 excluded: 380 over the size limit, 22 too old, 10 unreadable"
+    /// rather than only a number - which tells nobody whether to change
+    /// anything.
+    QHash<int, quint64> skippedByReason;
 
     /// True when something the selection asked for could not even be looked
     /// at. The capture still runs - most of it is fine - but nothing may

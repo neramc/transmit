@@ -150,6 +150,82 @@ bool ExcludeMatcher::matches(const QString& relativePath) const {
     return false;
 }
 
+std::optional<SkipReason> ScopeRule::reject(quint64 size, const QFileInfo& info) const {
+    if (maximumFileSize > 0 && size > maximumFileSize) {
+        return SkipReason::TooLarge;
+    }
+    if (minimumFileSize > 0 && size < minimumFileSize) {
+        return SkipReason::TooSmall;
+    }
+    if (!includeExtensions.isEmpty() || !excludeExtensions.isEmpty()) {
+        const QString extension = info.suffix().toLower();
+        if (!includeExtensions.isEmpty() && !includeExtensions.contains(extension)) {
+            return SkipReason::WrongExtension;
+        }
+        if (excludeExtensions.contains(extension)) {
+            return SkipReason::WrongExtension;
+        }
+    }
+    if (modifiedSince.isValid() || modifiedBefore.isValid()) {
+        const QDateTime modified = info.lastModified();
+        if (modifiedSince.isValid() && modified < modifiedSince) {
+            return SkipReason::TooOld;
+        }
+        if (modifiedBefore.isValid() && modified > modifiedBefore) {
+            return SkipReason::TooNew;
+        }
+    }
+    if (!includeHidden && info.isHidden()) {
+        return SkipReason::Hidden;
+    }
+    return std::nullopt;
+}
+
+namespace {
+
+/// Beyond this many, the individual notes stop earning their place: nobody
+/// reads four thousand lines saying the same thing, and the counts by reason
+/// say it better in one.
+constexpr quint64 kMaxSkipNotes = 50;
+
+/// The stricter of two rules, field by field. A root can only ever narrow what
+/// the selection asked for.
+ScopeRule narrowest(const ScopeRule& selection, const ScopeRule& root) {
+    ScopeRule merged = selection;
+
+    const auto tighterMaximum = [](quint64 a, quint64 b) {
+        if (a == 0)
+            return b;
+        if (b == 0)
+            return a;
+        return std::min(a, b);
+    };
+    merged.maximumFileSize = tighterMaximum(selection.maximumFileSize, root.maximumFileSize);
+    merged.minimumFileSize = std::max(selection.minimumFileSize, root.minimumFileSize);
+
+    if (!root.includeExtensions.isEmpty()) {
+        merged.includeExtensions = selection.includeExtensions.isEmpty()
+                                       ? root.includeExtensions
+                                       : selection.includeExtensions & root.includeExtensions;
+    }
+    merged.excludeExtensions |= root.excludeExtensions;
+
+    if (root.modifiedSince.isValid() &&
+        (!merged.modifiedSince.isValid() || root.modifiedSince > merged.modifiedSince)) {
+        merged.modifiedSince = root.modifiedSince;
+    }
+    if (root.modifiedBefore.isValid() &&
+        (!merged.modifiedBefore.isValid() || root.modifiedBefore < merged.modifiedBefore)) {
+        merged.modifiedBefore = root.modifiedBefore;
+    }
+
+    merged.followSymlinks = selection.followSymlinks && root.followSymlinks;
+    merged.includeHidden = selection.includeHidden && root.includeHidden;
+    return merged;
+}
+
+}  // namespace
+
 ScanService::ScanService(const platform::PlatformService& platformService)
     : tokens_(platformService.knownFolders()) {}
 
@@ -157,28 +233,49 @@ ScanResult ScanService::scan(const CaptureSelection& selection, CancelToken& can
                              const ProgressCallback& progress) const {
     ScanResult result;
 
-    ExcludeMatcher globalExcludes(selection.globalExcludePatterns);
+    ExcludeMatcher globalExcludes(selection.scope.excludePatterns);
 
+    // Most specific first. Roots overlap by design - a recipe names Firefox's
+    // own directory, and a profile may also sweep the whole configuration tree
+    // it sits inside - and the order they are visited in decides which one
+    // keeps a shared file, and therefore which application the report credits
+    // it to. Insertion order gave that to whichever happened to be listed
+    // first, so a broad sweep near the top of the list took every file in it
+    // and the report credited them to nobody.
+    QList<CaptureRoot> ordered;
     for (const CaptureRoot& root : selection.roots) {
+        if (selection.includes(root.domain)) {
+            ordered.push_back(root);
+        }
+    }
+    std::stable_sort(ordered.begin(), ordered.end(),
+                     [](const CaptureRoot& a, const CaptureRoot& b) {
+                         return a.specificity() > b.specificity();
+                     });
+
+    for (const CaptureRoot& root : ordered) {
         if (cancelToken.isCancelled()) {
             break;
-        }
-        if (!selection.includes(root.domain)) {
-            continue;
         }
         scanRoot(root, selection, globalExcludes, result, cancelToken, progress);
     }
 
-    // Roots overlap by design: a recipe names an application's own directory,
-    // and a profile may also take the whole configuration tree it sits in.
-    // Whichever claimed a file first keeps it, so the recipe's application id
-    // survives rather than being replaced by the broader sweep.
-    QSet<QString> seen;
+    QHash<QString, qsizetype> firstAt;
     QList<ScannedItem> unique;
     unique.reserve(result.items.size());
 
     for (ScannedItem& item : result.items) {
-        if (seen.contains(item.absolutePath)) {
+        const auto seen = firstAt.constFind(item.absolutePath);
+        if (seen != firstAt.constEnd()) {
+            // The duplicate is dropped, but not its application id. A broad
+            // root reaching a file first used to mean the file was stored with
+            // no owner even though a recipe also covered it; now the id is
+            // promoted onto the copy that was kept.
+            ScannedItem& kept = unique[seen.value()];
+            if (kept.appId.isEmpty() && !item.appId.isEmpty()) {
+                kept.appId = item.appId;
+            }
+
             if (item.type == format::EntryType::File) {
                 result.totalBytes -= item.size;
                 --result.fileCount;
@@ -189,7 +286,7 @@ ScanResult ScanService::scan(const CaptureSelection& selection, CancelToken& can
             }
             continue;
         }
-        seen.insert(item.absolutePath);
+        firstAt.insert(item.absolutePath, unique.size());
         unique.push_back(std::move(item));
     }
     result.items = std::move(unique);
@@ -224,6 +321,11 @@ void ScanService::scanRoot(const CaptureRoot& root, const CaptureSelection& sele
     }
 
     ExcludeMatcher rootExcludes(root.excludePatterns);
+
+    // A root may narrow the selection but not widen it, so the two are merged
+    // rather than one replacing the other: somebody who set a size limit for
+    // the whole capture does not expect one application to ignore it.
+    const ScopeRule scope = narrowest(selection.scope, root.scope);
 
     QElapsedTimer throttle;
     throttle.start();
@@ -281,12 +383,18 @@ void ScanService::scanRoot(const CaptureRoot& root, const CaptureSelection& sele
             item.type = format::EntryType::File;
             item.size = static_cast<quint64>(std::max<qint64>(info.size(), 0));
 
-            if (selection.maximumFileSize > 0 && item.size > selection.maximumFileSize) {
+            // The root's own rule when it has one, otherwise the selection's.
+            // Counted by reason rather than only totalled: "412 excluded" tells
+            // nobody whether to change anything, and "380 over the size limit"
+            // tells them exactly what to change.
+            if (const auto reason = scope.reject(item.size, info)) {
                 ++result.skippedCount;
-                result.notes.push_back(ContinuityNote{
-                    ContinuityGrade::Manual, root.domain, absolute,
-                    QObject::tr("Skipped because it is larger than the size limit you set (%1).")
-                        .arg(formatBytes(selection.maximumFileSize))});
+                result.skippedByReason[static_cast<int>(*reason)]++;
+                if (result.skippedCount <= kMaxSkipNotes) {
+                    result.notes.push_back(
+                        ContinuityNote{ContinuityGrade::Manual, root.domain, absolute,
+                                       QObject::tr("Left out: %1.").arg(skipReasonName(*reason))});
+                }
                 return;
             }
             if (!info.isReadable()) {
@@ -296,6 +404,7 @@ void ScanService::scanRoot(const CaptureRoot& root, const CaptureSelection& sele
                     QObject::tr("This file could not be read, so it was not captured. It may "
                                 "belong to another user or need administrator rights.")});
                 ++result.skippedCount;
+                result.skippedByReason[static_cast<int>(SkipReason::Unreadable)]++;
                 return;
             }
 
@@ -322,7 +431,7 @@ void ScanService::scanRoot(const CaptureRoot& root, const CaptureSelection& sele
 
         QDirIterator::IteratorFlags flags =
             root.recursive ? QDirIterator::Subdirectories : QDirIterator::NoIteratorFlags;
-        if (selection.followSymlinks) {
+        if (scope.followSymlinks) {
             flags |= QDirIterator::FollowSymlinks;
         }
 

@@ -65,7 +65,8 @@ void CatalogTest::everyRecipeHasAUniqueId() {
         // A duplicate is not caught by the loader: the second silently replaces
         // the first, which is exactly what a user overlay is meant to do and
         // exactly what the built-in file must never do to itself.
-        QVERIFY2(!seen.contains(id), qPrintable(QStringLiteral("two recipes share the id %1").arg(id)));
+        QVERIFY2(!seen.contains(id),
+                 qPrintable(QStringLiteral("two recipes share the id %1").arg(id)));
         seen.insert(id);
     }
 }
@@ -163,10 +164,10 @@ void CatalogTest::everyMoveStepUsesAnActionWeImplement() {
     // a misspelt action would silently become "take it as it is" - which for a
     // step that meant "delete this or the application will not start" is the
     // worst possible substitution.
-    const QSet<QString> known = {
-        QStringLiteral("copy"),   QStringLiteral("skip"),      QStringLiteral("rename"),
-        QStringLiteral("merge"),  QStringLiteral("regenerate"), QStringLiteral("rewrite"),
-        QStringLiteral("drop-keys")};
+    const QSet<QString> known = {QStringLiteral("copy"),       QStringLiteral("skip"),
+                                 QStringLiteral("rename"),     QStringLiteral("merge"),
+                                 QStringLiteral("regenerate"), QStringLiteral("rewrite"),
+                                 QStringLiteral("drop-keys")};
 
     for (const QJsonValue& value : rawEntries(QStringLiteral(":/catalog/app-catalog.json"))) {
         const QJsonObject entry = value.toObject();
@@ -196,10 +197,10 @@ void CatalogTest::noTwoApplicationsClaimTheSameFolder() {
                      root.candidatesByOs.value(QString::fromLatin1(system))) {
                     const QString normalised = candidate.toLower();
                     const QString owner = claimedBy.value(normalised);
-                    QVERIFY2(owner.isEmpty() || owner == recipe.id,
-                             qPrintable(QStringLiteral("on %1, %2 and %3 both claim %4")
-                                            .arg(QLatin1String(system), owner, recipe.id,
-                                                 candidate)));
+                    QVERIFY2(
+                        owner.isEmpty() || owner == recipe.id,
+                        qPrintable(QStringLiteral("on %1, %2 and %3 both claim %4")
+                                       .arg(QLatin1String(system), owner, recipe.id, candidate)));
                     claimedBy.insert(normalised, recipe.id);
                 }
             }
@@ -314,8 +315,7 @@ void CatalogTest::theInventoryPayloadSurvivesTheJourney() {
                 QCOMPARE(back.state[r].contents[c].path, sent.state[r].contents[c].path);
                 QCOMPARE(back.state[r].contents[c].role, sent.state[r].contents[c].role);
                 QCOMPARE(back.state[r].contents[c].portable, sent.state[r].contents[c].portable);
-                QCOMPARE(back.state[r].contents[c].sensitive,
-                         sent.state[r].contents[c].sensitive);
+                QCOMPARE(back.state[r].contents[c].sensitive, sent.state[r].contents[c].sensitive);
                 QCOMPARE(back.state[r].contents[c].live, sent.state[r].contents[c].live);
             }
         }
