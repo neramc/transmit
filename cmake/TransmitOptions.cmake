@@ -25,6 +25,11 @@ option(TRANSMIT_WITH_OPENSSL  "Enable archive encryption and secrets"  ON)
 option(TRANSMIT_WITH_LIBSECRET "Read the Linux login keyring directly"  ON)
 option(TRANSMIT_WERROR        "Treat compiler warnings as errors"      OFF)
 
+# Needs clang and its sanitiser runtime. Off by default so an ordinary
+# build still produces the replay binaries, which is what keeps a crasher
+# fixed on a machine that cannot fuzz.
+option(TRANSMIT_BUILD_FUZZERS "Build the fuzz targets with libFuzzer"   OFF)
+
 # Interface target carrying the warning set every Transmit target compiles with.
 add_library(transmit_warnings INTERFACE)
 add_library(Transmit::Warnings ALIAS transmit_warnings)

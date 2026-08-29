@@ -18,6 +18,7 @@
 #include "format/BlockPacker.h"
 #include "format/Container.h"
 #include "format/Manifest.h"
+
 #include "property/Generators.h"
 
 namespace transmit::format {
@@ -55,11 +56,21 @@ std::vector<GeneratedFile> generateFiles(Gen& gen, std::uint64_t blockSize) {
 
         std::size_t length = 0;
         switch (gen.inRange(0, 6)) {
-            case 0: length = 0; break;
-            case 1: length = 1; break;
-            case 2: length = static_cast<std::size_t>(blockSize); break;
-            case 3: length = static_cast<std::size_t>(blockSize) + 1; break;
-            default: length = gen.size(0, static_cast<std::size_t>(blockSize) * 2); break;
+            case 0:
+                length = 0;
+                break;
+            case 1:
+                length = 1;
+                break;
+            case 2:
+                length = static_cast<std::size_t>(blockSize);
+                break;
+            case 3:
+                length = static_cast<std::size_t>(blockSize) + 1;
+                break;
+            default:
+                length = gen.size(0, static_cast<std::size_t>(blockSize) * 2);
+                break;
         }
         file.content = gen.bytes(length);
 
@@ -101,9 +112,7 @@ TEST_P(RoundTripProperty, EveryArchiveGivesBackWhatWentIntoIt) {
     options.preset = gen.pick(std::vector<CompressionPreset>{
         CompressionPreset::Fast, CompressionPreset::Balanced, CompressionPreset::Maximum});
     options.solidBlockSize = gen.pick(std::vector<std::uint64_t>{1024, 4096, 65536});
-    options.partSize = gen.chance(40)
-                           ? gen.pick(std::vector<std::uint64_t>{2048, 8192, 32768})
-                           : 0;
+    options.partSize = gen.chance(40) ? gen.pick(std::vector<std::uint64_t>{2048, 8192, 32768}) : 0;
     if (ArchiveCipher::isAvailable() && gen.chance(30)) {
         options.passphrase = "property-" + std::to_string(seed % 100000);
     }
@@ -211,8 +220,7 @@ TEST_P(RoundTripProperty, EveryArchiveGivesBackWhatWentIntoIt) {
     }
 }
 
-INSTANTIATE_TEST_SUITE_P(Cases, RoundTripProperty,
-                         testing::Range(0, property::caseCount(200)));
+INSTANTIATE_TEST_SUITE_P(Cases, RoundTripProperty, testing::Range(0, property::caseCount(200)));
 
 }  // namespace
 }  // namespace transmit::format

@@ -1,5 +1,6 @@
 add_subdirectory(unit)
 add_subdirectory(property)
+add_subdirectory(fuzz)
 
 if(TRANSMIT_BUILD_APP)
     add_subdirectory(integration)

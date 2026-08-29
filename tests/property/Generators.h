@@ -65,9 +65,10 @@ public:
 
     [[nodiscard]] bool chance(int percent) { return inRange(1, 100) <= percent; }
 
-    template <typename T>
+    template<typename T>
     [[nodiscard]] const T& pick(const std::vector<T>& choices) {
-        return choices.at(static_cast<std::size_t>(inRange(0, static_cast<int>(choices.size()) - 1)));
+        return choices.at(
+            static_cast<std::size_t>(inRange(0, static_cast<int>(choices.size()) - 1)));
     }
 
     /// Bytes that compress well, badly, or not at all, chosen at random -
@@ -99,11 +100,11 @@ public:
     /// is illegal on Windows.
     [[nodiscard]] std::string relativePath() {
         static const std::vector<std::string> kNames = {
-            "notes", "Notes", "report.txt", "report .txt", "a.b.c", "데이터",
-            "café", "with space", "UPPER", "lower", "CON", "PRN", "nul",
-            "trailing.", "dash-name", "under_score", "0123", "x"};
-        static const std::vector<std::string> kSuffixes = {
-            "", ".txt", ".json", ".TXT", ".bin", ".tar.gz", "."};
+            "notes", "Notes",      "report.txt", "report .txt", "a.b.c", "데이터",
+            "café",  "with space", "UPPER",      "lower",       "CON",   "PRN",
+            "nul",   "trailing.",  "dash-name",  "under_score", "0123",  "x"};
+        static const std::vector<std::string> kSuffixes = {"",     ".txt",    ".json", ".TXT",
+                                                           ".bin", ".tar.gz", "."};
 
         std::string path;
         const int depth = inRange(0, 3);

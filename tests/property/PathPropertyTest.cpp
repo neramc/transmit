@@ -14,6 +14,7 @@
 
 #include "format/NameSanitizer.h"
 #include "format/PathToken.h"
+
 #include "property/Generators.h"
 
 namespace transmit::format {
@@ -23,7 +24,7 @@ using property::Gen;
 
 const std::vector<OsFamily>& everyFamily() {
     static const std::vector<OsFamily> kFamilies = {OsFamily::Windows, OsFamily::MacOs,
-                                                     OsFamily::Linux};
+                                                    OsFamily::Linux};
     return kFamilies;
 }
 
@@ -81,9 +82,8 @@ TEST(PathProperty, ARestoredPathNeverEscapesTheFolderItResolvesUnder) {
     // The shapes an archive would carry to climb out of the destination,
     // mixed in with ordinary generated ones.
     const std::vector<std::string> kEscapes = {
-        "../outside",       "../../outside", "a/../../outside", "./../outside",
-        "a/b/../../../out", "/absolute",     "//server/share",  "C:/elsewhere",
-        "..\\windows",      "a\\..\\..\\out"};
+        "../outside", "../../outside",  "a/../../outside", "./../outside", "a/b/../../../out",
+        "/absolute",  "//server/share", "C:/elsewhere",    "..\\windows",  "a\\..\\..\\out"};
 
     for (int i = 0; i < property::caseCount(400); ++i) {
         const OsFamily family = gen.pick(everyFamily());
@@ -116,8 +116,7 @@ TEST(PathProperty, ARestoredPathNeverEscapesTheFolderItResolvesUnder) {
 
         const auto resolved = map.resolve(TokenizedPath{PathTokenId::Documents, safe});
         ASSERT_TRUE(resolved) << resolved.error().toString();
-        EXPECT_EQ(resolved->rfind(*base, 0), 0u)
-            << *resolved << " is outside " << *base;
+        EXPECT_EQ(resolved->rfind(*base, 0), 0u) << *resolved << " is outside " << *base;
     }
 }
 
