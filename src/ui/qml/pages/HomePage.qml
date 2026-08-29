@@ -27,11 +27,16 @@ AppScrollView {
 
             AppCard {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 168
+                Layout.fillHeight: true
+                // Sized by what is in it. A fixed height here was right at one
+                // type scale and eight pixels short at the next, and the button
+                // simply hung out of the bottom of the card.
+                implicitHeight: saveContent.implicitHeight + Spacing.s24 * 2
                 interactive: true
                 onClicked: AppController.currentPage = "export"
 
                 ColumnLayout {
+                    id: saveContent
                     anchors.fill: parent
                     anchors.margins: Spacing.xl
                     spacing: Spacing.sm
@@ -67,11 +72,13 @@ AppScrollView {
 
             AppCard {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 168
+                Layout.fillHeight: true
+                implicitHeight: openContent.implicitHeight + Spacing.s24 * 2
                 interactive: true
                 onClicked: AppController.currentPage = "import"
 
                 ColumnLayout {
+                    id: openContent
                     anchors.fill: parent
                     anchors.margins: Spacing.xl
                     spacing: Spacing.sm
