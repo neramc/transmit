@@ -634,7 +634,6 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     report.rawBytes = bytesDone;
     report.storedBytes = writer->storedBytes();
     report.deduplicatedBytes = packer.deduplicatedBytes();
-    report.elapsedMilliseconds = timer.elapsed();
 
     for (const auto& part : writer->parts()) {
         report.archiveParts.push_back(fromUtf8(format::fromFsPath(part)));
@@ -741,6 +740,11 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         }
     }
 
+    // Set here rather than with the rest of the report: the read-back, the
+    // checksum file and the part patching all happen after that point, and a
+    // capture that took three and a half seconds should not tell somebody it
+    // took one and a half.
+    report.elapsedMilliseconds = timer.elapsed();
     report.stages = stages.stages();
 
     qCInfo(logCapture) << "captured" << report.fileCount << "files:" << formatBytes(report.rawBytes)

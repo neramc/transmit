@@ -229,6 +229,17 @@ int runCapture(const QString& corpus, const QString& archive, const QString& pre
             out() << "capture failed: " << report.errorMessage << Qt::endl;
             return 1;
         }
+        // An empty corpus is the failure that looks most like a success: the
+        // capture works, it is instant, and the comparison reports a
+        // spectacular improvement. It is measuring nothing.
+        if (report.fileCount == 0) {
+            out() << "captured nothing from " << corpus
+                  << " - is that a corpus directory? Make one with: transmit_bench corpus "
+                     "--corpus "
+                  << corpus << Qt::endl;
+            return 1;
+        }
+
         result.milliseconds.push_back(static_cast<double>(report.elapsedMilliseconds));
         result.bytesIn = report.rawBytes;
         result.bytesOut = report.storedBytes;
@@ -353,7 +364,19 @@ int main(int argc, char** argv) {
     const int repeat = std::max(1, parser.value(repeatOption).toInt());
 
     if (command == QLatin1String("corpus")) {
-        return writeCorpus(parser.value(outOption), parser.value(profileOption),
+        // --corpus, the same option every other command uses for the same
+        // directory. It used to read --out, so `corpus --corpus /dev/shm/x`
+        // wrote two hundred megabytes into the working directory and then the
+        // capture measured an empty folder and called it a 99% improvement.
+        QString directory = parser.value(corpusOption);
+        if (directory.isEmpty()) {
+            directory = parser.value(outOption);
+        }
+        if (directory.isEmpty()) {
+            out() << "corpus needs --corpus DIRECTORY" << Qt::endl;
+            return 1;
+        }
+        return writeCorpus(directory, parser.value(profileOption),
                            parser.value(seedOption).toUInt());
     }
     if (command == QLatin1String("capture")) {

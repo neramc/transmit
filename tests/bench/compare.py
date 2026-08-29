@@ -45,6 +45,14 @@ def main():
         if was["medianMs"] < 1.0:
             continue
 
+        # Neither is one that read nothing. A capture pointed at an empty
+        # directory finishes instantly and reports a spectacular improvement,
+        # and a gate that accepts that is not a gate.
+        if was.get("files", 0) > 0 and now.get("files", 0) == 0:
+            failures.append(
+                f"{name} measured no files at all - the corpus is missing or empty")
+            continue
+
         change = (now["medianMs"] - was["medianMs"]) / was["medianMs"] * 100.0
         print(f"{name:<28} {was['medianMs']:>10.1f} {now['medianMs']:>10.1f} "
               f"{change:>+8.1f}%")

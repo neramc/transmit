@@ -445,3 +445,75 @@ jobs:
             timeout-*
             oom-*
           if-no-files-found: ignore
+
+  # The numbers this project promises, checked against the ones it promised
+  # last time.
+  #
+  # Linux only, and deliberately so: the Windows and macOS runners are shared
+  # hardware with a noise floor wide enough that a gate on them would fire on
+  # other people's builds. A gate that fires on noise is a gate everybody
+  # learns to ignore, which is worse than not having one.
+  #
+  # The committed baselines were taken on a developer machine, so the first
+  # thing to do with the artifact this uploads is recalibrate them: a baseline
+  # from faster hardware makes the gate too loose, and one from slower hardware
+  # makes it fire on nothing. The tolerances assume the two are the same class
+  # of machine.
+  benchmark:
+    name: Speed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libzstd-dev liblzma-dev libssl-dev \
+                                  libsqlite3-dev qt6-base-dev
+
+      - name: Build
+        run: |
+          cmake -S . -B build-bench -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DTRANSMIT_BUILD_BENCH=ON \
+                -DTRANSMIT_BUILD_TESTS=OFF -DTRANSMIT_BUILD_APP=OFF
+          cmake --build build-bench --target transmit_bench
+
+      # In memory rather than on the runner's disk, which is network-backed and
+      # varies by more than anything being measured here.
+      - name: Make a corpus
+        run: |
+          ./build-bench/transmit_bench corpus --corpus /dev/shm/corpus \
+              --profile mixed --seed 20260829
+
+      - name: The per-byte primitives
+        run: |
+          ./build-bench/transmit_bench micro --repeat 5 --json micro.json
+          python3 tests/bench/compare.py tests/bench/baseline-micro.json micro.json --tolerance 15
+
+      - name: Capture
+        run: |
+          ./build-bench/transmit_bench capture --corpus /dev/shm/corpus \
+              --out /dev/shm/bench.txa --repeat 3 --json capture.json
+          python3 tests/bench/compare.py tests/bench/baseline-capture.json capture.json \
+              --tolerance 20 --size-tolerance 5
+
+      - name: Restore
+        run: |
+          ./build-bench/transmit_bench restore --archive /dev/shm/bench.txa \
+              --into /dev/shm/restored --repeat 3 --json restore.json
+          python3 tests/bench/compare.py tests/bench/baseline-restore.json restore.json \
+              --tolerance 20
+
+      # The measurement is worth keeping whether or not it passed: a run that
+      # failed the gate is the one somebody needs the numbers from.
+      - name: Keep the numbers
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            micro.json
+            capture.json
+            restore.json
+          if-no-files-found: ignore

@@ -2,15 +2,15 @@
     "results": [
         {
             "bytesIn": 257948566,
-            "bytesOut": 104960403,
+            "bytesOut": 104995797,
             "files": 2000,
-            "medianMs": 1690,
-            "mibPerSecond": 145.56149251362277,
+            "medianMs": 3893,
+            "mibPerSecond": 63.19006482096647,
             "name": "capture/balanced",
             "runsMs": [
-                2688,
-                1617,
-                1690
+                3974,
+                3840,
+                3893
             ]
         }
     ]

@@ -40,4 +40,12 @@ if(TRANSMIT_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
+# Not under tests/: the benchmark is not a test and measuring it should not
+# mean building four hundred of them. TRANSMIT_BUILD_BENCH used to be reachable
+# only with TRANSMIT_BUILD_TESTS also on, which made an option that said it
+# built the harness quietly build nothing.
+if(TRANSMIT_BUILD_BENCH AND NOT TRANSMIT_BUILD_TESTS)
+    add_subdirectory(tests/bench)
+endif()
+
 include(TransmitSummary)
