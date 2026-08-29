@@ -15,12 +15,15 @@
 #include <iostream>
 
 #include "core/continuity/ContinuityTypes.h"
+#include "core/continuity/SelectionCodec.h"
+#include "core/recipe/RecipeCatalog.h"
 #include "core/services/ExportService.h"
 #include "core/services/ImportService.h"
 #include "core/services/ProfileService.h"
 #include "core/services/RollbackWriter.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
+#include "format/FileIo.h"
 #include "platform/PlatformService.h"
 
 #include "cli/Terminal.h"
@@ -126,6 +129,83 @@ void printNotes(const QList<core::ContinuityNote>& notes) {
     }
 }
 
+/// "512", "64K", "3584M", "2G". Returns nothing when it is not a size.
+std::optional<quint64> parseSize(const QString& text) {
+    const QString upper = text.trimmed().toUpper();
+    if (upper.isEmpty()) {
+        return std::nullopt;
+    }
+
+    quint64 multiplier = 1;
+    QString digits = upper;
+    if (upper.endsWith(u'K')) {
+        multiplier = 1024ULL;
+        digits.chop(1);
+    } else if (upper.endsWith(u'M')) {
+        multiplier = 1024ULL * 1024;
+        digits.chop(1);
+    } else if (upper.endsWith(u'G')) {
+        multiplier = 1024ULL * 1024 * 1024;
+        digits.chop(1);
+    }
+
+    bool valid = false;
+    const quint64 value = digits.toULongLong(&valid);
+    if (!valid) {
+        return std::nullopt;
+    }
+    return value * multiplier;
+}
+
+/// "30d", "6m", "2y", or an ISO date. Relative forms because that is how
+/// people think about it - "anything I have touched this year" - and the
+/// absolute one because a script wants a fixed boundary.
+std::optional<QDateTime> parseWhen(const QString& text) {
+    const QString trimmed = text.trimmed();
+    if (trimmed.isEmpty()) {
+        return std::nullopt;
+    }
+
+    const QChar unit = trimmed.back().toLower();
+    if (unit == u'd' || unit == u'w' || unit == u'm' || unit == u'y') {
+        bool valid = false;
+        const int count = QStringView(trimmed).chopped(1).toInt(&valid);
+        if (!valid || count < 0) {
+            return std::nullopt;
+        }
+        const QDateTime now = QDateTime::currentDateTime();
+        switch (unit.unicode()) {
+            case u'd':
+                return now.addDays(-count);
+            case u'w':
+                return now.addDays(-count * 7);
+            case u'm':
+                return now.addMonths(-count);
+            default:
+                return now.addYears(-count);
+        }
+    }
+
+    const QDateTime absolute = QDateTime::fromString(trimmed, Qt::ISODate);
+    return absolute.isValid() ? std::optional<QDateTime>(absolute) : std::nullopt;
+}
+
+/// The extensions in a comma-separated list, lowercase and without dots, so
+/// "--include-ext .TXT, md" means what it looks like it means.
+QSet<QString> parseExtensions(const QString& text) {
+    QSet<QString> extensions;
+    for (const QString& piece : text.split(u',', Qt::SkipEmptyParts)) {
+        QString extension = piece.trimmed().toLower();
+        while (extension.startsWith(u'.')) {
+            extension.remove(0, 1);
+        }
+        if (!extension.isEmpty()) {
+            extensions.insert(extension);
+        }
+    }
+    return extensions;
+}
+
 int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption,
               const QCommandLineOption& profileOption, const QCommandLineOption& presetOption,
               const QCommandLineOption& splitOption, const QCommandLineOption& passphraseOption,
@@ -141,11 +221,31 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
 
     core::ExportRequest request;
     request.destinationPath = parser.value(outputOption);
-    request.label = parser.value(labelOption);
 
-    const core::CaptureProfile profile =
-        core::ProfileService::profileById(parser.value(profileOption));
-    request.selection = profile.selection;
+    // A saved selection is the starting point; anything typed on the command
+    // line goes on top of it. That way one file can hold the settled choices
+    // and a flag can vary the one thing that differs this time.
+    core::CaptureDocument document;
+    if (parser.isSet(QStringLiteral("selection-file"))) {
+        const QString path = parser.value(QStringLiteral("selection-file"));
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly)) {
+            return reportError(
+                QStringLiteral("could not read %1: %2").arg(path, file.errorString()));
+        }
+        QString error;
+        if (!core::SelectionCodec::decode(file.readAll(), document, &error)) {
+            return reportError(QStringLiteral("%1: %2").arg(path, error));
+        }
+    } else {
+        const core::CaptureProfile profile =
+            core::ProfileService::profileById(parser.value(profileOption));
+        document.selection = profile.selection;
+    }
+
+    request.selection = document.selection;
+    request.packaging = document.packaging;
+    request.label = parser.isSet(labelOption) ? parser.value(labelOption) : document.label;
 
     if (parser.isSet(domainsOption)) {
         request.selection.domains.clear();
@@ -158,34 +258,140 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
         }
     }
 
-    const auto preset = format::presetFromName(toUtf8(parser.value(presetOption)));
-    if (!preset) {
-        return reportError(core::describeError(preset.error()));
+    if (parser.isSet(presetOption) || !parser.isSet(QStringLiteral("selection-file"))) {
+        const auto preset = format::presetFromName(toUtf8(parser.value(presetOption)));
+        if (!preset) {
+            return reportError(core::describeError(preset.error()));
+        }
+        request.packaging.preset = *preset;
     }
-    request.preset = *preset;
 
     if (parser.isSet(splitOption)) {
-        const QString text = parser.value(splitOption).trimmed().toUpper();
-        quint64 multiplier = 1;
-        QString digits = text;
-        if (text.endsWith(u'K')) {
-            multiplier = 1024ULL;
-            digits.chop(1);
-        } else if (text.endsWith(u'M')) {
-            multiplier = 1024ULL * 1024;
-            digits.chop(1);
-        } else if (text.endsWith(u'G')) {
-            multiplier = 1024ULL * 1024 * 1024;
-            digits.chop(1);
-        }
-
-        bool valid = false;
-        const quint64 value = digits.toULongLong(&valid);
-        if (!valid) {
+        const auto size = parseSize(parser.value(splitOption));
+        if (!size) {
             return reportError(QStringLiteral("could not read the split size '%1'")
                                    .arg(parser.value(splitOption)));
         }
-        request.partSize = value * multiplier;
+        request.packaging.partSize = *size;
+    }
+
+    // ------------------------------------------------------- what to take
+    core::ScopeRule& scope = request.selection.scope;
+
+    const auto readSize = [&parser](const char* name, quint64& into) -> QString {
+        const QString option = QString::fromLatin1(name);
+        if (!parser.isSet(option)) {
+            return {};
+        }
+        const auto size = parseSize(parser.value(option));
+        if (!size) {
+            return QStringLiteral("could not read --%1 '%2'").arg(option, parser.value(option));
+        }
+        into = *size;
+        return {};
+    };
+
+    for (const auto& [name, target] : std::initializer_list<std::pair<const char*, quint64*>>{
+             {"max-file-size", &scope.maximumFileSize},
+             {"min-file-size", &scope.minimumFileSize},
+             {"block-size", &request.packaging.solidBlockSize},
+             {"sync-every", &request.packaging.syncIntervalBytes}}) {
+        if (const QString problem = readSize(name, *target); !problem.isEmpty()) {
+            return reportError(problem);
+        }
+    }
+
+    for (const auto& [name, target] : std::initializer_list<std::pair<const char*, QDateTime*>>{
+             {"modified-since", &scope.modifiedSince},
+             {"modified-before", &scope.modifiedBefore}}) {
+        const QString option = QString::fromLatin1(name);
+        if (!parser.isSet(option)) {
+            continue;
+        }
+        const auto when = parseWhen(parser.value(option));
+        if (!when) {
+            return reportError(QStringLiteral("could not read --%1 '%2'; try 30d, 6m, 2y or a "
+                                              "date like 2025-01-31")
+                                   .arg(option, parser.value(option)));
+        }
+        *target = *when;
+    }
+
+    if (parser.isSet(QStringLiteral("include-ext"))) {
+        scope.includeExtensions = parseExtensions(parser.value(QStringLiteral("include-ext")));
+    }
+    if (parser.isSet(QStringLiteral("exclude-ext"))) {
+        scope.excludeExtensions = parseExtensions(parser.value(QStringLiteral("exclude-ext")));
+    }
+    scope.excludePatterns += parser.values(QStringLiteral("exclude"));
+    if (parser.isSet(QStringLiteral("no-hidden"))) {
+        scope.includeHidden = false;
+    }
+    if (parser.isSet(QStringLiteral("follow-symlinks"))) {
+        scope.followSymlinks = true;
+    }
+
+    if (parser.isSet(QStringLiteral("workers"))) {
+        bool valid = false;
+        const int workers = parser.value(QStringLiteral("workers")).toInt(&valid);
+        if (!valid || workers < 0) {
+            return reportError(QStringLiteral("--workers needs a count of 0 or more"));
+        }
+        request.packaging.workerCount = workers;
+    }
+    if (parser.isSet(QStringLiteral("no-verify-after"))) {
+        request.packaging.verifyAfterWriting = false;
+    }
+
+    // ------------------------------------------------ which applications
+    if (parser.isSet(QStringLiteral("apps"))) {
+        const QString value = parser.value(QStringLiteral("apps")).trimmed();
+        if (value.compare(QLatin1String("all"), Qt::CaseInsensitive) == 0) {
+            request.selection.appMode = core::AppSelectionMode::All;
+        } else if (value.compare(QLatin1String("none"), Qt::CaseInsensitive) == 0) {
+            request.selection.appMode = core::AppSelectionMode::None;
+        } else {
+            request.selection.appMode = core::AppSelectionMode::Explicit;
+            for (const QString& id : value.split(u',', Qt::SkipEmptyParts)) {
+                core::AppSelection app;
+                app.appId = id.trimmed();
+                app.captureState = true;
+                app.stateRootIds =
+                    parser.value(QStringLiteral("app-roots")).split(u',', Qt::SkipEmptyParts);
+                request.selection.apps.push_back(app);
+            }
+        }
+    }
+
+    for (const QString& id :
+         parser.value(QStringLiteral("no-app-data")).split(u',', Qt::SkipEmptyParts)) {
+        // Named after the mode on purpose: "--apps all --no-app-data
+        // com.spotify.client" is the common case, and an explicit entry always
+        // wins over the mode.
+        core::AppSelection app;
+        app.appId = id.trimmed();
+        app.captureState = false;
+        app.recordForReinstall = true;
+        request.selection.apps.push_back(app);
+    }
+
+    if (parser.isSet(QStringLiteral("save-selection"))) {
+        core::CaptureDocument saved;
+        saved.selection = request.selection;
+        saved.packaging = request.packaging;
+        saved.label = request.label;
+
+        const QString path = parser.value(QStringLiteral("save-selection"));
+        const QByteArray encoded = core::SelectionCodec::encode(saved);
+        const auto written = format::writeFileAtomically(
+            format::toFsPath(path.toUtf8().toStdString()),
+            format::ByteView(reinterpret_cast<const std::byte*>(encoded.constData()),
+                             static_cast<std::size_t>(encoded.size())));
+        if (!written) {
+            return reportError(QStringLiteral("could not write %1: %2")
+                                   .arg(path, core::describeError(written.error())));
+        }
+        out() << QStringLiteral("saved these choices to ") << path << Qt::endl;
     }
 
     const bool capturingSecrets =
@@ -494,6 +700,75 @@ int runRollback(const QString& archivePath) {
     return result->errors.isEmpty() ? 0 : 1;
 }
 
+/// What is installed here, and how much of it can come with you.
+///
+/// The list matters more than it looks: "--apps a,b,c" needs ids, and there is
+/// no other way to find out what they are. It also answers the question the
+/// interface will ask in a table - whether an application's data travels at
+/// all, or whether Transmit can only note that it was installed.
+int runApps(bool onlyThoseThatCarryData) {
+    auto platformService = platform::PlatformService::create();
+
+    core::RecipeCatalog catalog;
+    catalog.loadDefaults();
+
+    const format::PathTokenMap folders = platformService->knownFolders();
+    const format::OsFamily os = platformService->environment().os;
+
+    QList<core::MatchedApp> matched = catalog.match(platformService->installedApplications(), os);
+    matched += catalog.matchByStateOnly(matched, os, folders);
+    catalog.noteWhichHaveState(matched, os, folders);
+
+    std::sort(matched.begin(), matched.end(),
+              [](const core::MatchedApp& a, const core::MatchedApp& b) {
+                  return a.recipe.displayName.localeAwareCompare(b.recipe.displayName) < 0;
+              });
+
+    int shown = 0;
+    for (const core::MatchedApp& match : matched) {
+        const bool carries = match.recipe.portability.carriesData && match.hasState;
+        if (onlyThoseThatCarryData && !carries) {
+            continue;
+        }
+        ++shown;
+
+        out() << QStringLiteral("%1  %2").arg(
+                     carries ? QStringLiteral("data + list") : QStringLiteral("list only  "),
+                     match.recipe.displayName)
+              << Qt::endl;
+        out() << QStringLiteral("    %1").arg(match.recipe.id) << Qt::endl;
+
+        if (!carries && match.recipe.portability.carriesData) {
+            out() << QStringLiteral(
+                         "    its data could travel, but none of its folders are on this machine")
+                  << Qt::endl;
+        }
+        for (const core::RecipeStatePath& root : match.recipe.state) {
+            for (const QString& candidate : root.candidatesForOs(os)) {
+                const QString absolute = core::RecipeCatalog::resolveStatePath(candidate, folders);
+                if (!absolute.isEmpty() && QFileInfo::exists(absolute)) {
+                    out() << QStringLiteral("    %1: %2").arg(root.id, absolute) << Qt::endl;
+                    break;
+                }
+            }
+        }
+
+        const QString why = match.recipe.portability.reasonFor(os, os);
+        if (!why.isEmpty()) {
+            out() << QStringLiteral("    %1").arg(why) << Qt::endl;
+        }
+        out() << Qt::endl;
+    }
+
+    out() << QStringLiteral(
+                 "%1 application(s)%2. Use the id with --apps, --no-app-data or "
+                 "--app-roots.")
+                 .arg(shown)
+                 .arg(onlyThoseThatCarryData ? QStringLiteral(" whose data can travel") : QString())
+          << Qt::endl;
+    return 0;
+}
+
 int runProfiles() {
     for (const core::CaptureProfile& profile : core::ProfileService::builtInProfiles()) {
         out() << QStringLiteral("%1  %2").arg(profile.id, -12).arg(profile.displayName) << Qt::endl;
@@ -587,8 +862,8 @@ int main(int argc, char** argv) {
     parser.addVersionOption();
     parser.addPositionalArgument(
         QStringLiteral("command"),
-        QStringLiteral(
-            "export, import, inspect, verify, rollback, profiles, drives or environment"));
+        QStringLiteral("export, import, inspect, verify, rollback, apps, profiles, drives or "
+                       "environment"));
     parser.addPositionalArgument(QStringLiteral("archive"),
                                  QStringLiteral("archive path, for import, inspect and verify"));
 
@@ -644,10 +919,76 @@ int main(int argc, char** argv) {
     const QCommandLineOption verboseOption(QStringLiteral("verbose"),
                                            QStringLiteral("Log what is happening in detail."));
 
+    // Everything below is read back by name rather than being threaded through
+    // runExport's parameter list, which was already ten long. A name is also
+    // what the user typed, so a mistake here is visible in the same place.
+    const QList<QCommandLineOption> scopeOptions = {
+        QCommandLineOption(QStringLiteral("apps"),
+                           QStringLiteral("Which applications' data to carry: all, none, or a "
+                                          "comma-separated list of ids (see `apps`)."),
+                           QStringLiteral("list")),
+        QCommandLineOption(QStringLiteral("no-app-data"),
+                           QStringLiteral("Note these applications as installed but leave their "
+                                          "data behind."),
+                           QStringLiteral("list")),
+        QCommandLineOption(QStringLiteral("app-roots"),
+                           QStringLiteral("Only these state folders of the chosen applications, "
+                                          "by their id in the catalog."),
+                           QStringLiteral("list")),
+        QCommandLineOption(QStringLiteral("max-file-size"),
+                           QStringLiteral("Leave out files larger than this, e.g. 2G."),
+                           QStringLiteral("size")),
+        QCommandLineOption(QStringLiteral("min-file-size"),
+                           QStringLiteral("Leave out files smaller than this."),
+                           QStringLiteral("size")),
+        QCommandLineOption(QStringLiteral("modified-since"),
+                           QStringLiteral("Only files touched since then: 30d, 6m, 2y, or a date."),
+                           QStringLiteral("when")),
+        QCommandLineOption(QStringLiteral("modified-before"),
+                           QStringLiteral("Only files older than that."), QStringLiteral("when")),
+        QCommandLineOption(QStringLiteral("include-ext"),
+                           QStringLiteral("Only these file types, e.g. txt,md,pdf."),
+                           QStringLiteral("list")),
+        QCommandLineOption(QStringLiteral("exclude-ext"),
+                           QStringLiteral("Leave out these file types."), QStringLiteral("list")),
+        QCommandLineOption(QStringLiteral("exclude"),
+                           QStringLiteral("Leave out paths matching this pattern. Repeatable."),
+                           QStringLiteral("pattern")),
+        QCommandLineOption(QStringLiteral("no-hidden"),
+                           QStringLiteral("Leave out hidden files. Off by default, because on "
+                                          "every system Transmit runs on that is where the "
+                                          "settings are.")),
+        QCommandLineOption(QStringLiteral("follow-symlinks"),
+                           QStringLiteral("Copy what a link points at rather than the link.")),
+        QCommandLineOption(QStringLiteral("block-size"),
+                           QStringLiteral("How much is compressed together, e.g. 64M. Larger "
+                                          "compresses better and costs more memory per worker."),
+                           QStringLiteral("size")),
+        QCommandLineOption(QStringLiteral("workers"),
+                           QStringLiteral("Compression threads. 0 chooses from the machine."),
+                           QStringLiteral("count")),
+        QCommandLineOption(QStringLiteral("sync-every"),
+                           QStringLiteral("Push this much to the drive at a time, e.g. 32M."),
+                           QStringLiteral("size")),
+        QCommandLineOption(QStringLiteral("no-verify-after"),
+                           QStringLiteral("Do not read the archive back after writing it.")),
+        QCommandLineOption(QStringLiteral("selection-file"),
+                           QStringLiteral("Read every choice from this file, then apply any "
+                                          "options given here on top."),
+                           QStringLiteral("path")),
+        QCommandLineOption(QStringLiteral("carries-data-only"),
+                           QStringLiteral("For `apps`: only the ones whose data can travel.")),
+        QCommandLineOption(QStringLiteral("save-selection"),
+                           QStringLiteral("Write the choices to this file so the same capture "
+                                          "can be repeated."),
+                           QStringLiteral("path")),
+    };
+
     parser.addOptions({outputOption, profileOption, presetOption, splitOption, passphraseOption,
                        passphraseFileOption, askPassphraseOption, domainsOption, labelOption,
                        intoOption, emulateOption, dryRunOption, conflictOption, verifyOption,
                        verboseOption});
+    parser.addOptions(scopeOptions);
     parser.process(app);
 
     core::configureLogging(parser.isSet(verboseOption));
@@ -699,6 +1040,9 @@ int main(int argc, char** argv) {
             return reportError(QStringLiteral("rollback needs the path of an undo point"));
         }
         return runRollback(archive);
+    }
+    if (command == QLatin1String("apps")) {
+        return runApps(parser.isSet(QStringLiteral("carries-data-only")));
     }
     if (command == QLatin1String("profiles")) {
         return runProfiles();

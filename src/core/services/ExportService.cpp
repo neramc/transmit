@@ -346,10 +346,10 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
 
     // ----------------------------------------------------- open archive
     format::ArchiveOptions options;
-    options.preset = request.preset;
-    options.partSize = request.partSize;
+    options.preset = request.packaging.preset;
+    options.partSize = request.packaging.partSize;
     options.passphrase = toUtf8(request.passphrase);
-    options.solidBlockSize = request.solidBlockSize;
+    options.solidBlockSize = request.packaging.solidBlockSize;
 
     // On a USB stick the operating system will happily accept gigabytes it has
     // not written yet, so without this the archive looks finished long before
@@ -358,7 +358,9 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     // a fraction of a second per interval on any stick worth using and keeps
     // all three of those honest. Internal disks are left alone: there the
     // page cache is the whole point.
-    if (volumeFor(platform_, request.destinationPath).removable) {
+    if (request.packaging.syncIntervalBytes > 0) {
+        options.syncIntervalBytes = request.packaging.syncIntervalBytes;
+    } else if (volumeFor(platform_, request.destinationPath).removable) {
         options.syncIntervalBytes = kRemovableSyncIntervalBytes;
     }
 
@@ -391,9 +393,9 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     auto writer = std::move(writerResult).value();
     writtenParts = &writer->parts();
 
-    BlockPipeline pipeline(*writer);
+    BlockPipeline pipeline(*writer, request.packaging.workerCount);
     pipeline.setAbortCheck([&cancelToken] { return cancelToken.isCancelled(); });
-    format::BlockPacker packer(request.solidBlockSize,
+    format::BlockPacker packer(request.packaging.solidBlockSize,
                                [&pipeline](format::ByteView raw) -> format::Result<quint32> {
                                    return pipeline.submit(raw);
                                });

@@ -221,7 +221,7 @@ int runCapture(const QString& corpus, const QString& archive, const QString& pre
         request.destinationPath = archive;
         request.selection =
             core::ProfileService::profileById(QStringLiteral("documents")).selection;
-        request.preset = *preset;
+        request.packaging.preset = *preset;
 
         core::CancelToken token;
         const core::ExportReport report = exporter.run(request, token);

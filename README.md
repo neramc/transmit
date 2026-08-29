@@ -219,11 +219,29 @@ paths were corrected. Either way nothing of Transmit's is left behind.
 transmit-cli environment          # what this machine looks like to Transmit
 transmit-cli drives               # where an archive could be written
 transmit-cli profiles             # the built-in capture profiles
+transmit-cli apps                 # what is installed, and how much of it travels
+                    [--carries-data-only]
 
 transmit-cli export --out ARCHIVE [--profile full|documents|developer]
                     [--preset fast|balanced|maximum|extreme]
                     [--split 3584M] [--passphrase-file FILE]
                     [--domains userdata,appstate,settings,apps]
+
+                    # which applications
+                    [--apps all|none|ID,ID] [--no-app-data ID,ID] [--app-roots ID,ID]
+
+                    # which files
+                    [--max-file-size 2G] [--min-file-size 1K]
+                    [--modified-since 6m] [--modified-before 2024-01-01]
+                    [--include-ext txt,md] [--exclude-ext iso,vmdk]
+                    [--exclude PATTERN] [--no-hidden] [--follow-symlinks]
+
+                    # how it is packed
+                    [--block-size 64M] [--workers 4] [--sync-every 32M]
+                    [--no-verify-after]
+
+                    # and all of the above, written down
+                    [--selection-file FILE] [--save-selection FILE]
 
 transmit-cli inspect ARCHIVE      # where it came from and what is inside
 transmit-cli verify ARCHIVE       # check every block against its hash
@@ -232,6 +250,20 @@ transmit-cli import ARCHIVE [--into DIR] [--dry-run] [--verify]
                     [--emulate-os windows|macos|linux]
 transmit-cli rollback UNDO-POINT  # reverse a restore
 ```
+
+`--save-selection` writes every choice to a JSON file and `--selection-file`
+reads one back, so a capture that took some working out can be repeated next
+month, or handed to somebody else, without repeating the working out. Options
+given alongside `--selection-file` are applied on top of it, which is how one
+file holds the settled choices while a flag varies the one thing that differs
+today.
+
+`transmit-cli apps` is where the ids for `--apps` come from, and it says which
+applications' data can actually travel as opposed to only being noted as
+installed. Choosing an application and leaving its data behind are separate:
+`--apps all --no-app-data com.spotify.client` still records that Spotify was
+there, which costs a few hundred bytes and is what lets a restore offer to
+install it again.
 
 A passphrase can come from three places. `--passphrase-file FILE` reads it from
 a file; `--ask-passphrase` asks the terminal for it without showing it, which

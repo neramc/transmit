@@ -191,20 +191,40 @@ struct CaptureSelection {
     static QStringList defaultExcludes();
 };
 
-struct ExportRequest {
-    QString destinationPath;  ///< base archive path, without any part suffix
-    QString label;            ///< free text shown when the archive is inspected
-    CaptureSelection selection;
+/// How the archive itself is built, as distinct from what goes in it.
+///
+/// Separated so it can be written down and reproduced: the same selection
+/// packed with a different block size is the same capture, and somebody
+/// comparing two runs needs to see which of the two things changed.
+struct PackagingOptions {
     format::CompressionPreset preset = format::CompressionPreset::Maximum;
 
     /// 0 writes a single file. The UI sets this from the target volume's
     /// filesystem, so a FAT32 stick gets split automatically.
     quint64 partSize = 0;
 
+    quint64 solidBlockSize = format::kDefaultSolidBlockSize;
+
+    /// 0 lets the pipeline choose from the machine and the preset.
+    int workerCount = 0;
+
+    /// How often the payload is pushed to the device while writing. 0 leaves
+    /// it to the destination: removable media get 32 MiB, fixed disks nothing.
+    quint64 syncIntervalBytes = 0;
+
+    /// Read the archive back and check every file against its recorded hash,
+    /// as soon as it is written and before the drive is unplugged.
+    bool verifyAfterWriting = true;
+};
+
+struct ExportRequest {
+    QString destinationPath;  ///< base archive path, without any part suffix
+    QString label;            ///< free text shown when the archive is inspected
+    CaptureSelection selection;
+    PackagingOptions packaging;
+
     /// Required when the selection includes credentials.
     QString passphrase;
-
-    quint64 solidBlockSize = format::kDefaultSolidBlockSize;
 };
 
 /// Which part of a run an update comes from.

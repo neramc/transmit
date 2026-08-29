@@ -235,7 +235,7 @@ void ContinuityRoundTripTest::capturesAndRestoresUserFiles() {
     core::ExportRequest request;
     request.destinationPath = archivePath("round-trip.txa");
     request.selection = documentsSelection();
-    request.preset = format::CompressionPreset::Fast;
+    request.packaging.preset = format::CompressionPreset::Fast;
 
     const core::ExportReport exported = exporter.run(request, token);
     QVERIFY2(exported.succeeded, qPrintable(exported.errorMessage));
@@ -268,7 +268,7 @@ void ContinuityRoundTripTest::deduplicatesRepeatedContent() {
     core::ExportRequest request;
     request.destinationPath = archivePath("dedup.txa");
     request.selection = documentsSelection();
-    request.preset = format::CompressionPreset::Fast;
+    request.packaging.preset = format::CompressionPreset::Fast;
 
     const core::ExportReport report = exporter.run(request, token);
     QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
@@ -284,9 +284,9 @@ void ContinuityRoundTripTest::splitsAcrossVolumesAndReadsThemBack() {
     core::ExportRequest request;
     request.destinationPath = archivePath("split.txa");
     request.selection = documentsSelection();
-    request.preset = format::CompressionPreset::Fast;
-    request.partSize = 8 * 1024;
-    request.solidBlockSize = 4 * 1024;
+    request.packaging.preset = format::CompressionPreset::Fast;
+    request.packaging.partSize = 8 * 1024;
+    request.packaging.solidBlockSize = 4 * 1024;
 
     const core::ExportReport report = exporter.run(request, token);
     QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
@@ -318,7 +318,7 @@ void ContinuityRoundTripTest::encryptsWhenGivenAPassphrase() {
     core::ExportRequest request;
     request.destinationPath = archivePath("locked.txa");
     request.selection = documentsSelection();
-    request.preset = format::CompressionPreset::Fast;
+    request.packaging.preset = format::CompressionPreset::Fast;
     request.passphrase = QStringLiteral("a passphrase worth remembering");
 
     const core::ExportReport report = exporter.run(request, token);
@@ -374,7 +374,7 @@ void ContinuityRoundTripTest::renamesFilesThatCollideOnACaseBlindTarget() {
     core::ExportRequest request;
     request.destinationPath = archivePath("cross-os.txa");
     request.selection = documentsSelection();
-    request.preset = format::CompressionPreset::Fast;
+    request.packaging.preset = format::CompressionPreset::Fast;
     QVERIFY(exporter.run(request, token).succeeded);
 
     core::ImportService importer(*platform_);
@@ -400,7 +400,7 @@ void ContinuityRoundTripTest::reportsWhatARestoreWouldDoWithoutWriting() {
     core::ExportRequest request;
     request.destinationPath = archivePath("preview.txa");
     request.selection = documentsSelection();
-    request.preset = format::CompressionPreset::Fast;
+    request.packaging.preset = format::CompressionPreset::Fast;
     QVERIFY(exporter.run(request, token).succeeded);
 
     const QString destination = workspace_.filePath("never-written");
@@ -424,7 +424,7 @@ void ContinuityRoundTripTest::honoursTheSkipConflictPolicy() {
     core::ExportRequest request;
     request.destinationPath = archivePath("conflict.txa");
     request.selection = documentsSelection();
-    request.preset = format::CompressionPreset::Fast;
+    request.packaging.preset = format::CompressionPreset::Fast;
     QVERIFY(exporter.run(request, token).succeeded);
 
     const QString destination = workspace_.filePath("restored-conflict");
@@ -454,7 +454,7 @@ void ContinuityRoundTripTest::aCancelledCaptureLeavesNoArchiveBehind() {
     core::ExportRequest request;
     request.destinationPath = archivePath("cancelled.txa");
     request.selection = documentsSelection();
-    request.preset = format::CompressionPreset::Fast;
+    request.packaging.preset = format::CompressionPreset::Fast;
 
     // Cancelled from the progress callback rather than up front, and only once
     // the run says it is transferring: by then the archive exists on disk and
@@ -486,7 +486,7 @@ void ContinuityRoundTripTest::theArchiveFolderIsMadeButNotInvented() {
 
     core::ExportRequest request;
     request.selection = documentsSelection();
-    request.preset = format::CompressionPreset::Fast;
+    request.packaging.preset = format::CompressionPreset::Fast;
 
     request.destinationPath = workspace_.filePath(QStringLiteral("backups/laptop.txa"));
     const core::ExportReport made = exporter.run(request, token);
@@ -511,7 +511,7 @@ void ContinuityRoundTripTest::aRestoreCanBeUndone() {
     core::ExportRequest request;
     request.destinationPath = archivePath("undo.txa");
     request.selection = documentsSelection();
-    request.preset = format::CompressionPreset::Fast;
+    request.packaging.preset = format::CompressionPreset::Fast;
     QVERIFY(exporter.run(request, token).succeeded);
 
     const QString destination = workspace_.filePath("undo-target");
@@ -572,7 +572,7 @@ void ContinuityRoundTripTest::settingsOfAnUnknownProgramStillTravel() {
     core::ExportRequest request;
     request.destinationPath = archivePath("unknown-app.txa");
     request.selection = core::ProfileService::fullContinuity().selection;
-    request.preset = format::CompressionPreset::Fast;
+    request.packaging.preset = format::CompressionPreset::Fast;
 
     const core::ExportReport exported = exporter.run(request, token);
     QVERIFY2(exported.succeeded, qPrintable(exported.errorMessage));
@@ -650,7 +650,7 @@ void ContinuityRoundTripTest::foldersAreRestoredBeforeWhatGoesInsideThem() {
     core::ExportRequest request;
     request.destinationPath = archivePath("order.txa");
     request.selection = documentsSelection();
-    request.preset = format::CompressionPreset::Fast;
+    request.packaging.preset = format::CompressionPreset::Fast;
 
     const core::ExportReport exported = exporter.run(request, token);
     QVERIFY2(exported.succeeded, qPrintable(exported.errorMessage));
@@ -716,7 +716,7 @@ void ContinuityRoundTripTest::aFolderThatArrivesReadOnlyStillGetsItsContents() {
     core::ExportRequest request;
     request.destinationPath = archivePath("readonly-folder.txa");
     request.selection = documentsSelection();
-    request.preset = format::CompressionPreset::Fast;
+    request.packaging.preset = format::CompressionPreset::Fast;
 
     const core::ExportReport exported = exporter.run(request, token);
     QVERIFY2(exported.succeeded, qPrintable(exported.errorMessage));

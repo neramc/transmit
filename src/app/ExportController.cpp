@@ -215,10 +215,10 @@ void ExportController::start(const QString& profileId, const QString& destinatio
     request.selection = selectionFor(profileId, domains, includeSecrets);
 
     request.passphrase = passphrase;
-    request.partSize = splitForFat32 ? format::kFat32SafePartSize : 0;
+    request.packaging.partSize = splitForFat32 ? format::kFat32SafePartSize : 0;
 
     if (const auto parsed = format::presetFromName(core::toUtf8(preset))) {
-        request.preset = *parsed;
+        request.packaging.preset = *parsed;
     }
 
     const QString folder = destinationFolder.isEmpty() ? QDir::homePath() : destinationFolder;
