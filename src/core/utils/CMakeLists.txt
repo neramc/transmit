@@ -3,7 +3,8 @@
 
 add_library(transmit_common STATIC
     Logging.cpp
-    Conversions.cpp)
+    Conversions.cpp
+    StageTimer.cpp)
 
 add_library(Transmit::Common ALIAS transmit_common)
 

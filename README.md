@@ -272,6 +272,9 @@ transmit-cli verify ARCHIVE       # check every block against its hash
                     [--json]      # exit 0 all of it, 2 some of it, 1 none of it
 transmit-cli repair ARCHIVE       # recover the damaged files from this machine
                     [--from-report verify.json]
+
+# any capture can be asked where its time went
+transmit-cli export --out X --timings
 transmit-cli import ARCHIVE [--into DIR] [--dry-run] [--verify]
                     [--conflict skip|overwrite|newer|keep-both]
                     [--emulate-os windows|macos|linux]

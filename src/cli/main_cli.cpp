@@ -211,6 +211,48 @@ QSet<QString> parseExtensions(const QString& text) {
     return extensions;
 }
 
+/// Where the time went, longest first, with what each stage is a share of.
+///
+/// The share is the point. A stage that took four seconds means nothing on
+/// its own; four seconds out of six says where to look, and one line saying
+/// what was not measured stops the columns from having to add up to something
+/// they were never going to add up to.
+void printTimings(const QList<core::StageTiming>& stages, qint64 totalMilliseconds) {
+    if (stages.isEmpty()) {
+        return;
+    }
+
+    QList<core::StageTiming> sorted = stages;
+    std::sort(sorted.begin(), sorted.end(),
+              [](const core::StageTiming& a, const core::StageTiming& b) {
+                  return a.nanoseconds > b.nanoseconds;
+              });
+
+    const auto total = static_cast<double>(totalMilliseconds);
+    double measured = 0;
+
+    out() << Qt::endl << QStringLiteral("Where the time went") << Qt::endl;
+    for (const core::StageTiming& stage : sorted) {
+        measured += stage.milliseconds();
+        out() << QStringLiteral("  %1 %2 %3  (%4)")
+                     .arg(stage.name, -12)
+                     .arg(stage.milliseconds(), 10, 'f', 1)
+                     .arg(QStringLiteral("ms"))
+                     .arg(total > 0 ? QStringLiteral("%1%").arg(
+                                          stage.milliseconds() / total * 100.0, 0, 'f', 1)
+                                    : QStringLiteral("-"))
+              << Qt::endl;
+    }
+    out() << QStringLiteral("  %1 %2 ms").arg(QStringLiteral("total"), -12).arg(total, 10, 'f', 1)
+          << Qt::endl;
+    if (total > measured) {
+        out() << QStringLiteral("  %1 %2 ms  (everything between the stages above)")
+                     .arg(QStringLiteral("unmeasured"), -12)
+                     .arg(total - measured, 10, 'f', 1)
+              << Qt::endl;
+    }
+}
+
 int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption,
               const QCommandLineOption& profileOption, const QCommandLineOption& presetOption,
               const QCommandLineOption& splitOption, const QCommandLineOption& passphraseOption,
@@ -463,6 +505,10 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
           << Qt::endl;
     for (const QString& part : report.archiveParts) {
         out() << QStringLiteral("  wrote ") << part << Qt::endl;
+    }
+
+    if (parser.isSet(QStringLiteral("timings"))) {
+        printTimings(report.stages, report.elapsedMilliseconds);
     }
 
     // Said plainly and separately from the notes, because somebody who is
@@ -1245,6 +1291,8 @@ int main(int argc, char** argv) {
                                           "decompresses.")),
         QCommandLineOption(QStringLiteral("json"),
                            QStringLiteral("For `verify`: write the result as JSON.")),
+        QCommandLineOption(QStringLiteral("timings"),
+                           QStringLiteral("Print where the time went, stage by stage.")),
         QCommandLineOption(QStringLiteral("from-report"),
                            QStringLiteral("For `repair`: recover the files a "
                                           "`verify --deep --json` run named, rather than "

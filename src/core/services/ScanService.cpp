@@ -9,6 +9,7 @@
 
 #include <filesystem>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "core/utils/Conversions.h"
@@ -47,21 +48,41 @@ qint64 toUnixNs(const QDateTime& time) {
 /// A name that cannot be resolved is left empty rather than guessed at: the
 /// numeric uid is recorded either way, and a restore onto another machine maps
 /// by name only when it recognises one.
+///
+/// The answer is remembered per thread, because a home directory has one owner
+/// and a scan asks about every file in it. The lookup is not cheap: it
+/// allocates a sixteen-kilobyte buffer, and on a machine whose accounts come
+/// from LDAP or SSSD it is a network round trip - two per file, for an answer
+/// that never differs.
+///
+/// Per thread rather than shared, so there is no lock on the path every file
+/// takes, and kept for the life of the thread: a uid does not change its name
+/// while a capture is running, and if one somehow did, the number is recorded
+/// alongside it and is what a restore falls back to.
 template<typename Id, typename Record, typename Lookup>
 std::string resolveName(Id id, Lookup lookup, char* Record::*field) {
-    long suggested = ::sysconf(_SC_GETPW_R_SIZE_MAX);
-    if (suggested <= 0) {
-        suggested = 16384;
+    thread_local std::unordered_map<Id, std::string> known;
+    if (const auto remembered = known.find(id); remembered != known.end()) {
+        return remembered->second;
     }
 
-    std::vector<char> buffer(static_cast<std::size_t>(suggested));
+    thread_local std::vector<char> buffer = [] {
+        const long suggested = ::sysconf(_SC_GETPW_R_SIZE_MAX);
+        return std::vector<char>(static_cast<std::size_t>(suggested > 0 ? suggested : 16384));
+    }();
+
     Record record{};
     Record* found = nullptr;
 
-    if (lookup(id, &record, buffer.data(), buffer.size(), &found) != 0 || found == nullptr) {
-        return {};
+    // A name that cannot be resolved is remembered as empty too: a uid with no
+    // account behind it is exactly the case that would otherwise pay for the
+    // full lookup on every single file.
+    std::string name;
+    if (lookup(id, &record, buffer.data(), buffer.size(), &found) == 0 && found != nullptr) {
+        name = found->*field;
     }
-    return found->*field;
+    known.emplace(id, name);
+    return name;
 }
 #endif
 

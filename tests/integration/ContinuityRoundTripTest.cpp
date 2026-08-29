@@ -9,6 +9,7 @@
 #include <QTest>
 
 #ifndef Q_OS_WIN
+#include <pwd.h>
 #include <unistd.h>
 #endif
 
@@ -50,6 +51,7 @@ private slots:
     void anExtensionFilterTakesOnlyWhatWasAskedFor();
     void aDateBoundLeavesTheOldFilesBehind();
     void theMoreSpecificRootKeepsTheApplicationItBelongsTo();
+    void everyFileGetsItsOwnersNameNotJustTheFirst();
     void cleanupTestCase();
 
 private:
@@ -137,6 +139,40 @@ void ContinuityRoundTripTest::initTestCase() {
     }
 
     buildSourceTree(sourceHome());
+}
+
+// The scan remembers uid and gid names per thread rather than asking the
+// system twice per file - two lookups that each allocate sixteen kilobytes,
+// and on a machine whose accounts come from LDAP are a network round trip. A
+// cache that answered the first file and then handed back nothing, or handed
+// back the same name for a different owner, would put the wrong owner in
+// somebody's manifest and nothing else would notice.
+void ContinuityRoundTripTest::everyFileGetsItsOwnersNameNotJustTheFirst() {
+#ifdef Q_OS_WIN
+    QSKIP("Windows has no POSIX ownership to record");
+#else
+    const core::ScanService scanner(*platform_);
+    core::CancelToken token;
+    const core::ScanResult scan = scanner.scan(documentsSelection(), token, {});
+
+    QVERIFY2(scan.items.size() > 3, "the fixture is too small for this to mean anything");
+
+    // What the system says, asked once here without going through the cache.
+    const ::uid_t uid = ::getuid();
+    const struct ::passwd* account = ::getpwuid(uid);
+    const std::string expected = account != nullptr ? account->pw_name : std::string();
+
+    int checked = 0;
+    for (const core::ScannedItem& item : scan.items) {
+        if (item.type != format::EntryType::File) {
+            continue;
+        }
+        QCOMPARE(item.posix.uid, static_cast<quint32>(uid));
+        QCOMPARE(item.posix.userName, expected);
+        ++checked;
+    }
+    QVERIFY2(checked > 3, "no files were checked");
+#endif
 }
 
 void ContinuityRoundTripTest::cleanupTestCase() {

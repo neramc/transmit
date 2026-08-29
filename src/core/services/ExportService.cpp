@@ -7,6 +7,7 @@
 #include <QFileInfo>
 
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <system_error>
 #include <vector>
@@ -28,6 +29,14 @@
 
 namespace transmit::core {
 namespace {
+
+/// Nanoseconds since a mark. Used inside the capture loop, where a scoped
+/// timer would measure its own construction thousands of times over.
+qint64 elapsedNanoseconds(std::chrono::steady_clock::time_point since) {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() -
+                                                                since)
+        .count();
+}
 
 constexpr qint64 kProgressIntervalMs = 100;
 
@@ -63,15 +72,44 @@ platform::StorageVolume volumeFor(const platform::PlatformService& platform, con
 /// extension first puts all the JSON, all the PNGs and all the source files
 /// together, which is where most of the compression gain comes from; the path
 /// is the tie-break so a directory stays contiguous.
+///
+/// The keys are worked out once per file rather than inside the comparator.
+/// The comparator used to build two QFileInfo objects every time it was
+/// called - and a sort calls it n log n times, so a home directory of half a
+/// million files meant ten million of them, all to look at the letters after
+/// the last dot.
 void sortForCompression(QList<ScannedItem>& items) {
-    std::stable_sort(items.begin(), items.end(), [](const ScannedItem& a, const ScannedItem& b) {
-        const QString extensionA = QFileInfo(a.absolutePath).suffix().toLower();
-        const QString extensionB = QFileInfo(b.absolutePath).suffix().toLower();
-        if (extensionA != extensionB) {
-            return extensionA < extensionB;
+    if (items.size() < 2) {
+        return;
+    }
+
+    struct Key {
+        QString extension;
+        const std::string* relative;
+        qsizetype index;
+    };
+
+    std::vector<Key> keys;
+    keys.reserve(static_cast<std::size_t>(items.size()));
+    for (qsizetype i = 0; i < items.size(); ++i) {
+        keys.push_back(Key{fileExtension(items[i].absolutePath), &items[i].tokenPath.relative, i});
+    }
+
+    // Sorting the keys rather than the items also stops the sort moving
+    // ScannedItem around, which is a dozen strings each.
+    std::stable_sort(keys.begin(), keys.end(), [](const Key& a, const Key& b) {
+        if (a.extension != b.extension) {
+            return a.extension < b.extension;
         }
-        return a.tokenPath.relative < b.tokenPath.relative;
+        return *a.relative < *b.relative;
     });
+
+    QList<ScannedItem> ordered;
+    ordered.reserve(items.size());
+    for (const Key& key : keys) {
+        ordered.push_back(std::move(items[key.index]));
+    }
+    items = std::move(ordered);
 }
 
 format::ManifestEntry toManifestEntry(const ScannedItem& item, quint64 id) {
@@ -141,6 +179,12 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     ExportReport report;
     QElapsedTimer timer;
     timer.start();
+
+    // Every stage of the run named and measured. It costs one steady_clock
+    // reading per stage - nothing measurable against the work between them -
+    // and it is what turns "the capture was slow" into a thing somebody can
+    // do something about.
+    StageTimer stages;
 
     // Clears away what a failed capture wrote.
     //
@@ -325,8 +369,10 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         progress(update);
     }
 
+    stages.begin(QStringLiteral("scan"));
     const ScanService scanner(platform_);
     ScanResult scan = scanner.scan(selection, cancelToken, progress);
+    stages.end();
     report.notes += scan.notes;
     report.incomplete = scan.incomplete();
     report.unreadablePaths = scan.unreadableDirectories;
@@ -343,7 +389,9 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
             break;
         }
     }
+    stages.begin(QStringLiteral("snapshot"));
     const std::unique_ptr<platform::Snapshot> snapshot = platform_.createSnapshot(snapshotPaths);
+    stages.end();
     if (!snapshot->isRealSnapshot() && !snapshot->unavailableReason().isEmpty()) {
         report.notes.push_back(
             ContinuityNote{ContinuityGrade::Adapted, DomainId::Unknown,
@@ -351,7 +399,9 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
                            snapshot->unavailableReason()});
     }
 
+    stages.begin(QStringLiteral("sort"));
     sortForCompression(scan.items);
+    stages.end();
 
     // ----------------------------------------------------- open archive
     format::ArchiveOptions options;
@@ -469,7 +519,13 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
 
         if (item.type == format::EntryType::File && item.size > 0) {
             const QString readPath = snapshot->translate(item.absolutePath);
+
+            // Timed by hand rather than with a Scope: three stages run inside
+            // this loop thousands of times over, and a stage object per file
+            // would be measuring its own construction.
+            const auto readStarted = std::chrono::steady_clock::now();
             auto content = consistent_copy::readFile(readPath, item.size);
+            stages.add(QStringLiteral("read"), elapsedNanoseconds(readStarted));
 
             if (!content) {
                 // A file that vanished or locked mid-capture is reported rather
@@ -487,12 +543,20 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
             // Both digests in one walk of the buffer. They answer different
             // questions: the BLAKE2b is the identity the packer deduplicates
             // on, the MD5 is what somebody can check with md5sum later.
+            const auto hashStarted = std::chrono::steady_clock::now();
             const format::ContentDigests digests =
                 format::hashContent(bytes, request.packaging.recordMd5);
+            stages.add(QStringLiteral("hash"), elapsedNanoseconds(hashStarted));
+
             entry.contentHash = digests.blake2b;
             entry.contentMd5 = digests.md5;
 
+            // Packing includes waiting for a compression worker when they are
+            // all busy, which is exactly the number that says whether the
+            // machine is short of workers or short of disk.
+            const auto packStarted = std::chrono::steady_clock::now();
             auto handle = packer.add(entry.contentHash, bytes);
+            stages.add(QStringLiteral("pack"), elapsedNanoseconds(packStarted));
             if (!handle) {
                 return fail(describeError(handle.error()));
             }
@@ -550,8 +614,14 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     }
     manifest.deduplicatedBytes = packer.deduplicatedBytes();
 
-    if (const auto status = writer->finish(manifest); !status) {
-        return fail(describeError(status.error()));
+    // The manifest, the footer, patching every part header and the fsync that
+    // makes all of it real. On a stick this is often the longest stage and
+    // never the one anybody expects.
+    stages.begin(QStringLiteral("finish"));
+    const auto finishStatus = writer->finish(manifest);
+    stages.end();
+    if (!finishStatus) {
+        return fail(describeError(finishStatus.error()));
     }
 
     // ----------------------------------------------------------- report
@@ -582,8 +652,10 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         sidecar.includeEntries =
             !writer->isEncrypted() || request.packaging.sidecarNamesEvenWhenEncrypted;
 
+        stages.begin(QStringLiteral("sidecar"));
         const auto written =
             format::writeChecksumSidecar(sidecarPath, writer->parts(), manifest, sidecar);
+        stages.end();
         if (written) {
             report.checksumSidecar = fromUtf8(format::fromFsPath(*written));
         } else {
@@ -616,8 +688,10 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         verification.passphrase = request.passphrase;
         verification.deep = true;
 
+        stages.begin(QStringLiteral("verify"));
         const VerifyService verifier(platform_);
         const VerifyReport verified = verifier.run(verification, cancelToken, progress);
+        stages.end();
 
         report.verificationRan = true;
         report.verified = verified.everythingMatched();
@@ -667,9 +741,12 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         }
     }
 
+    report.stages = stages.stages();
+
     qCInfo(logCapture) << "captured" << report.fileCount << "files:" << formatBytes(report.rawBytes)
                        << "->" << formatBytes(report.storedBytes) << "in"
                        << report.elapsedMilliseconds << "ms";
+    qCInfo(logCapture) << "time went:" << stages.summary();
     return report;
 }
 

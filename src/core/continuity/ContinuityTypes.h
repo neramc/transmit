@@ -10,6 +10,7 @@
 
 #include <optional>
 
+#include "core/utils/StageTimer.h"
 #include "format/Container.h"
 #include "format/Manifest.h"
 #include "format/PathToken.h"
@@ -293,6 +294,14 @@ struct ExportReport {
     quint64 verificationFailures = 0;
     quint64 verificationRetriedReads = 0;
     qint64 verificationMilliseconds = 0;
+
+    /// Where the time went, stage by stage.
+    ///
+    /// "The capture took four minutes" is not something anybody can act on;
+    /// "three and a half of them were hashing" is. Carried in the report so
+    /// somebody's slow capture on their own machine can be explained without
+    /// asking them to install a profiler.
+    QList<StageTiming> stages;
 
     QString archiveId;
     quint64 fileCount = 0;

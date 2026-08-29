@@ -3,6 +3,8 @@
 #include <QCoreApplication>
 #include <QLocale>
 
+#include <algorithm>
+
 namespace transmit::core {
 
 QString formatBytes(quint64 bytes) {
@@ -35,6 +37,20 @@ QString formatDuration(qint64 milliseconds) {
         return QCoreApplication::translate("Duration", "%1 min %2 s").arg(minutes).arg(seconds);
     }
     return QCoreApplication::translate("Duration", "%1 s").arg(seconds);
+}
+
+QString fileExtension(const QString& path) {
+    const qsizetype lastSeparator = std::max(path.lastIndexOf(u'/'), path.lastIndexOf(u'\\'));
+    const qsizetype lastDot = path.lastIndexOf(u'.');
+
+    // No dot in the last component, or nothing after it. A dot at the very
+    // start counts: QFileInfo(".bashrc").suffix() is "bashrc", and this has to
+    // give the same answer as the QFileInfo call it replaced or it would
+    // quietly reorder everybody's archives.
+    if (lastDot <= lastSeparator || lastDot == path.size() - 1) {
+        return {};
+    }
+    return path.mid(lastDot + 1).toLower();
 }
 
 double percentage(quint64 done, quint64 total) {

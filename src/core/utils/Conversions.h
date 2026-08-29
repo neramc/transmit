@@ -40,6 +40,20 @@ QString formatBytes(quint64 bytes);
 /// "3 minutes 20 seconds" style text for progress estimates.
 QString formatDuration(qint64 milliseconds);
 
+/// The lowercase characters after the last dot of a path's last component, or
+/// nothing.
+///
+/// The same answer as `QFileInfo(path).suffix().toLower()`, without building a
+/// QFileInfo. That matters because it is called once per file while sorting a
+/// capture: QFileInfo allocates a private object to answer a question about
+/// the letters in a string, and a home directory has half a million of them.
+///
+/// Matches suffix() on the awkward cases, including the ones that are easy to
+/// assume the other way: ".bashrc" is "bashrc", "trailing." is nothing,
+/// "archive.tar.gz" is "gz", and a dot in a directory name does not give the
+/// file an extension.
+[[nodiscard]] QString fileExtension(const QString& path);
+
 /// A percentage clamped to [0, 100], safe when the total is still unknown.
 double percentage(quint64 done, quint64 total);
 
