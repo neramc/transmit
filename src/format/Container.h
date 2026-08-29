@@ -185,6 +185,9 @@ public:
     [[nodiscard]] std::size_t partCount() const;
     [[nodiscard]] const std::vector<std::filesystem::path>& parts() const;
 
+    /// Reads that needed more than one attempt since this reader was opened.
+    [[nodiscard]] std::uint64_t retriedReads() const;
+
     /// Reads every block and checks everything inside it.
     ///
     /// Each block is decompressed once - which checks the block's own hash and,

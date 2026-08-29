@@ -46,6 +46,8 @@ class ExportController : public QObject {
     Q_PROPERTY(QStringList archiveParts READ archiveParts NOTIFY finishedChanged)
     Q_PROPERTY(bool incomplete READ incomplete NOTIFY finishedChanged)
     Q_PROPERTY(QString incompleteText READ incompleteText NOTIFY finishedChanged)
+    Q_PROPERTY(bool verified READ verified NOTIFY finishedChanged)
+    Q_PROPERTY(QString verificationText READ verificationText NOTIFY finishedChanged)
     Q_PROPERTY(QString scopeSummary READ scopeSummary NOTIFY scopeChanged)
     Q_PROPERTY(QString applicationSummary READ applicationSummary NOTIFY scopeChanged)
 
@@ -73,6 +75,12 @@ public:
     [[nodiscard]] bool incomplete() const { return report_.incomplete; }
     [[nodiscard]] QString incompleteText() const;
     [[nodiscard]] QStringList archiveParts() const { return report_.archiveParts; }
+
+    /// The archive was read back off the drive and every file matched.
+    [[nodiscard]] bool verified() const { return report_.verified; }
+
+    /// What the read-back found, in a sentence. Empty when none was asked for.
+    [[nodiscard]] QString verificationText() const;
 
     [[nodiscard]] const core::ExportReport& report() const { return report_; }
 

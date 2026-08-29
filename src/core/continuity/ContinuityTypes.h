@@ -280,6 +280,20 @@ struct ExportReport {
     /// The `.md5` file written beside the archive, empty when none was.
     QString checksumSidecar;
 
+    /// The read-back after writing, when one was asked for.
+    ///
+    /// A capture whose archive did not survive the journey to the drive is not
+    /// a capture that worked, so a failed verification fails the run - which
+    /// is the point of doing it here rather than leaving it to somebody to
+    /// remember afterwards.
+    bool verified = false;
+    bool verificationRan = false;
+    bool verificationUsedColdReads = false;
+    quint64 verifiedFiles = 0;
+    quint64 verificationFailures = 0;
+    quint64 verificationRetriedReads = 0;
+    qint64 verificationMilliseconds = 0;
+
     QString archiveId;
     quint64 fileCount = 0;
     quint64 directoryCount = 0;

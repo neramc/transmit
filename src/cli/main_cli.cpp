@@ -10,6 +10,9 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QTextStream>
 
 #include <iostream>
@@ -21,6 +24,7 @@
 #include "core/services/ImportService.h"
 #include "core/services/ProfileService.h"
 #include "core/services/RollbackWriter.h"
+#include "core/services/VerifyService.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
 #include "format/FileIo.h"
@@ -653,44 +657,167 @@ int runImport(QCommandLineParser& parser, const QString& archivePath,
     return report.filesFailed > 0 ? kPartialExitCode : 0;
 }
 
-int runVerify(const QString& archivePath, const QString& passphrase) {
+/// The verification report as JSON, for a script that has to decide something.
+QJsonObject verifyReportAsJson(const core::VerifyReport& report) {
+    QJsonObject root;
+    root.insert(QStringLiteral("succeeded"), report.succeeded);
+    root.insert(QStringLiteral("filesChecked"), static_cast<qint64>(report.filesChecked));
+    root.insert(QStringLiteral("filesFailed"), static_cast<qint64>(report.filesFailed));
+    root.insert(QStringLiteral("bytesRead"), static_cast<qint64>(report.bytesRead));
+    root.insert(QStringLiteral("elapsedMilliseconds"), report.elapsedMilliseconds);
+    root.insert(QStringLiteral("retriedReads"), static_cast<qint64>(report.retriedReads));
+
+    // Said out loud rather than left for a script to assume: without it the
+    // read-back may have come from memory.
+    root.insert(QStringLiteral("readPastTheCache"), report.cacheDropped);
+    if (!report.errorMessage.isEmpty()) {
+        root.insert(QStringLiteral("error"), report.errorMessage);
+    }
+
+    QJsonArray failures;
+    for (const core::VerifyFileResult& failure : report.failures) {
+        QJsonObject entry;
+        entry.insert(QStringLiteral("path"), failure.path);
+        entry.insert(QStringLiteral("status"), core::verifyStatusName(failure.status));
+        entry.insert(QStringLiteral("size"), static_cast<qint64>(failure.size));
+        entry.insert(QStringLiteral("attempts"), failure.attempts);
+        if (!failure.appId.isEmpty()) {
+            entry.insert(QStringLiteral("appId"), failure.appId);
+        }
+        if (!failure.detail.isEmpty()) {
+            entry.insert(QStringLiteral("detail"), failure.detail);
+        }
+        failures.push_back(entry);
+    }
+    root.insert(QStringLiteral("failures"), failures);
+
+    QJsonArray parts;
+    for (const core::VerifyPartResult& part : report.parts) {
+        QJsonObject entry;
+        entry.insert(QStringLiteral("path"), part.path);
+        entry.insert(QStringLiteral("size"), static_cast<qint64>(part.size));
+        entry.insert(QStringLiteral("endsMatched"), part.endsMatched);
+        entry.insert(QStringLiteral("checksumMatched"), part.md5Matched);
+        if (!part.detail.isEmpty()) {
+            entry.insert(QStringLiteral("detail"), part.detail);
+        }
+        parts.push_back(entry);
+    }
+    root.insert(QStringLiteral("parts"), parts);
+    return root;
+}
+
+int runVerify(const QString& archivePath, const QString& passphrase, bool deep, bool asJson) {
     CancelToken cancelToken;
     const cli::InterruptHandler interrupts(cancelToken);
 
-    auto readerResult = format::ArchiveReader::open(format::toFsPath(toUtf8(archivePath)));
-    if (!readerResult) {
-        return reportError(core::describeError(readerResult.error()));
-    }
-    auto reader = std::move(readerResult).value();
-
-    if (reader->isEncrypted()) {
-        if (passphrase.isEmpty()) {
-            return reportError(
-                QStringLiteral("this archive is encrypted; run this from a terminal to be asked "
-                               "for the passphrase, or pass --passphrase-file"));
+    if (!deep) {
+        // The shallow check: does every block decompress and match its own
+        // hash. Faster, and enough to answer "is this archive readable at
+        // all"; it says nothing about whether the entry table still points at
+        // the right bytes, which is what --deep is for.
+        auto readerResult = format::ArchiveReader::open(format::toFsPath(toUtf8(archivePath)));
+        if (!readerResult) {
+            return reportError(core::describeError(readerResult.error()));
         }
-        if (const auto status = reader->unlock(toUtf8(passphrase)); !status) {
+        auto reader = std::move(readerResult).value();
+
+        if (reader->isEncrypted()) {
+            if (passphrase.isEmpty()) {
+                return reportError(QStringLiteral(
+                    "this archive is encrypted; run this from a terminal to be asked "
+                    "for the passphrase, or pass --passphrase-file"));
+            }
+            if (const auto status = reader->unlock(toUtf8(passphrase)); !status) {
+                return reportError(core::describeError(status.error()));
+            }
+        }
+
+        const auto status =
+            reader->verifyAllBlocks([&cancelToken, asJson](std::size_t done, std::size_t total) {
+                if (!asJson) {
+                    out() << QStringLiteral("\rchecking block %1 of %2").arg(done).arg(total);
+                    out().flush();
+                }
+                return !cancelToken.isCancelled();
+            });
+        if (!asJson) {
+            out() << Qt::endl;
+        }
+
+        if (!status) {
+            if (cli::InterruptHandler::wasInterrupted()) {
+                err() << QStringLiteral("stopped before every block had been checked.") << Qt::endl;
+                return kInterruptedExitCode;
+            }
             return reportError(core::describeError(status.error()));
         }
-    }
-
-    const auto status =
-        reader->verifyAllBlocks([&cancelToken](std::size_t done, std::size_t total) {
-            out() << QStringLiteral("\rchecking block %1 of %2").arg(done).arg(total);
-            out().flush();
-            return !cancelToken.isCancelled();
-        });
-    out() << Qt::endl;
-
-    if (!status) {
-        if (cli::InterruptHandler::wasInterrupted()) {
-            err() << QStringLiteral("stopped before every block had been checked.") << Qt::endl;
-            return kInterruptedExitCode;
+        if (!asJson) {
+            out() << QStringLiteral("Every block matches its recorded hash.") << Qt::endl;
         }
-        return reportError(core::describeError(status.error()));
+        return 0;
     }
-    out() << QStringLiteral("Every block matches its recorded hash.") << Qt::endl;
-    return 0;
+
+    const auto platform = platform::PlatformService::create();
+    const core::VerifyService verifier(*platform);
+
+    core::VerifyRequest request;
+    request.archivePath = archivePath;
+    request.passphrase = passphrase;
+    request.deep = true;
+
+    const core::VerifyReport report =
+        verifier.run(request, cancelToken, [asJson](const core::ProgressUpdate& update) {
+            if (asJson || update.filesTotal == 0) {
+                return;
+            }
+            out() << QStringLiteral("\rchecking %1 of %2")
+                         .arg(update.filesDone)
+                         .arg(update.filesTotal);
+            out().flush();
+        });
+
+    if (asJson) {
+        out() << QString::fromUtf8(
+                     QJsonDocument(verifyReportAsJson(report)).toJson(QJsonDocument::Indented))
+              << Qt::flush;
+    } else {
+        out() << Qt::endl;
+        if (report.succeeded) {
+            out() << QStringLiteral("Every one of %1 file(s) came back off the drive unchanged.")
+                         .arg(report.filesChecked)
+                  << Qt::endl;
+        } else if (!report.errorMessage.isEmpty()) {
+            err() << report.errorMessage << Qt::endl;
+        }
+        if (!report.cacheDropped) {
+            out() << QStringLiteral(
+                         "  note: this system cannot be asked to forget its cached copy of a "
+                         "file, so some of this may have been read from memory rather than "
+                         "from the drive.")
+                  << Qt::endl;
+        }
+        if (report.retriedReads > 0) {
+            out() << QStringLiteral("  %1 read(s) only worked after retrying.")
+                         .arg(report.retriedReads)
+                  << Qt::endl;
+        }
+        for (const core::VerifyFileResult& failure : report.failures) {
+            err() << QStringLiteral("  %1: %2")
+                         .arg(failure.path, core::verifyStatusName(failure.status))
+                  << Qt::endl;
+        }
+    }
+
+    if (cli::InterruptHandler::wasInterrupted()) {
+        return kInterruptedExitCode;
+    }
+    if (report.succeeded) {
+        return 0;
+    }
+    // Some of it came back and some did not, which is a different thing from
+    // an archive that could not be read at all.
+    return report.filesFailed > 0 ? kPartialExitCode : 1;
 }
 
 int runRollback(const QString& archivePath) {
@@ -982,6 +1109,12 @@ int main(int argc, char** argv) {
                            QStringLiteral("size")),
         QCommandLineOption(QStringLiteral("no-verify-after"),
                            QStringLiteral("Do not read the archive back after writing it.")),
+        QCommandLineOption(QStringLiteral("deep"),
+                           QStringLiteral("For `verify`: check every file's contents against "
+                                          "what was recorded, not only that each block "
+                                          "decompresses.")),
+        QCommandLineOption(QStringLiteral("json"),
+                           QStringLiteral("For `verify`: write the result as JSON.")),
         QCommandLineOption(QStringLiteral("no-md5"),
                            QStringLiteral("Do not record an MD5 for each file. Saves 18 bytes a "
                                           "file and gives up being able to check the archive "
@@ -1054,7 +1187,8 @@ int main(int argc, char** argv) {
         if (archive.isEmpty()) {
             return reportError(QStringLiteral("verify needs an archive path"));
         }
-        return runVerify(archive, passphraseFor(archive));
+        return runVerify(archive, passphraseFor(archive), parser.isSet(QStringLiteral("deep")),
+                         parser.isSet(QStringLiteral("json")));
     }
     if (command == QLatin1String("rollback")) {
         if (archive.isEmpty()) {

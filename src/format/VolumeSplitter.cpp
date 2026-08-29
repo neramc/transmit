@@ -312,12 +312,17 @@ Result<std::unique_ptr<VolumeSource>> VolumeSource::open(const std::filesystem::
         // touches somebody's USB stick should not be the one place a single
         // bad read is fatal.
         std::array<Byte, VolumeHeader::kSize> raw{};
-        const Status headerRead = withRetry(source->retry_, [&stream, &raw]() -> Status {
+        int attempts = 0;
+        const Status headerRead = withRetry(source->retry_, [&stream, &raw, &attempts]() -> Status {
+            ++attempts;
             if (auto sought = stream.seek(0); !sought) {
                 return sought;
             }
             return stream.read(raw);
         });
+        if (attempts > 1) {
+            source->retriedReads_ += static_cast<std::uint64_t>(attempts - 1);
+        }
         TRANSMIT_CHECK(headerRead);
         TRANSMIT_TRY(header, VolumeHeader::decode(raw));
 
@@ -391,12 +396,17 @@ Status VolumeSource::readAt(std::uint64_t logicalOffset, MutableByteView out) {
         // that fails once and works the second time is ordinary rather than
         // remarkable. A full disk or an unplugged stick still fails at once;
         // isTransient decides which is which.
+        int attempts = 0;
         const Status attempt = withRetry(retry_, [&]() -> Status {
+            ++attempts;
             if (auto sought = it->stream.seek(VolumeHeader::kSize + withinPart); !sought) {
                 return sought;
             }
             return it->stream.read(out.subspan(written, chunk));
         });
+        if (attempts > 1) {
+            retriedReads_ += static_cast<std::uint64_t>(attempts - 1);
+        }
         TRANSMIT_CHECK(attempt);
         written += chunk;
     }

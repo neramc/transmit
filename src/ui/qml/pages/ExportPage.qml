@@ -899,6 +899,19 @@ Item {
                     body: ExportController.summaryText
                 }
 
+                // The read-back is the difference between "it was written" and
+                // "it is there", and somebody about to wipe this machine is
+                // deciding on the second one.
+                AppInlineMessage {
+                    visible: ExportController.finished && ExportController.succeeded
+                             && ExportController.verificationText !== ""
+                    tone: ExportController.verified ? "success" : "error"
+                    title: ExportController.verified
+                           ? qsTr("Checked against the drive")
+                           : qsTr("It did not read back correctly")
+                    body: ExportController.verificationText
+                }
+
                 AppInlineMessage {
                     visible: ExportController.finished && ExportController.succeeded
                              && ExportController.incomplete

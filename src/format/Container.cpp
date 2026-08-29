@@ -660,4 +660,8 @@ const std::vector<std::filesystem::path>& ArchiveReader::parts() const {
     return source_->parts();
 }
 
+std::uint64_t ArchiveReader::retriedReads() const {
+    return source_->retriedReads();
+}
+
 }  // namespace transmit::format

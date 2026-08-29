@@ -133,6 +133,35 @@ void ExportController::clearScope() {
     emit scopeChanged();
 }
 
+QString ExportController::verificationText() const {
+    if (!report_.verificationRan) {
+        return {};
+    }
+    if (!report_.verified) {
+        return tr("%1 of %2 files did not read back from the drive correctly.")
+            .arg(report_.verificationFailures)
+            .arg(report_.verifiedFiles);
+    }
+
+    QString text = tr("Read back off the drive: all %1 files matched.").arg(report_.verifiedFiles);
+    if (!report_.verificationUsedColdReads) {
+        // Not a footnote. Without the eviction the read-back may have been
+        // served from memory, and somebody about to wipe this machine is
+        // entitled to know that before they do.
+        text += QLatin1Char(' ');
+        text +=
+            tr("This system cannot be asked to forget its cached copy of a file, so some of "
+               "that may have been read from memory rather than from the drive.");
+    }
+    if (report_.verificationRetriedReads > 0) {
+        text += QLatin1Char(' ');
+        text += tr("%1 read(s) only worked after retrying - the archive is sound, but a drive "
+                   "that needs a second attempt is worth replacing.")
+                    .arg(report_.verificationRetriedReads);
+    }
+    return text;
+}
+
 QString ExportController::scopeSummary() const {
     if (scope_.isUnrestricted()) {
         return tr("Everything in the folders you chose");
@@ -273,10 +302,14 @@ QString ExportController::incompleteText() const {
     if (!report_.incomplete) {
         return {};
     }
-    return tr(
-        "%n folder(s) could not be opened, so nothing inside them was captured. This "
-        "archive is not a complete copy of what you selected.",
-        nullptr, static_cast<int>(report_.unreadablePaths.size()));
+    // Written out rather than left as Qt's untranslated plural form, which
+    // renders "3 folder(s)" - a warning about an incomplete backup should not
+    // read like debug output.
+    const int folders = static_cast<int>(report_.unreadablePaths.size());
+    const QString count = folders == 1 ? tr("One folder") : tr("%1 folders").arg(folders);
+    return tr("%1 could not be opened, so nothing inside them was captured. This archive is not "
+              "a complete copy of what you selected.")
+        .arg(count);
 }
 
 quint64 ExportController::estimateSize(const QString& profileId) {

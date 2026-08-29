@@ -23,6 +23,7 @@ add_library(transmit_core STATIC
     services/ScanService.cpp
     services/ConsistentCopy.cpp
     services/ExportService.cpp
+    services/VerifyService.cpp
     services/ImportService.cpp
     services/RollbackWriter.cpp
     services/ProfileService.cpp

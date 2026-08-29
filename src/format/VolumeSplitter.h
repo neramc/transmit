@@ -130,6 +130,15 @@ public:
     [[nodiscard]] std::uint64_t logicalSize() const noexcept { return logicalSize_; }
     [[nodiscard]] const ArchiveUuid& uuid() const noexcept { return uuid_; }
 
+    /// How many reads have needed more than one attempt.
+    ///
+    /// Counted here because this is where the retrying happens, and a caller
+    /// wrapping readAt in a retry of its own would never see it: by the time
+    /// the read returns, the second attempt has already succeeded. A drive
+    /// that answers on the second try is working and dying, and this is the
+    /// only place that difference is visible.
+    [[nodiscard]] std::uint64_t retriedReads() const noexcept { return retriedReads_; }
+
     /// False when the write that produced these files never reached finish().
     /// Always true for a set written before the finalised flag existed, which
     /// is why the flag lives behind a version bump rather than a bare check.
@@ -151,6 +160,7 @@ private:
     ArchiveUuid uuid_{};
     std::uint64_t logicalSize_ = 0;
     RetryPolicy retry_;
+    std::uint64_t retriedReads_ = 0;
     bool finalised_ = true;
 };
 

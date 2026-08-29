@@ -155,8 +155,23 @@ splits for automatically.
   Identical files are stored once. The default is zstd at its highest level with
   a 128 MiB window, which lands within a few percent of xz while decompressing
   far faster — and restoring is the half you are waiting on.
-- **Integrity.** Every block carries a BLAKE2b hash, checked on the way out.
-  `transmit-cli verify` walks the whole archive.
+- **Integrity.** Every block carries a BLAKE2b hash and every file carries both
+  a BLAKE2b hash and an MD5, all checked on the way out. After writing, the
+  archive is read back off the drive - with a new reader, and with the page
+  cache dropped first where the system allows it, so what is checked is what
+  the drive kept rather than what is still in memory. A capture that does not
+  read back correctly fails; `--no-verify-after` turns it off.
+- **Checking it elsewhere.** A `.md5` file is written beside the archive in
+  `md5sum`'s own format, so a drive can be checked with a tool that has never
+  heard of Transmit:
+
+  ```
+  md5sum -c machine-20260829-1130.txa.md5
+  ```
+
+  The files inside are listed as comments, which `md5sum` skips - except on an
+  encrypted archive, where listing every path beside the thing that was
+  encrypted to hide them would defeat the point.
 - **Encryption.** Optional, AES-256-GCM with scrypt key derivation. The manifest
   is encrypted too, so file names are protected, not just contents. A wrong
   passphrase is rejected immediately rather than after a failed decryption.
@@ -238,13 +253,15 @@ transmit-cli export --out ARCHIVE [--profile full|documents|developer]
 
                     # how it is packed
                     [--block-size 64M] [--workers 4] [--sync-every 32M]
-                    [--no-verify-after]
+                    [--no-verify-after] [--no-md5] [--no-md5-sidecar]
 
                     # and all of the above, written down
                     [--selection-file FILE] [--save-selection FILE]
 
 transmit-cli inspect ARCHIVE      # where it came from and what is inside
 transmit-cli verify ARCHIVE       # check every block against its hash
+                    [--deep]      # and every file against its hash and MD5
+                    [--json]      # exit 0 all of it, 2 some of it, 1 none of it
 transmit-cli import ARCHIVE [--into DIR] [--dry-run] [--verify]
                     [--conflict skip|overwrite|newer|keep-both]
                     [--emulate-os windows|macos|linux]

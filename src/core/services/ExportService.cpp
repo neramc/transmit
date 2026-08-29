@@ -15,6 +15,7 @@
 #include "core/recipe/RecipeCatalog.h"
 #include "core/secrets/SecretsDomain.h"
 #include "core/services/ConsistentCopy.h"
+#include "core/services/VerifyService.h"
 #include "core/settings/SettingsDomain.h"
 #include "core/tasks/BlockPipeline.h"
 #include "core/utils/Conversions.h"
@@ -595,6 +596,74 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
                                             "The archive is complete, but its checksum file "
                                             "could not be written: %1")
                     .arg(describeError(written.error()))});
+        }
+    }
+
+    // ----------------------------------------------------------- verify
+    //
+    // Here rather than left to somebody to remember: an archive that did not
+    // survive the journey onto the drive is not a capture that worked, and the
+    // moment to find that out is while the machine it came from still exists.
+    if (request.packaging.verifyAfterWriting) {
+        VerifyRequest verification;
+
+        // A part rather than the base name: a split archive has no file at
+        // `name.txa` at all, and opening it would fail with "no such file"
+        // after a capture that went perfectly.
+        verification.archivePath = report.archiveParts.value(0, request.destinationPath);
+        verification.sidecarPath = report.checksumSidecar;
+        verification.useSidecar = !report.checksumSidecar.isEmpty();
+        verification.passphrase = request.passphrase;
+        verification.deep = true;
+
+        const VerifyService verifier(platform_);
+        const VerifyReport verified = verifier.run(verification, cancelToken, progress);
+
+        report.verificationRan = true;
+        report.verified = verified.everythingMatched();
+        report.verificationUsedColdReads = verified.cacheDropped;
+        report.verifiedFiles = verified.filesChecked;
+        report.verificationFailures = verified.filesFailed;
+        report.verificationRetriedReads = verified.retriedReads;
+        report.verificationMilliseconds = verified.elapsedMilliseconds;
+
+        if (!verified.cacheDropped) {
+            report.notes.push_back(ContinuityNote{
+                ContinuityGrade::Adapted, format::DomainId::Unknown,
+                QCoreApplication::translate("Export", "Verification"),
+                QCoreApplication::translate(
+                    "Export",
+                    "This system cannot be asked to forget its cached copy of a file, so the "
+                    "read-back may have come from memory rather than from the drive.")});
+        }
+        for (const VerifyFileResult& failure : verified.failures) {
+            report.notes.push_back(ContinuityNote{
+                ContinuityGrade::Impossible, format::DomainId::Unknown, failure.path,
+                QCoreApplication::translate("Export", "Did not come back off the drive: %1")
+                    .arg(failure.detail)});
+        }
+        if (verified.retriedReads > 0) {
+            report.notes.push_back(ContinuityNote{
+                ContinuityGrade::Adapted, format::DomainId::Unknown,
+                QCoreApplication::translate("Export", "Verification"),
+                QCoreApplication::translate(
+                    "Export",
+                    "%1 read(s) only worked after retrying. The archive is sound, but a drive "
+                    "that needs a second attempt is worth replacing.")
+                    .arg(verified.retriedReads)});
+        }
+
+        if (!report.verified) {
+            report.succeeded = false;
+            report.errorMessage =
+                verified.errorMessage.isEmpty()
+                    ? QCoreApplication::translate(
+                          "Export", "%1 of %2 files did not read back from the drive correctly.")
+                          .arg(verified.filesFailed)
+                          .arg(verified.filesChecked)
+                    : verified.errorMessage;
+            qCWarning(logCapture) << "verification failed:" << report.errorMessage;
+            return report;
         }
     }
 
