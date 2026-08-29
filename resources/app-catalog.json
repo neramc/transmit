@@ -1,6 +1,6 @@
 {
   "$comment": "Transmit application catalog. Each entry says how to recognise an application on each platform, how to reinstall it, which directories hold its state, and which files inside that state contain paths that must be rewritten for the new machine. Drop additional files into the user catalog directory to extend or correct this.",
-  "version": 1,
+  "schemaVersion": 2,
   "apps": [
     {
       "id": "org.alacritty.alacritty",
@@ -30,12 +30,24 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/alacritty",
-          "macos": "{HOME}/.config/alacritty",
-          "linux": "{HOME}/.config/alacritty"
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/alacritty"
+            ],
+            "macos": [
+              "{HOME}/.config/alacritty"
+            ],
+            "linux": [
+              "{HOME}/.config/alacritty"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "The font named in the configuration may not exist on the new system; the report will say so if it had to fall back."
     },
@@ -64,16 +76,28 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPDATA}/AnyDesk",
-          "macos": "{HOME}/.anydesk",
-          "linux": "{HOME}/.anydesk",
+          "paths": {
+            "windows": [
+              "{APPDATA}/AnyDesk"
+            ],
+            "macos": [
+              "{HOME}/.anydesk"
+            ],
+            "linux": [
+              "{HOME}/.anydesk"
+            ]
+          },
           "exclude": [
             "**/*.trace",
             "**/*.log"
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "manual",
       "note": "The AnyDesk identity is tied to the machine, so this one gets a new address."
     },
@@ -105,15 +129,27 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/audacity",
-          "macos": "{HOME}/Library/Application Support/audacity",
-          "linux": "{HOME}/.config/audacity",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/audacity"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/audacity"
+            ],
+            "linux": [
+              "{HOME}/.config/audacity"
+            ]
+          },
           "exclude": [
             "**/SessionData/**"
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -139,26 +175,57 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "macos": "{HOME}/.bashrc",
-          "linux": "{HOME}/.bashrc"
+          "paths": {
+            "macos": [
+              "{HOME}/.bashrc"
+            ],
+            "linux": [
+              "{HOME}/.bashrc"
+            ]
+          }
         },
         {
+          "id": "config2",
           "role": "config",
-          "macos": "{HOME}/.bash_profile",
-          "linux": "{HOME}/.bash_profile"
+          "paths": {
+            "macos": [
+              "{HOME}/.bash_profile"
+            ],
+            "linux": [
+              "{HOME}/.bash_profile"
+            ]
+          }
         },
         {
+          "id": "config3",
           "role": "config",
-          "macos": "{HOME}/.profile",
-          "linux": "{HOME}/.profile"
+          "paths": {
+            "macos": [
+              "{HOME}/.profile"
+            ],
+            "linux": [
+              "{HOME}/.profile"
+            ]
+          }
         },
         {
+          "id": "config4",
           "role": "config",
-          "macos": "{HOME}/.aliases",
-          "linux": "{HOME}/.aliases"
+          "paths": {
+            "macos": [
+              "{HOME}/.aliases"
+            ],
+            "linux": [
+              "{HOME}/.aliases"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Shell configuration often names tools and paths from the old machine; the report lists what could not be resolved here."
     },
@@ -191,16 +258,28 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPDATA}/Blender Foundation/Blender",
-          "macos": "{HOME}/Library/Application Support/Blender",
-          "linux": "{HOME}/.config/blender",
+          "paths": {
+            "windows": [
+              "{APPDATA}/Blender Foundation/Blender"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Blender"
+            ],
+            "linux": [
+              "{HOME}/.config/blender"
+            ]
+          },
           "exclude": [
             "**/cache/**",
             "**/autosave/**"
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -231,15 +310,136 @@
       },
       "state": [
         {
+          "id": "profile",
           "role": "profile",
-          "windows": "{APPDATA}/BraveSoftware/Brave-Browser/User Data",
-          "macos": "{HOME}/Library/Application Support/BraveSoftware/Brave-Browser",
-          "linux": "{HOME}/.config/BraveSoftware/Brave-Browser",
+          "paths": {
+            "windows": [
+              "{APPDATA}/BraveSoftware/Brave-Browser/User Data"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/BraveSoftware/Brave-Browser"
+            ],
+            "linux": [
+              "{HOME}/.config/BraveSoftware/Brave-Browser"
+            ]
+          },
           "exclude": [
             "**/Cache/**",
             "**/Code Cache/**",
             "**/GPUCache/**",
             "**/Crashpad/**"
+          ],
+          "contents": [
+            {
+              "path": "Local State",
+              "role": "index",
+              "format": "json",
+              "portable": "rewrite",
+              "note": "Lists the profiles and, on Windows, holds the key the saved passwords are encrypted with."
+            },
+            {
+              "path": "*/Preferences",
+              "role": "settings",
+              "format": "json",
+              "portable": "rewrite"
+            },
+            {
+              "path": "*/Secure Preferences",
+              "role": "settings",
+              "format": "json",
+              "portable": "never",
+              "note": "Signed against this installation; a copied one is rejected and rebuilt."
+            },
+            {
+              "path": "*/Bookmarks",
+              "role": "content",
+              "format": "json",
+              "portable": "always"
+            },
+            {
+              "path": "*/History",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "always",
+              "live": true
+            },
+            {
+              "path": "*/Login Data",
+              "role": "credentials",
+              "format": "sqlite",
+              "portable": "same-os",
+              "sensitive": true,
+              "note": "Encrypted with a key held by the operating system's own keystore, which does not travel."
+            },
+            {
+              "path": "*/Cookies",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "same-os",
+              "sensitive": true,
+              "live": true,
+              "note": "Encrypted the same way as the saved passwords."
+            },
+            {
+              "path": "*/Extensions",
+              "role": "extension",
+              "portable": "always"
+            },
+            {
+              "path": "*/Local Storage",
+              "role": "content",
+              "portable": "always"
+            },
+            {
+              "path": "*/IndexedDB",
+              "role": "content",
+              "portable": "always"
+            },
+            {
+              "path": "*/Cache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "*/Code Cache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "*/GPUCache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "ShaderCache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "GrShaderCache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "Crashpad",
+              "role": "log",
+              "portable": "never"
+            },
+            {
+              "path": "SingletonLock",
+              "role": "lock",
+              "portable": "never"
+            },
+            {
+              "path": "SingletonSocket",
+              "role": "lock",
+              "portable": "never"
+            },
+            {
+              "path": "SingletonCookie",
+              "role": "lock",
+              "portable": "never"
+            }
           ]
         }
       ],
@@ -253,11 +453,91 @@
           ]
         }
       ],
+      "move": [
+        {
+          "when": {
+            "from": "*",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "*/Secure Preferences",
+          "action": "regenerate",
+          "note": "Signed against the installation that wrote it; rebuilt on first start."
+        },
+        {
+          "when": {
+            "from": "windows",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "Local State",
+          "format": "json",
+          "action": "drop-keys",
+          "keys": [
+            "os_crypt"
+          ],
+          "note": "Holds a key sealed to the old Windows account. Kept, it would be tried and fail; dropped, the browser starts a new one."
+        },
+        {
+          "when": {
+            "from": "*",
+            "to": "windows"
+          },
+          "root": "profile",
+          "file": "Local State",
+          "format": "json",
+          "action": "drop-keys",
+          "keys": [
+            "os_crypt"
+          ]
+        }
+      ],
       "quiesce": [
         "brave",
         "brave.exe",
         "Brave Browser"
       ],
+      "portability": {
+        "carries_data": true,
+        "pairs": [
+          {
+            "from": "windows",
+            "to": "linux",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old account and cannot be read here."
+          },
+          {
+            "from": "windows",
+            "to": "macos",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old account and cannot be read here."
+          },
+          {
+            "from": "linux",
+            "to": "windows",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keyring and cannot be read here."
+          },
+          {
+            "from": "macos",
+            "to": "windows",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keychain and cannot be read here."
+          },
+          {
+            "from": "linux",
+            "to": "macos",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keyring and cannot be read here."
+          },
+          {
+            "from": "macos",
+            "to": "linux",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keychain and cannot be read here."
+          }
+        ]
+      },
       "grade": "adapted"
     },
     {
@@ -288,15 +568,27 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPDATA}/calibre",
-          "macos": "{HOME}/Library/Preferences/calibre",
-          "linux": "{HOME}/.config/calibre",
+          "paths": {
+            "windows": [
+              "{APPDATA}/calibre"
+            ],
+            "macos": [
+              "{HOME}/Library/Preferences/calibre"
+            ],
+            "linux": [
+              "{HOME}/.config/calibre"
+            ]
+          },
           "exclude": [
             "**/cache/**"
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "The library folder itself is ordinary files; make sure it is in the selection if it lives outside your documents."
     },
@@ -331,16 +623,138 @@
       },
       "state": [
         {
+          "id": "profile",
           "role": "profile",
-          "windows": "{APPDATA}/Chromium/User Data",
-          "macos": "{HOME}/Library/Application Support/Chromium",
-          "linux": "{HOME}/.config/chromium",
+          "paths": {
+            "windows": [
+              "{APPDATA}/Chromium/User Data"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Chromium"
+            ],
+            "linux": [
+              "{HOME}/.config/chromium",
+              "{HOME}/.var/app/org.chromium.Chromium/config/chromium"
+            ]
+          },
           "exclude": [
             "**/Cache/**",
             "**/Code Cache/**",
             "**/GPUCache/**",
             "**/Crashpad/**",
             "**/ShaderCache/**"
+          ],
+          "contents": [
+            {
+              "path": "Local State",
+              "role": "index",
+              "format": "json",
+              "portable": "rewrite",
+              "note": "Lists the profiles and, on Windows, holds the key the saved passwords are encrypted with."
+            },
+            {
+              "path": "*/Preferences",
+              "role": "settings",
+              "format": "json",
+              "portable": "rewrite"
+            },
+            {
+              "path": "*/Secure Preferences",
+              "role": "settings",
+              "format": "json",
+              "portable": "never",
+              "note": "Signed against this installation; a copied one is rejected and rebuilt."
+            },
+            {
+              "path": "*/Bookmarks",
+              "role": "content",
+              "format": "json",
+              "portable": "always"
+            },
+            {
+              "path": "*/History",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "always",
+              "live": true
+            },
+            {
+              "path": "*/Login Data",
+              "role": "credentials",
+              "format": "sqlite",
+              "portable": "same-os",
+              "sensitive": true,
+              "note": "Encrypted with a key held by the operating system's own keystore, which does not travel."
+            },
+            {
+              "path": "*/Cookies",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "same-os",
+              "sensitive": true,
+              "live": true,
+              "note": "Encrypted the same way as the saved passwords."
+            },
+            {
+              "path": "*/Extensions",
+              "role": "extension",
+              "portable": "always"
+            },
+            {
+              "path": "*/Local Storage",
+              "role": "content",
+              "portable": "always"
+            },
+            {
+              "path": "*/IndexedDB",
+              "role": "content",
+              "portable": "always"
+            },
+            {
+              "path": "*/Cache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "*/Code Cache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "*/GPUCache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "ShaderCache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "GrShaderCache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "Crashpad",
+              "role": "log",
+              "portable": "never"
+            },
+            {
+              "path": "SingletonLock",
+              "role": "lock",
+              "portable": "never"
+            },
+            {
+              "path": "SingletonSocket",
+              "role": "lock",
+              "portable": "never"
+            },
+            {
+              "path": "SingletonCookie",
+              "role": "lock",
+              "portable": "never"
+            }
           ]
         }
       ],
@@ -354,11 +768,91 @@
           ]
         }
       ],
+      "move": [
+        {
+          "when": {
+            "from": "*",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "*/Secure Preferences",
+          "action": "regenerate",
+          "note": "Signed against the installation that wrote it; rebuilt on first start."
+        },
+        {
+          "when": {
+            "from": "windows",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "Local State",
+          "format": "json",
+          "action": "drop-keys",
+          "keys": [
+            "os_crypt"
+          ],
+          "note": "Holds a key sealed to the old Windows account. Kept, it would be tried and fail; dropped, the browser starts a new one."
+        },
+        {
+          "when": {
+            "from": "*",
+            "to": "windows"
+          },
+          "root": "profile",
+          "file": "Local State",
+          "format": "json",
+          "action": "drop-keys",
+          "keys": [
+            "os_crypt"
+          ]
+        }
+      ],
       "quiesce": [
         "chromium",
         "chromium-browser",
         "chrome.exe"
       ],
+      "portability": {
+        "carries_data": true,
+        "pairs": [
+          {
+            "from": "windows",
+            "to": "linux",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old account and cannot be read here."
+          },
+          {
+            "from": "windows",
+            "to": "macos",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old account and cannot be read here."
+          },
+          {
+            "from": "linux",
+            "to": "windows",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keyring and cannot be read here."
+          },
+          {
+            "from": "macos",
+            "to": "windows",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keychain and cannot be read here."
+          },
+          {
+            "from": "linux",
+            "to": "macos",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keyring and cannot be read here."
+          },
+          {
+            "from": "macos",
+            "to": "linux",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keychain and cannot be read here."
+          }
+        ]
+      },
       "grade": "adapted"
     },
     {
@@ -388,16 +882,28 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPDATA}/DBeaverData/workspace6/General/.dbeaver",
-          "macos": "{HOME}/Library/DBeaverData/workspace6/General/.dbeaver",
-          "linux": "{HOME}/.local/share/DBeaverData/workspace6/General/.dbeaver"
+          "paths": {
+            "windows": [
+              "{APPDATA}/DBeaverData/workspace6/General/.dbeaver"
+            ],
+            "macos": [
+              "{HOME}/Library/DBeaverData/workspace6/General/.dbeaver"
+            ],
+            "linux": [
+              "{HOME}/.local/share/DBeaverData/workspace6/General/.dbeaver"
+            ]
+          }
         }
       ],
       "quiesce": [
         "dbeaver",
         "dbeaver.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Connection definitions travel; the saved passwords for them are protected by the old machine and need re-entering."
     },
@@ -428,10 +934,19 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/discord",
-          "macos": "{HOME}/Library/Application Support/discord",
-          "linux": "{HOME}/.config/discord",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/discord"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/discord"
+            ],
+            "linux": [
+              "{HOME}/.config/discord"
+            ]
+          },
           "exclude": [
             "**/Cache/**",
             "**/Code Cache/**",
@@ -445,6 +960,9 @@
         "discord",
         "Discord.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted"
     },
     {
@@ -475,12 +993,24 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{HOME}/.docker/config.json",
-          "macos": "{HOME}/.docker/config.json",
-          "linux": "{HOME}/.docker/config.json"
+          "paths": {
+            "windows": [
+              "{HOME}/.docker/config.json"
+            ],
+            "macos": [
+              "{HOME}/.docker/config.json"
+            ],
+            "linux": [
+              "{HOME}/.docker/config.json"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Only the client configuration travels. Images and containers are tied to the machine that built them and are rebuilt or pulled again."
     },
@@ -510,16 +1040,28 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/Element",
-          "macos": "{HOME}/Library/Application Support/Element",
-          "linux": "{HOME}/.config/Element",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/Element"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Element"
+            ],
+            "linux": [
+              "{HOME}/.config/Element"
+            ]
+          },
           "exclude": [
             "**/Cache/**",
             "**/GPUCache/**"
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "manual",
       "note": "Element stores its encryption keys per device. Verify this as a new session from another device rather than expecting the old keys to work."
     },
@@ -554,10 +1096,19 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/emacs",
-          "macos": "{HOME}/.emacs.d",
-          "linux": "{HOME}/.emacs.d",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/emacs"
+            ],
+            "macos": [
+              "{HOME}/.emacs.d"
+            ],
+            "linux": [
+              "{HOME}/.emacs.d"
+            ]
+          },
           "exclude": [
             "**/eln-cache/**",
             "**/elpa/**/*.elc",
@@ -566,12 +1117,24 @@
           ]
         },
         {
+          "id": "config2",
           "role": "config",
-          "windows": "{HOME}/.emacs",
-          "macos": "{HOME}/.emacs",
-          "linux": "{HOME}/.emacs"
+          "paths": {
+            "windows": [
+              "{HOME}/.emacs"
+            ],
+            "macos": [
+              "{HOME}/.emacs"
+            ],
+            "linux": [
+              "{HOME}/.emacs"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Byte-compiled and natively compiled files are left behind because they are built for the old machine; Emacs regenerates them."
     },
@@ -593,17 +1156,30 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "linux": "{HOME}/.config/evolution"
+          "paths": {
+            "linux": [
+              "{HOME}/.config/evolution"
+            ]
+          }
         },
         {
+          "id": "data",
           "role": "data",
-          "linux": "{HOME}/.local/share/evolution",
+          "paths": {
+            "linux": [
+              "{HOME}/.local/share/evolution"
+            ]
+          },
           "exclude": [
             "**/cache/**"
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted"
     },
     {
@@ -629,12 +1205,24 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPDATA}/Figma/settings.json",
-          "macos": "{HOME}/Library/Application Support/Figma/settings.json",
-          "linux": "{HOME}/.config/figma-linux/settings.json"
+          "paths": {
+            "windows": [
+              "{APPDATA}/Figma/settings.json"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Figma/settings.json"
+            ],
+            "linux": [
+              "{HOME}/.config/figma-linux/settings.json"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Your files live in your Figma account, so they are there as soon as you sign in."
     },
@@ -656,8 +1244,13 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "linux": "{HOME}/.config/gtk-3.0/bookmarks"
+          "paths": {
+            "linux": [
+              "{HOME}/.config/gtk-3.0/bookmarks"
+            ]
+          }
         }
       ],
       "rewrite": [
@@ -668,6 +1261,9 @@
           "group": 1
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Bookmarked folders are repointed at where those folders landed on this machine."
     },
@@ -699,15 +1295,27 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/FileZilla",
-          "macos": "{HOME}/.config/filezilla",
-          "linux": "{HOME}/.config/filezilla",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/FileZilla"
+            ],
+            "macos": [
+              "{HOME}/.config/filezilla"
+            ],
+            "linux": [
+              "{HOME}/.config/filezilla"
+            ]
+          },
           "exclude": [
             "**/*.tmp"
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted"
     },
     {
@@ -743,10 +1351,21 @@
       },
       "state": [
         {
+          "id": "profile",
           "role": "profile",
-          "windows": "{APPCONFIG}/Mozilla/Firefox",
-          "macos": "{HOME}/Library/Application Support/Firefox",
-          "linux": "{HOME}/.mozilla/firefox",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/Mozilla/Firefox"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Firefox"
+            ],
+            "linux": [
+              "{HOME}/.mozilla/firefox",
+              "{HOME}/.var/app/org.mozilla.firefox/.mozilla/firefox",
+              "{HOME}/snap/firefox/common/.mozilla/firefox"
+            ]
+          },
           "exclude": [
             "**/cache2/**",
             "**/startupCache/**",
@@ -757,6 +1376,149 @@
             "**/crashes/**",
             "**/minidumps/**",
             "**/datareporting/**"
+          ],
+          "contents": [
+            {
+              "path": "profiles.ini",
+              "role": "index",
+              "format": "ini",
+              "portable": "rewrite",
+              "note": "Names every profile folder and whether the name is relative."
+            },
+            {
+              "path": "installs.ini",
+              "role": "index",
+              "format": "ini",
+              "portable": "never",
+              "note": "Keyed by a hash of the installation directory, which is different on the new machine."
+            },
+            {
+              "path": "*/compatibility.ini",
+              "role": "index",
+              "format": "ini",
+              "portable": "never",
+              "note": "Records where the last-run build lived; rebuilt on first start."
+            },
+            {
+              "path": "*/prefs.js",
+              "role": "settings",
+              "format": "text",
+              "portable": "rewrite"
+            },
+            {
+              "path": "*/user.js",
+              "role": "settings",
+              "format": "text",
+              "portable": "rewrite"
+            },
+            {
+              "path": "*/places.sqlite",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "always",
+              "live": true,
+              "note": "Bookmarks and history."
+            },
+            {
+              "path": "*/favicons.sqlite",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "always",
+              "live": true
+            },
+            {
+              "path": "*/cookies.sqlite",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "always",
+              "live": true
+            },
+            {
+              "path": "*/formhistory.sqlite",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "always",
+              "live": true
+            },
+            {
+              "path": "*/logins.json",
+              "role": "credentials",
+              "format": "json",
+              "portable": "always",
+              "sensitive": true,
+              "note": "Encrypted with key4.db, which travels beside it, so these keep working anywhere."
+            },
+            {
+              "path": "*/key4.db",
+              "role": "credentials",
+              "format": "sqlite",
+              "portable": "always",
+              "sensitive": true
+            },
+            {
+              "path": "*/cert9.db",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "always"
+            },
+            {
+              "path": "*/extensions",
+              "role": "extension",
+              "portable": "always"
+            },
+            {
+              "path": "*/extensions.json",
+              "role": "index",
+              "format": "json",
+              "portable": "rewrite",
+              "note": "Records where each extension file is."
+            },
+            {
+              "path": "*/storage",
+              "role": "content",
+              "portable": "always",
+              "note": "Site storage: what pages have saved locally."
+            },
+            {
+              "path": "*/sessionstore-backups",
+              "role": "state",
+              "portable": "always"
+            },
+            {
+              "path": "*/cache2",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "*/startupCache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "*/thumbnails",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "*/lock",
+              "role": "lock",
+              "portable": "never"
+            },
+            {
+              "path": "*/.parentlock",
+              "role": "lock",
+              "portable": "never"
+            },
+            {
+              "path": "*/crashes",
+              "role": "log",
+              "portable": "never"
+            },
+            {
+              "path": "*/minidumps",
+              "role": "log",
+              "portable": "never"
+            }
           ]
         }
       ],
@@ -789,11 +1551,70 @@
           "group": 1
         }
       ],
+      "move": [
+        {
+          "when": {
+            "from": "*",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "profiles.ini",
+          "format": "ini",
+          "action": "rewrite",
+          "set": [
+            {
+              "key": "*/IsRelative",
+              "value": "1"
+            }
+          ],
+          "note": "Forced to relative so the profile is found wherever the folder ends up, rather than at the path it had on the old machine."
+        },
+        {
+          "when": {
+            "from": "*",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "installs.ini",
+          "action": "regenerate",
+          "note": "Its section names are a hash of the old installation directory, so every entry in it is stale."
+        },
+        {
+          "when": {
+            "from": "*",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "*/compatibility.ini",
+          "action": "regenerate"
+        },
+        {
+          "when": {
+            "from": "*",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "*/prefs.js",
+          "format": "text",
+          "action": "drop-keys",
+          "keys": [
+            "browser.startup.homepage_override.buildID",
+            "browser.startup.homepage_override.mstone",
+            "gfx.blacklist.",
+            "media.gmp-.abi",
+            "app.update.lastUpdateTime."
+          ],
+          "note": "Removes the settings that describe the old build and the old graphics hardware. Left in place they make the application believe it has already dealt with this profile."
+        }
+      ],
       "quiesce": [
         "firefox",
         "firefox-bin",
         "firefox.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full",
       "note": "Firefox keeps saved passwords in key4.db next to logins.json, both inside the profile, so they travel with it and keep working on the new system."
     },
@@ -820,14 +1641,24 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "macos": "{HOME}/.config/fish",
-          "linux": "{HOME}/.config/fish",
+          "paths": {
+            "macos": [
+              "{HOME}/.config/fish"
+            ],
+            "linux": [
+              "{HOME}/.config/fish"
+            ]
+          },
           "exclude": [
             "**/fish_history"
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted"
     },
     {
@@ -860,16 +1691,28 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/GIMP",
-          "macos": "{HOME}/Library/Application Support/GIMP",
-          "linux": "{HOME}/.config/GIMP",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/GIMP"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/GIMP"
+            ],
+            "linux": [
+              "{HOME}/.config/GIMP"
+            ]
+          },
           "exclude": [
             "**/tmp/**",
             "**/swap/**"
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -901,16 +1744,62 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{HOME}/.gitconfig",
-          "macos": "{HOME}/.gitconfig",
-          "linux": "{HOME}/.gitconfig"
+          "paths": {
+            "windows": [
+              "{HOME}/.gitconfig"
+            ],
+            "macos": [
+              "{HOME}/.gitconfig"
+            ],
+            "linux": [
+              "{HOME}/.gitconfig"
+            ]
+          },
+          "contents": [
+            {
+              "path": ".gitconfig",
+              "role": "settings",
+              "format": "ini",
+              "portable": "rewrite"
+            }
+          ]
         },
         {
+          "id": "config2",
           "role": "config",
-          "windows": "{APPCONFIG}/git",
-          "macos": "{HOME}/.config/git",
-          "linux": "{HOME}/.config/git"
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/git"
+            ],
+            "macos": [
+              "{HOME}/.config/git"
+            ],
+            "linux": [
+              "{HOME}/.config/git"
+            ]
+          },
+          "contents": [
+            {
+              "path": "config",
+              "role": "settings",
+              "format": "ini",
+              "portable": "rewrite"
+            },
+            {
+              "path": "ignore",
+              "role": "settings",
+              "format": "text",
+              "portable": "always"
+            },
+            {
+              "path": "attributes",
+              "role": "settings",
+              "format": "text",
+              "portable": "always"
+            }
+          ]
         }
       ],
       "rewrite": [
@@ -936,6 +1825,42 @@
           ]
         }
       ],
+      "move": [
+        {
+          "when": {
+            "from": "*",
+            "to": "windows"
+          },
+          "root": "config",
+          "file": ".gitconfig",
+          "format": "ini",
+          "action": "drop-keys",
+          "keys": [
+            "credential/helper",
+            "core/sshCommand"
+          ],
+          "note": "The credential helper and any ssh command named there are programs at paths that do not exist on Windows."
+        },
+        {
+          "when": {
+            "from": "windows",
+            "to": "*"
+          },
+          "root": "config",
+          "file": ".gitconfig",
+          "format": "ini",
+          "action": "drop-keys",
+          "keys": [
+            "credential/helper",
+            "core/autocrlf",
+            "core/sshCommand"
+          ],
+          "note": "Windows line-ending handling is wrong elsewhere, and the credential helper is a Windows program."
+        }
+      ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Paths inside the configuration are repointed. A credential helper named there is specific to the old system and is reported for you to set again."
     },
@@ -967,12 +1892,24 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/GitHub CLI",
-          "macos": "{HOME}/.config/gh",
-          "linux": "{HOME}/.config/gh"
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/GitHub CLI"
+            ],
+            "macos": [
+              "{HOME}/.config/gh"
+            ],
+            "linux": [
+              "{HOME}/.config/gh"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -1006,10 +1943,19 @@
       },
       "state": [
         {
+          "id": "data",
           "role": "data",
-          "windows": "{APPDATA}/gnupg",
-          "macos": "{HOME}/.gnupg",
-          "linux": "{HOME}/.gnupg",
+          "paths": {
+            "windows": [
+              "{APPDATA}/gnupg"
+            ],
+            "macos": [
+              "{HOME}/.gnupg"
+            ],
+            "linux": [
+              "{HOME}/.gnupg"
+            ]
+          },
           "exclude": [
             "**/S.*",
             "**/*.lock",
@@ -1017,6 +1963,9 @@
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Your keyring travels. Private keys are restored with owner-only permissions, which GnuPG insists on before it will use them."
     },
@@ -1047,10 +1996,19 @@
       },
       "state": [
         {
+          "id": "profile",
           "role": "profile",
-          "windows": "{APPDATA}/Google/Chrome/User Data",
-          "macos": "{HOME}/Library/Application Support/Google/Chrome",
-          "linux": "{HOME}/.config/google-chrome",
+          "paths": {
+            "windows": [
+              "{APPDATA}/Google/Chrome/User Data"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Google/Chrome"
+            ],
+            "linux": [
+              "{HOME}/.config/google-chrome"
+            ]
+          },
           "exclude": [
             "**/Cache/**",
             "**/Code Cache/**",
@@ -1061,6 +2019,118 @@
             "**/component_crx_cache/**",
             "**/*.tmp",
             "**/Singleton*"
+          ],
+          "contents": [
+            {
+              "path": "Local State",
+              "role": "index",
+              "format": "json",
+              "portable": "rewrite",
+              "note": "Lists the profiles and, on Windows, holds the key the saved passwords are encrypted with."
+            },
+            {
+              "path": "*/Preferences",
+              "role": "settings",
+              "format": "json",
+              "portable": "rewrite"
+            },
+            {
+              "path": "*/Secure Preferences",
+              "role": "settings",
+              "format": "json",
+              "portable": "never",
+              "note": "Signed against this installation; a copied one is rejected and rebuilt."
+            },
+            {
+              "path": "*/Bookmarks",
+              "role": "content",
+              "format": "json",
+              "portable": "always"
+            },
+            {
+              "path": "*/History",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "always",
+              "live": true
+            },
+            {
+              "path": "*/Login Data",
+              "role": "credentials",
+              "format": "sqlite",
+              "portable": "same-os",
+              "sensitive": true,
+              "note": "Encrypted with a key held by the operating system's own keystore, which does not travel."
+            },
+            {
+              "path": "*/Cookies",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "same-os",
+              "sensitive": true,
+              "live": true,
+              "note": "Encrypted the same way as the saved passwords."
+            },
+            {
+              "path": "*/Extensions",
+              "role": "extension",
+              "portable": "always"
+            },
+            {
+              "path": "*/Local Storage",
+              "role": "content",
+              "portable": "always"
+            },
+            {
+              "path": "*/IndexedDB",
+              "role": "content",
+              "portable": "always"
+            },
+            {
+              "path": "*/Cache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "*/Code Cache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "*/GPUCache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "ShaderCache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "GrShaderCache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "Crashpad",
+              "role": "log",
+              "portable": "never"
+            },
+            {
+              "path": "SingletonLock",
+              "role": "lock",
+              "portable": "never"
+            },
+            {
+              "path": "SingletonSocket",
+              "role": "lock",
+              "portable": "never"
+            },
+            {
+              "path": "SingletonCookie",
+              "role": "lock",
+              "portable": "never"
+            }
           ]
         }
       ],
@@ -1084,11 +2154,91 @@
           ]
         }
       ],
+      "move": [
+        {
+          "when": {
+            "from": "*",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "*/Secure Preferences",
+          "action": "regenerate",
+          "note": "Signed against the installation that wrote it; rebuilt on first start."
+        },
+        {
+          "when": {
+            "from": "windows",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "Local State",
+          "format": "json",
+          "action": "drop-keys",
+          "keys": [
+            "os_crypt"
+          ],
+          "note": "Holds a key sealed to the old Windows account. Kept, it would be tried and fail; dropped, the browser starts a new one."
+        },
+        {
+          "when": {
+            "from": "*",
+            "to": "windows"
+          },
+          "root": "profile",
+          "file": "Local State",
+          "format": "json",
+          "action": "drop-keys",
+          "keys": [
+            "os_crypt"
+          ]
+        }
+      ],
       "quiesce": [
         "chrome",
         "chrome.exe",
         "Google Chrome"
       ],
+      "portability": {
+        "carries_data": true,
+        "pairs": [
+          {
+            "from": "windows",
+            "to": "linux",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old account and cannot be read here."
+          },
+          {
+            "from": "windows",
+            "to": "macos",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old account and cannot be read here."
+          },
+          {
+            "from": "linux",
+            "to": "windows",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keyring and cannot be read here."
+          },
+          {
+            "from": "macos",
+            "to": "windows",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keychain and cannot be read here."
+          },
+          {
+            "from": "linux",
+            "to": "macos",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keyring and cannot be read here."
+          },
+          {
+            "from": "macos",
+            "to": "linux",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keychain and cannot be read here."
+          }
+        ]
+      },
       "grade": "adapted",
       "note": "Chrome seals its saved passwords with a key held by the operating system, so those need the credentials option; bookmarks, history, extensions and settings move as they are."
     },
@@ -1121,12 +2271,24 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/helix",
-          "macos": "{HOME}/.config/helix",
-          "linux": "{HOME}/.config/helix"
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/helix"
+            ],
+            "macos": [
+              "{HOME}/.config/helix"
+            ],
+            "linux": [
+              "{HOME}/.config/helix"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -1155,16 +2317,28 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPDATA}/HexChat",
-          "macos": "{HOME}/Library/Application Support/HexChat",
-          "linux": "{HOME}/.config/hexchat",
+          "paths": {
+            "windows": [
+              "{APPDATA}/HexChat"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/HexChat"
+            ],
+            "linux": [
+              "{HOME}/.config/hexchat"
+            ]
+          },
           "exclude": [
             "**/logs/**",
             "**/scrollback/**"
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -1195,12 +2369,24 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/inkscape",
-          "macos": "{HOME}/Library/Application Support/org.inkscape.Inkscape/config/inkscape",
-          "linux": "{HOME}/.config/inkscape"
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/inkscape"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/org.inkscape.Inkscape/config/inkscape"
+            ],
+            "linux": [
+              "{HOME}/.config/inkscape"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -1228,16 +2414,28 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/Insomnia",
-          "macos": "{HOME}/Library/Application Support/Insomnia",
-          "linux": "{HOME}/.config/Insomnia",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/Insomnia"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Insomnia"
+            ],
+            "linux": [
+              "{HOME}/.config/Insomnia"
+            ]
+          },
           "exclude": [
             "**/Cache/**",
             "**/GPUCache/**"
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted"
     },
     {
@@ -1271,10 +2469,19 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/JetBrains",
-          "macos": "{HOME}/Library/Application Support/JetBrains",
-          "linux": "{HOME}/.config/JetBrains",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/JetBrains"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/JetBrains"
+            ],
+            "linux": [
+              "{HOME}/.config/JetBrains"
+            ]
+          },
           "exclude": [
             "**/caches/**",
             "**/index/**",
@@ -1290,6 +2497,9 @@
         "webstorm",
         "idea64.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Keymaps, colour schemes and inspection profiles carry across. Project indexes are rebuilt on first open and are deliberately not copied."
     },
@@ -1319,10 +2529,19 @@
       },
       "state": [
         {
+          "id": "data",
           "role": "data",
-          "windows": "{APPCONFIG}/joplin-desktop",
-          "macos": "{HOME}/.config/joplin-desktop",
-          "linux": "{HOME}/.config/joplin-desktop",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/joplin-desktop"
+            ],
+            "macos": [
+              "{HOME}/.config/joplin-desktop"
+            ],
+            "linux": [
+              "{HOME}/.config/joplin-desktop"
+            ]
+          },
           "exclude": [
             "**/cache/**",
             "**/tmp/**",
@@ -1334,6 +2553,9 @@
         "joplin",
         "Joplin.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -1354,10 +2576,18 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "linux": "{HOME}/.config/kdeconnect"
+          "paths": {
+            "linux": [
+              "{HOME}/.config/kdeconnect"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "manual",
       "note": "Paired devices are identified by a per-machine key, so pair this machine again."
     },
@@ -1390,10 +2620,19 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/KeePassXC",
-          "macos": "{HOME}/Library/Application Support/KeePassXC",
-          "linux": "{HOME}/.config/keepassxc"
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/KeePassXC"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/KeePassXC"
+            ],
+            "linux": [
+              "{HOME}/.config/keepassxc"
+            ]
+          }
         }
       ],
       "rewrite": [
@@ -1412,6 +2651,9 @@
         "keepassxc",
         "KeePassXC.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "The password database is a file of your own; make sure it is in the selection, and the recent-files list is repointed at where it landed."
     },
@@ -1439,11 +2681,21 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "macos": "{HOME}/.config/kitty",
-          "linux": "{HOME}/.config/kitty"
+          "paths": {
+            "macos": [
+              "{HOME}/.config/kitty"
+            ],
+            "linux": [
+              "{HOME}/.config/kitty"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted"
     },
     {
@@ -1474,18 +2726,39 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/kritarc",
-          "macos": "{HOME}/Library/Preferences/kritarc",
-          "linux": "{HOME}/.config/kritarc"
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/kritarc"
+            ],
+            "macos": [
+              "{HOME}/Library/Preferences/kritarc"
+            ],
+            "linux": [
+              "{HOME}/.config/kritarc"
+            ]
+          }
         },
         {
+          "id": "data",
           "role": "data",
-          "windows": "{APPDATA}/krita",
-          "macos": "{HOME}/Library/Application Support/krita",
-          "linux": "{HOME}/.local/share/krita"
+          "paths": {
+            "windows": [
+              "{APPDATA}/krita"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/krita"
+            ],
+            "linux": [
+              "{HOME}/.local/share/krita"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -1520,10 +2793,19 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/LibreOffice/4/user",
-          "macos": "{HOME}/Library/Application Support/LibreOffice/4/user",
-          "linux": "{HOME}/.config/libreoffice/4/user",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/LibreOffice/4/user"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/LibreOffice/4/user"
+            ],
+            "linux": [
+              "{HOME}/.config/libreoffice/4/user"
+            ]
+          },
           "exclude": [
             "**/backup/**",
             "**/temp/**",
@@ -1545,6 +2827,9 @@
         "soffice.bin",
         "soffice.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Templates, autocorrect entries, macros and your custom dictionary all travel."
     },
@@ -1573,16 +2858,28 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/Logseq",
-          "macos": "{HOME}/Library/Application Support/Logseq",
-          "linux": "{HOME}/.config/Logseq",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/Logseq"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Logseq"
+            ],
+            "linux": [
+              "{HOME}/.config/Logseq"
+            ]
+          },
           "exclude": [
             "**/Cache/**",
             "**/GPUCache/**"
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted"
     },
     {
@@ -1611,15 +2908,136 @@
       },
       "state": [
         {
+          "id": "profile",
           "role": "profile",
-          "windows": "{APPDATA}/Microsoft/Edge/User Data",
-          "macos": "{HOME}/Library/Application Support/Microsoft Edge",
-          "linux": "{HOME}/.config/microsoft-edge",
+          "paths": {
+            "windows": [
+              "{APPDATA}/Microsoft/Edge/User Data"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Microsoft Edge"
+            ],
+            "linux": [
+              "{HOME}/.config/microsoft-edge"
+            ]
+          },
           "exclude": [
             "**/Cache/**",
             "**/Code Cache/**",
             "**/GPUCache/**",
             "**/Crashpad/**"
+          ],
+          "contents": [
+            {
+              "path": "Local State",
+              "role": "index",
+              "format": "json",
+              "portable": "rewrite",
+              "note": "Lists the profiles and, on Windows, holds the key the saved passwords are encrypted with."
+            },
+            {
+              "path": "*/Preferences",
+              "role": "settings",
+              "format": "json",
+              "portable": "rewrite"
+            },
+            {
+              "path": "*/Secure Preferences",
+              "role": "settings",
+              "format": "json",
+              "portable": "never",
+              "note": "Signed against this installation; a copied one is rejected and rebuilt."
+            },
+            {
+              "path": "*/Bookmarks",
+              "role": "content",
+              "format": "json",
+              "portable": "always"
+            },
+            {
+              "path": "*/History",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "always",
+              "live": true
+            },
+            {
+              "path": "*/Login Data",
+              "role": "credentials",
+              "format": "sqlite",
+              "portable": "same-os",
+              "sensitive": true,
+              "note": "Encrypted with a key held by the operating system's own keystore, which does not travel."
+            },
+            {
+              "path": "*/Cookies",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "same-os",
+              "sensitive": true,
+              "live": true,
+              "note": "Encrypted the same way as the saved passwords."
+            },
+            {
+              "path": "*/Extensions",
+              "role": "extension",
+              "portable": "always"
+            },
+            {
+              "path": "*/Local Storage",
+              "role": "content",
+              "portable": "always"
+            },
+            {
+              "path": "*/IndexedDB",
+              "role": "content",
+              "portable": "always"
+            },
+            {
+              "path": "*/Cache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "*/Code Cache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "*/GPUCache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "ShaderCache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "GrShaderCache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "Crashpad",
+              "role": "log",
+              "portable": "never"
+            },
+            {
+              "path": "SingletonLock",
+              "role": "lock",
+              "portable": "never"
+            },
+            {
+              "path": "SingletonSocket",
+              "role": "lock",
+              "portable": "never"
+            },
+            {
+              "path": "SingletonCookie",
+              "role": "lock",
+              "portable": "never"
+            }
           ]
         }
       ],
@@ -1633,11 +3051,91 @@
           ]
         }
       ],
+      "move": [
+        {
+          "when": {
+            "from": "*",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "*/Secure Preferences",
+          "action": "regenerate",
+          "note": "Signed against the installation that wrote it; rebuilt on first start."
+        },
+        {
+          "when": {
+            "from": "windows",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "Local State",
+          "format": "json",
+          "action": "drop-keys",
+          "keys": [
+            "os_crypt"
+          ],
+          "note": "Holds a key sealed to the old Windows account. Kept, it would be tried and fail; dropped, the browser starts a new one."
+        },
+        {
+          "when": {
+            "from": "*",
+            "to": "windows"
+          },
+          "root": "profile",
+          "file": "Local State",
+          "format": "json",
+          "action": "drop-keys",
+          "keys": [
+            "os_crypt"
+          ]
+        }
+      ],
       "quiesce": [
         "msedge",
         "msedge.exe",
         "Microsoft Edge"
       ],
+      "portability": {
+        "carries_data": true,
+        "pairs": [
+          {
+            "from": "windows",
+            "to": "linux",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old account and cannot be read here."
+          },
+          {
+            "from": "windows",
+            "to": "macos",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old account and cannot be read here."
+          },
+          {
+            "from": "linux",
+            "to": "windows",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keyring and cannot be read here."
+          },
+          {
+            "from": "macos",
+            "to": "windows",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keychain and cannot be read here."
+          },
+          {
+            "from": "linux",
+            "to": "macos",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keyring and cannot be read here."
+          },
+          {
+            "from": "macos",
+            "to": "linux",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keychain and cannot be read here."
+          }
+        ]
+      },
       "grade": "adapted"
     },
     {
@@ -1669,12 +3167,24 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/mpv",
-          "macos": "{HOME}/.config/mpv",
-          "linux": "{HOME}/.config/mpv"
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/mpv"
+            ],
+            "macos": [
+              "{HOME}/.config/mpv"
+            ],
+            "linux": [
+              "{HOME}/.config/mpv"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -1708,16 +3218,34 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/nvim",
-          "macos": "{HOME}/.config/nvim",
-          "linux": "{HOME}/.config/nvim"
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/nvim"
+            ],
+            "macos": [
+              "{HOME}/.config/nvim"
+            ],
+            "linux": [
+              "{HOME}/.config/nvim"
+            ]
+          }
         },
         {
+          "id": "data",
           "role": "data",
-          "windows": "{APPDATA}/nvim-data",
-          "macos": "{HOME}/.local/share/nvim",
-          "linux": "{HOME}/.local/share/nvim",
+          "paths": {
+            "windows": [
+              "{APPDATA}/nvim-data"
+            ],
+            "macos": [
+              "{HOME}/.local/share/nvim"
+            ],
+            "linux": [
+              "{HOME}/.local/share/nvim"
+            ]
+          },
           "exclude": [
             "**/swap/**",
             "**/shada/**",
@@ -1729,6 +3257,9 @@
         "nvim",
         "nvim.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -1753,10 +3284,19 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/Notion",
-          "macos": "{HOME}/Library/Application Support/Notion",
-          "linux": "{HOME}/.config/Notion",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/Notion"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Notion"
+            ],
+            "linux": [
+              "{HOME}/.config/Notion"
+            ]
+          },
           "exclude": [
             "**/Cache/**",
             "**/GPUCache/**",
@@ -1764,6 +3304,9 @@
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted"
     },
     {
@@ -1796,12 +3339,24 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{HOME}/.npmrc",
-          "macos": "{HOME}/.npmrc",
-          "linux": "{HOME}/.npmrc"
+          "paths": {
+            "windows": [
+              "{HOME}/.npmrc"
+            ],
+            "macos": [
+              "{HOME}/.npmrc"
+            ],
+            "linux": [
+              "{HOME}/.npmrc"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "An access token in .npmrc is carried across as written; rotate it if the new machine is not equally trusted."
     },
@@ -1833,10 +3388,19 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/obs-studio",
-          "macos": "{HOME}/Library/Application Support/obs-studio",
-          "linux": "{HOME}/.config/obs-studio",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/obs-studio"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/obs-studio"
+            ],
+            "linux": [
+              "{HOME}/.config/obs-studio"
+            ]
+          },
           "exclude": [
             "**/logs/**",
             "**/crashes/**",
@@ -1859,6 +3423,9 @@
         "obs",
         "obs64.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Scenes and settings carry across. Sources that name a capture device or a window will need repointing on the new machine."
     },
@@ -1887,10 +3454,19 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/obsidian",
-          "macos": "{HOME}/Library/Application Support/obsidian",
-          "linux": "{HOME}/.config/obsidian",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/obsidian"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/obsidian"
+            ],
+            "linux": [
+              "{HOME}/.config/obsidian"
+            ]
+          },
           "exclude": [
             "**/Cache/**",
             "**/GPUCache/**",
@@ -1911,6 +3487,9 @@
         "obsidian",
         "Obsidian.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "The list of vaults is repointed at where those folders landed here. The notes themselves come across as ordinary files."
     },
@@ -1940,10 +3519,19 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/Postman",
-          "macos": "{HOME}/Library/Application Support/Postman",
-          "linux": "{HOME}/.config/Postman",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/Postman"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Postman"
+            ],
+            "linux": [
+              "{HOME}/.config/Postman"
+            ]
+          },
           "exclude": [
             "**/Cache/**",
             "**/GPUCache/**",
@@ -1956,6 +3544,9 @@
         "postman",
         "Postman.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted"
     },
     {
@@ -1972,10 +3563,18 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{HOME}/.putty"
+          "paths": {
+            "windows": [
+              "{HOME}/.putty"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "manual",
       "note": "PuTTY keeps its sessions in the Windows registry. Export them with \"regedit /e\" before the move; Transmit cannot read them from the filesystem."
     },
@@ -2009,18 +3608,39 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPDATA}/pip",
-          "macos": "{HOME}/.config/pip",
-          "linux": "{HOME}/.config/pip"
+          "paths": {
+            "windows": [
+              "{APPDATA}/pip"
+            ],
+            "macos": [
+              "{HOME}/.config/pip"
+            ],
+            "linux": [
+              "{HOME}/.config/pip"
+            ]
+          }
         },
         {
+          "id": "config2",
           "role": "config",
-          "windows": "{HOME}/.condarc",
-          "macos": "{HOME}/.condarc",
-          "linux": "{HOME}/.condarc"
+          "paths": {
+            "windows": [
+              "{HOME}/.condarc"
+            ],
+            "macos": [
+              "{HOME}/.condarc"
+            ],
+            "linux": [
+              "{HOME}/.condarc"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Virtual environments contain compiled binaries and are excluded; recreate them from your requirements file."
     },
@@ -2052,10 +3672,19 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/qBittorrent",
-          "macos": "{HOME}/Library/Application Support/qBittorrent",
-          "linux": "{HOME}/.config/qBittorrent"
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/qBittorrent"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/qBittorrent"
+            ],
+            "linux": [
+              "{HOME}/.config/qBittorrent"
+            ]
+          }
         }
       ],
       "rewrite": [
@@ -2073,6 +3702,9 @@
         "qbittorrent",
         "qbittorrent.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted"
     },
     {
@@ -2103,12 +3735,24 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/rclone",
-          "macos": "{HOME}/.config/rclone",
-          "linux": "{HOME}/.config/rclone"
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/rclone"
+            ],
+            "macos": [
+              "{HOME}/.config/rclone"
+            ],
+            "linux": [
+              "{HOME}/.config/rclone"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Remote definitions include access tokens. They are carried as written, so treat the archive accordingly."
     },
@@ -2130,14 +3774,27 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "linux": "{HOME}/.config/remmina"
+          "paths": {
+            "linux": [
+              "{HOME}/.config/remmina"
+            ]
+          }
         },
         {
+          "id": "data",
           "role": "data",
-          "linux": "{HOME}/.local/share/remmina"
+          "paths": {
+            "linux": [
+              "{HOME}/.local/share/remmina"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted"
     },
     {
@@ -2169,12 +3826,24 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{HOME}/.cargo/config.toml",
-          "macos": "{HOME}/.cargo/config.toml",
-          "linux": "{HOME}/.cargo/config.toml"
+          "paths": {
+            "windows": [
+              "{HOME}/.cargo/config.toml"
+            ],
+            "macos": [
+              "{HOME}/.cargo/config.toml"
+            ],
+            "linux": [
+              "{HOME}/.cargo/config.toml"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "The configuration travels; run rustup again on the new machine to fetch the toolchains, which are compiled for the old one."
     },
@@ -2204,10 +3873,19 @@
       },
       "state": [
         {
+          "id": "data",
           "role": "data",
-          "windows": "{APPCONFIG}/Signal",
-          "macos": "{HOME}/Library/Application Support/Signal",
-          "linux": "{HOME}/.config/Signal",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/Signal"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Signal"
+            ],
+            "linux": [
+              "{HOME}/.config/Signal"
+            ]
+          },
           "exclude": [
             "**/Cache/**",
             "**/GPUCache/**",
@@ -2220,6 +3898,9 @@
         "Signal",
         "Signal.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "manual",
       "note": "Signal encrypts its message database with a key held by the operating system's keychain, so the history usually cannot follow. Re-link the desktop app from your phone instead."
     },
@@ -2252,10 +3933,19 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/Slack",
-          "macos": "{HOME}/Library/Application Support/Slack",
-          "linux": "{HOME}/.config/Slack",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/Slack"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Slack"
+            ],
+            "linux": [
+              "{HOME}/.config/Slack"
+            ]
+          },
           "exclude": [
             "**/Cache/**",
             "**/Code Cache/**",
@@ -2270,6 +3960,9 @@
         "slack.exe",
         "Slack"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "You will be asked to sign in again: the session token is tied to the machine it was issued on."
     },
@@ -2301,10 +3994,19 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPDATA}/Spotify",
-          "macos": "{HOME}/Library/Application Support/Spotify",
-          "linux": "{HOME}/.config/spotify",
+          "paths": {
+            "windows": [
+              "{APPDATA}/Spotify"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Spotify"
+            ],
+            "linux": [
+              "{HOME}/.config/spotify"
+            ]
+          },
           "exclude": [
             "**/Data/**",
             "**/Browser/**",
@@ -2317,6 +4019,9 @@
         "spotify",
         "Spotify.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Playlists live in your account, not on the machine, so they are there when you sign in. Downloaded offline tracks stay behind."
     },
@@ -2350,13 +4055,63 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{HOME}/.ssh",
-          "macos": "{HOME}/.ssh",
-          "linux": "{HOME}/.ssh",
+          "paths": {
+            "windows": [
+              "{HOME}/.ssh"
+            ],
+            "macos": [
+              "{HOME}/.ssh"
+            ],
+            "linux": [
+              "{HOME}/.ssh"
+            ]
+          },
           "exclude": [
             "**/known_hosts.old",
             "**/*.sock"
+          ],
+          "contents": [
+            {
+              "path": "config",
+              "role": "settings",
+              "format": "text",
+              "portable": "rewrite"
+            },
+            {
+              "path": "id_*",
+              "role": "credentials",
+              "portable": "always",
+              "sensitive": true,
+              "note": "Private keys. Their file permissions matter and are restored."
+            },
+            {
+              "path": "*.pub",
+              "role": "credentials",
+              "portable": "always"
+            },
+            {
+              "path": "known_hosts",
+              "role": "state",
+              "format": "text",
+              "portable": "always"
+            },
+            {
+              "path": "authorized_keys",
+              "role": "credentials",
+              "portable": "always"
+            },
+            {
+              "path": "*.sock",
+              "role": "lock",
+              "portable": "never"
+            },
+            {
+              "path": "known_hosts.old",
+              "role": "cache",
+              "portable": "never"
+            }
           ]
         }
       ],
@@ -2368,6 +4123,9 @@
           "group": 1
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Private keys are only readable by you, and Transmit restores that. On Windows the permission model differs, so check the keys are accepted before relying on them."
     },
@@ -2398,12 +4156,24 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/starship.toml",
-          "macos": "{HOME}/.config/starship.toml",
-          "linux": "{HOME}/.config/starship.toml"
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/starship.toml"
+            ],
+            "macos": [
+              "{HOME}/.config/starship.toml"
+            ],
+            "linux": [
+              "{HOME}/.config/starship.toml"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -2434,10 +4204,19 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPDATA}/Steam/userdata",
-          "macos": "{HOME}/Library/Application Support/Steam/userdata",
-          "linux": "{HOME}/.local/share/Steam/userdata",
+          "paths": {
+            "windows": [
+              "{APPDATA}/Steam/userdata"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Steam/userdata"
+            ],
+            "linux": [
+              "{HOME}/.local/share/Steam/userdata"
+            ]
+          },
           "exclude": [
             "**/remotecache.vdf",
             "**/*.tmp"
@@ -2448,6 +4227,9 @@
         "steam",
         "steam.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "manual",
       "note": "Local settings and cloud-save staging travel. The games themselves are platform-specific and must be downloaded again from your library."
     },
@@ -2477,10 +4259,19 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/Sublime Text/Packages/User",
-          "macos": "{HOME}/Library/Application Support/Sublime Text/Packages/User",
-          "linux": "{HOME}/.config/sublime-text/Packages/User",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/Sublime Text/Packages/User"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Sublime Text/Packages/User"
+            ],
+            "linux": [
+              "{HOME}/.config/sublime-text/Packages/User"
+            ]
+          },
           "exclude": [
             "**/Cache/**"
           ]
@@ -2490,6 +4281,9 @@
         "sublime_text",
         "sublime_text.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -2520,10 +4314,19 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPDATA}/Syncthing",
-          "macos": "{HOME}/Library/Application Support/Syncthing",
-          "linux": "{HOME}/.local/state/syncthing",
+          "paths": {
+            "windows": [
+              "{APPDATA}/Syncthing"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Syncthing"
+            ],
+            "linux": [
+              "{HOME}/.local/state/syncthing"
+            ]
+          },
           "exclude": [
             "**/index-*/**",
             "**/*.log"
@@ -2542,6 +4345,9 @@
         "syncthing",
         "syncthing.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "The device identity travels, so your other devices still recognise this one. Folder paths are repointed at where those folders landed here."
     },
@@ -2574,10 +4380,19 @@
       },
       "state": [
         {
+          "id": "data",
           "role": "data",
-          "windows": "{APPDATA}/Telegram Desktop/tdata",
-          "macos": "{HOME}/Library/Application Support/Telegram Desktop/tdata",
-          "linux": "{HOME}/.local/share/TelegramDesktop/tdata",
+          "paths": {
+            "windows": [
+              "{APPDATA}/Telegram Desktop/tdata"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Telegram Desktop/tdata"
+            ],
+            "linux": [
+              "{HOME}/.local/share/TelegramDesktop/tdata"
+            ]
+          },
           "exclude": [
             "**/user_data/cache/**",
             "**/emoji/**"
@@ -2589,6 +4404,9 @@
         "Telegram",
         "Telegram.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full",
       "note": "The signed-in session travels with the data directory, so you stay logged in."
     },
@@ -2622,16 +4440,187 @@
       },
       "state": [
         {
+          "id": "profile",
           "role": "profile",
-          "windows": "{APPCONFIG}/Thunderbird",
-          "macos": "{HOME}/Library/Thunderbird",
-          "linux": "{HOME}/.thunderbird",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/Thunderbird"
+            ],
+            "macos": [
+              "{HOME}/Library/Thunderbird"
+            ],
+            "linux": [
+              "{HOME}/.thunderbird",
+              "{HOME}/.var/app/org.mozilla.Thunderbird/.thunderbird"
+            ]
+          },
           "exclude": [
             "**/cache2/**",
             "**/*.tmp",
             "**/lock",
             "**/.parentlock",
             "**/crashes/**"
+          ],
+          "contents": [
+            {
+              "path": "profiles.ini",
+              "role": "index",
+              "format": "ini",
+              "portable": "rewrite",
+              "note": "Names every profile folder and whether the name is relative."
+            },
+            {
+              "path": "installs.ini",
+              "role": "index",
+              "format": "ini",
+              "portable": "never",
+              "note": "Keyed by a hash of the installation directory, which is different on the new machine."
+            },
+            {
+              "path": "*/compatibility.ini",
+              "role": "index",
+              "format": "ini",
+              "portable": "never",
+              "note": "Records where the last-run build lived; rebuilt on first start."
+            },
+            {
+              "path": "*/prefs.js",
+              "role": "settings",
+              "format": "text",
+              "portable": "rewrite"
+            },
+            {
+              "path": "*/user.js",
+              "role": "settings",
+              "format": "text",
+              "portable": "rewrite"
+            },
+            {
+              "path": "*/places.sqlite",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "always",
+              "live": true,
+              "note": "Bookmarks and history."
+            },
+            {
+              "path": "*/favicons.sqlite",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "always",
+              "live": true
+            },
+            {
+              "path": "*/cookies.sqlite",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "always",
+              "live": true
+            },
+            {
+              "path": "*/formhistory.sqlite",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "always",
+              "live": true
+            },
+            {
+              "path": "*/logins.json",
+              "role": "credentials",
+              "format": "json",
+              "portable": "always",
+              "sensitive": true,
+              "note": "Encrypted with key4.db, which travels beside it, so these keep working anywhere."
+            },
+            {
+              "path": "*/key4.db",
+              "role": "credentials",
+              "format": "sqlite",
+              "portable": "always",
+              "sensitive": true
+            },
+            {
+              "path": "*/cert9.db",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "always"
+            },
+            {
+              "path": "*/extensions",
+              "role": "extension",
+              "portable": "always"
+            },
+            {
+              "path": "*/extensions.json",
+              "role": "index",
+              "format": "json",
+              "portable": "rewrite",
+              "note": "Records where each extension file is."
+            },
+            {
+              "path": "*/storage",
+              "role": "content",
+              "portable": "always",
+              "note": "Site storage: what pages have saved locally."
+            },
+            {
+              "path": "*/sessionstore-backups",
+              "role": "state",
+              "portable": "always"
+            },
+            {
+              "path": "*/cache2",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "*/startupCache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "*/thumbnails",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "*/lock",
+              "role": "lock",
+              "portable": "never"
+            },
+            {
+              "path": "*/.parentlock",
+              "role": "lock",
+              "portable": "never"
+            },
+            {
+              "path": "*/crashes",
+              "role": "log",
+              "portable": "never"
+            },
+            {
+              "path": "*/minidumps",
+              "role": "log",
+              "portable": "never"
+            },
+            {
+              "path": "*/Mail",
+              "role": "content",
+              "portable": "always",
+              "note": "Locally stored mail."
+            },
+            {
+              "path": "*/ImapMail",
+              "role": "content",
+              "portable": "always"
+            },
+            {
+              "path": "*/global-messages-db.sqlite",
+              "role": "cache",
+              "format": "sqlite",
+              "portable": "never",
+              "note": "The search index, rebuilt from the mail itself and often the largest file in the profile."
+            }
           ]
         }
       ],
@@ -2657,11 +4646,79 @@
           "group": 1
         }
       ],
+      "move": [
+        {
+          "when": {
+            "from": "*",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "profiles.ini",
+          "format": "ini",
+          "action": "rewrite",
+          "set": [
+            {
+              "key": "*/IsRelative",
+              "value": "1"
+            }
+          ],
+          "note": "Forced to relative so the profile is found wherever the folder ends up, rather than at the path it had on the old machine."
+        },
+        {
+          "when": {
+            "from": "*",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "installs.ini",
+          "action": "regenerate",
+          "note": "Its section names are a hash of the old installation directory, so every entry in it is stale."
+        },
+        {
+          "when": {
+            "from": "*",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "*/compatibility.ini",
+          "action": "regenerate"
+        },
+        {
+          "when": {
+            "from": "*",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "*/prefs.js",
+          "format": "text",
+          "action": "drop-keys",
+          "keys": [
+            "browser.startup.homepage_override.buildID",
+            "browser.startup.homepage_override.mstone",
+            "gfx.blacklist.",
+            "media.gmp-.abi",
+            "app.update.lastUpdateTime."
+          ],
+          "note": "Removes the settings that describe the old build and the old graphics hardware. Left in place they make the application believe it has already dealt with this profile."
+        },
+        {
+          "when": {
+            "from": "*",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "*/global-messages-db.sqlite",
+          "action": "regenerate"
+        }
+      ],
       "quiesce": [
         "thunderbird",
         "thunderbird-bin",
         "thunderbird.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Local mail folders are carried across. The account passwords live in the profile for Thunderbird, so they survive the move."
     },
@@ -2689,16 +4746,33 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "macos": "{HOME}/.tmux.conf",
-          "linux": "{HOME}/.tmux.conf"
+          "paths": {
+            "macos": [
+              "{HOME}/.tmux.conf"
+            ],
+            "linux": [
+              "{HOME}/.tmux.conf"
+            ]
+          }
         },
         {
+          "id": "config2",
           "role": "config",
-          "macos": "{HOME}/.config/tmux",
-          "linux": "{HOME}/.config/tmux"
+          "paths": {
+            "macos": [
+              "{HOME}/.config/tmux"
+            ],
+            "linux": [
+              "{HOME}/.config/tmux"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -2726,10 +4800,18 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "linux": "{HOME}/.local/share/torbrowser"
+          "paths": {
+            "linux": [
+              "{HOME}/.local/share/torbrowser"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "manual",
       "note": "Tor Browser is deliberately built to leave no portable identity. Install it fresh rather than carrying its profile over."
     },
@@ -2760,10 +4842,19 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPDATA}/Transmission",
-          "macos": "{HOME}/Library/Application Support/Transmission",
-          "linux": "{HOME}/.config/transmission"
+          "paths": {
+            "windows": [
+              "{APPDATA}/Transmission"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Transmission"
+            ],
+            "linux": [
+              "{HOME}/.config/transmission"
+            ]
+          }
         }
       ],
       "rewrite": [
@@ -2777,6 +4868,9 @@
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted"
     },
     {
@@ -2810,16 +4904,34 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{HOME}/_vimrc",
-          "macos": "{HOME}/.vimrc",
-          "linux": "{HOME}/.vimrc"
+          "paths": {
+            "windows": [
+              "{HOME}/_vimrc"
+            ],
+            "macos": [
+              "{HOME}/.vimrc"
+            ],
+            "linux": [
+              "{HOME}/.vimrc"
+            ]
+          }
         },
         {
+          "id": "data",
           "role": "data",
-          "windows": "{HOME}/vimfiles",
-          "macos": "{HOME}/.vim",
-          "linux": "{HOME}/.vim",
+          "paths": {
+            "windows": [
+              "{HOME}/vimfiles"
+            ],
+            "macos": [
+              "{HOME}/.vim"
+            ],
+            "linux": [
+              "{HOME}/.vim"
+            ]
+          },
           "exclude": [
             "**/swap/**",
             "**/undo/**",
@@ -2827,6 +4939,9 @@
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -2856,16 +4971,28 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{HOME}/.VirtualBox",
-          "macos": "{HOME}/Library/VirtualBox",
-          "linux": "{HOME}/.config/VirtualBox",
+          "paths": {
+            "windows": [
+              "{HOME}/.VirtualBox"
+            ],
+            "macos": [
+              "{HOME}/Library/VirtualBox"
+            ],
+            "linux": [
+              "{HOME}/.config/VirtualBox"
+            ]
+          },
           "exclude": [
             "**/*.log",
             "**/*.log.*"
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "manual",
       "note": "Only the preferences travel. Virtual machine disks are very large and are excluded by default; copy them yourself if you need them."
     },
@@ -2899,24 +5026,110 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/Code/User",
-          "macos": "{HOME}/Library/Application Support/Code/User",
-          "linux": "{HOME}/.config/Code/User",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/Code/User"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Code/User"
+            ],
+            "linux": [
+              "{HOME}/.config/Code/User"
+            ]
+          },
           "exclude": [
             "**/workspaceStorage/**/state.vscdb.backup",
             "**/globalStorage/**/Cache/**",
             "**/History/**"
+          ],
+          "contents": [
+            {
+              "path": "settings.json",
+              "role": "settings",
+              "format": "json",
+              "portable": "rewrite"
+            },
+            {
+              "path": "keybindings.json",
+              "role": "settings",
+              "format": "json",
+              "portable": "always"
+            },
+            {
+              "path": "snippets",
+              "role": "content",
+              "portable": "always"
+            },
+            {
+              "path": "tasks.json",
+              "role": "settings",
+              "format": "json",
+              "portable": "rewrite"
+            },
+            {
+              "path": "globalStorage/state.vscdb",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "always",
+              "live": true
+            },
+            {
+              "path": "globalStorage/state.vscdb.backup",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "workspaceStorage",
+              "role": "state",
+              "portable": "never",
+              "note": "Keyed by the folder each workspace was opened from, so none of it applies on the new machine."
+            },
+            {
+              "path": "History",
+              "role": "state",
+              "portable": "never",
+              "note": "The editor's own local file history."
+            }
           ]
         },
         {
+          "id": "data",
           "role": "data",
-          "windows": "{HOME}/.vscode/extensions",
-          "macos": "{HOME}/.vscode/extensions",
-          "linux": "{HOME}/.vscode/extensions",
+          "paths": {
+            "windows": [
+              "{HOME}/.vscode/extensions"
+            ],
+            "macos": [
+              "{HOME}/.vscode/extensions"
+            ],
+            "linux": [
+              "{HOME}/.vscode/extensions"
+            ]
+          },
           "exclude": [
             "**/.obsolete",
             "**/node_modules/.cache/**"
+          ],
+          "contents": [
+            {
+              "path": "*",
+              "role": "extension",
+              "portable": "rewrite"
+            },
+            {
+              "path": ".obsolete",
+              "role": "index",
+              "format": "json",
+              "portable": "never"
+            },
+            {
+              "path": "extensions.json",
+              "role": "index",
+              "format": "json",
+              "portable": "rewrite"
+            }
           ]
         }
       ],
@@ -2933,11 +5146,34 @@
           ]
         }
       ],
+      "move": [
+        {
+          "when": {
+            "from": "*",
+            "to": "*"
+          },
+          "root": "config",
+          "file": "workspaceStorage",
+          "action": "skip"
+        },
+        {
+          "when": {
+            "from": "*",
+            "to": "*"
+          },
+          "root": "data",
+          "file": ".obsolete",
+          "action": "regenerate"
+        }
+      ],
       "quiesce": [
         "code",
         "Code",
         "code.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Extensions are carried across as files. Any that ship compiled native components will need reinstalling on a different operating system."
     },
@@ -2968,14 +5204,174 @@
       },
       "state": [
         {
+          "id": "profile",
           "role": "profile",
-          "windows": "{APPDATA}/Vivaldi/User Data",
-          "macos": "{HOME}/Library/Application Support/Vivaldi",
-          "linux": "{HOME}/.config/vivaldi",
+          "paths": {
+            "windows": [
+              "{APPDATA}/Vivaldi/User Data"
+            ],
+            "macos": [
+              "{HOME}/Library/Application Support/Vivaldi"
+            ],
+            "linux": [
+              "{HOME}/.config/vivaldi"
+            ]
+          },
           "exclude": [
             "**/Cache/**",
             "**/Code Cache/**",
             "**/GPUCache/**"
+          ],
+          "contents": [
+            {
+              "path": "Local State",
+              "role": "index",
+              "format": "json",
+              "portable": "rewrite",
+              "note": "Lists the profiles and, on Windows, holds the key the saved passwords are encrypted with."
+            },
+            {
+              "path": "*/Preferences",
+              "role": "settings",
+              "format": "json",
+              "portable": "rewrite"
+            },
+            {
+              "path": "*/Secure Preferences",
+              "role": "settings",
+              "format": "json",
+              "portable": "never",
+              "note": "Signed against this installation; a copied one is rejected and rebuilt."
+            },
+            {
+              "path": "*/Bookmarks",
+              "role": "content",
+              "format": "json",
+              "portable": "always"
+            },
+            {
+              "path": "*/History",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "always",
+              "live": true
+            },
+            {
+              "path": "*/Login Data",
+              "role": "credentials",
+              "format": "sqlite",
+              "portable": "same-os",
+              "sensitive": true,
+              "note": "Encrypted with a key held by the operating system's own keystore, which does not travel."
+            },
+            {
+              "path": "*/Cookies",
+              "role": "database",
+              "format": "sqlite",
+              "portable": "same-os",
+              "sensitive": true,
+              "live": true,
+              "note": "Encrypted the same way as the saved passwords."
+            },
+            {
+              "path": "*/Extensions",
+              "role": "extension",
+              "portable": "always"
+            },
+            {
+              "path": "*/Local Storage",
+              "role": "content",
+              "portable": "always"
+            },
+            {
+              "path": "*/IndexedDB",
+              "role": "content",
+              "portable": "always"
+            },
+            {
+              "path": "*/Cache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "*/Code Cache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "*/GPUCache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "ShaderCache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "GrShaderCache",
+              "role": "cache",
+              "portable": "never"
+            },
+            {
+              "path": "Crashpad",
+              "role": "log",
+              "portable": "never"
+            },
+            {
+              "path": "SingletonLock",
+              "role": "lock",
+              "portable": "never"
+            },
+            {
+              "path": "SingletonSocket",
+              "role": "lock",
+              "portable": "never"
+            },
+            {
+              "path": "SingletonCookie",
+              "role": "lock",
+              "portable": "never"
+            }
+          ]
+        }
+      ],
+      "move": [
+        {
+          "when": {
+            "from": "*",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "*/Secure Preferences",
+          "action": "regenerate",
+          "note": "Signed against the installation that wrote it; rebuilt on first start."
+        },
+        {
+          "when": {
+            "from": "windows",
+            "to": "*"
+          },
+          "root": "profile",
+          "file": "Local State",
+          "format": "json",
+          "action": "drop-keys",
+          "keys": [
+            "os_crypt"
+          ],
+          "note": "Holds a key sealed to the old Windows account. Kept, it would be tried and fail; dropped, the browser starts a new one."
+        },
+        {
+          "when": {
+            "from": "*",
+            "to": "windows"
+          },
+          "root": "profile",
+          "file": "Local State",
+          "format": "json",
+          "action": "drop-keys",
+          "keys": [
+            "os_crypt"
           ]
         }
       ],
@@ -2984,6 +5380,47 @@
         "vivaldi-bin",
         "vivaldi.exe"
       ],
+      "portability": {
+        "carries_data": true,
+        "pairs": [
+          {
+            "from": "windows",
+            "to": "linux",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old account and cannot be read here."
+          },
+          {
+            "from": "windows",
+            "to": "macos",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old account and cannot be read here."
+          },
+          {
+            "from": "linux",
+            "to": "windows",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keyring and cannot be read here."
+          },
+          {
+            "from": "macos",
+            "to": "windows",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keychain and cannot be read here."
+          },
+          {
+            "from": "linux",
+            "to": "macos",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keyring and cannot be read here."
+          },
+          {
+            "from": "macos",
+            "to": "linux",
+            "grade": "adapted",
+            "why": "Bookmarks, history and extensions come across. Saved passwords and cookies are sealed to the old keychain and cannot be read here."
+          }
+        ]
+      },
       "grade": "adapted"
     },
     {
@@ -3017,16 +5454,28 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPCONFIG}/vlc",
-          "macos": "{HOME}/Library/Preferences/org.videolan.vlc",
-          "linux": "{HOME}/.config/vlc",
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/vlc"
+            ],
+            "macos": [
+              "{HOME}/Library/Preferences/org.videolan.vlc"
+            ],
+            "linux": [
+              "{HOME}/.config/vlc"
+            ]
+          },
           "exclude": [
             "**/art/**",
             "**/ml.xspf"
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -3054,18 +5503,39 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{HOME}/.wezterm.lua",
-          "macos": "{HOME}/.wezterm.lua",
-          "linux": "{HOME}/.wezterm.lua"
+          "paths": {
+            "windows": [
+              "{HOME}/.wezterm.lua"
+            ],
+            "macos": [
+              "{HOME}/.wezterm.lua"
+            ],
+            "linux": [
+              "{HOME}/.wezterm.lua"
+            ]
+          }
         },
         {
+          "id": "config2",
           "role": "config",
-          "windows": "{APPCONFIG}/wezterm",
-          "macos": "{HOME}/.config/wezterm",
-          "linux": "{HOME}/.config/wezterm"
+          "paths": {
+            "windows": [
+              "{APPCONFIG}/wezterm"
+            ],
+            "macos": [
+              "{HOME}/.config/wezterm"
+            ],
+            "linux": [
+              "{HOME}/.config/wezterm"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted"
     },
     {
@@ -3082,10 +5552,18 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPDATA}/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState"
+          "paths": {
+            "windows": [
+              "{APPDATA}/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -3117,12 +5595,24 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "windows": "{APPDATA}/Wireshark",
-          "macos": "{HOME}/.config/wireshark",
-          "linux": "{HOME}/.config/wireshark"
+          "paths": {
+            "windows": [
+              "{APPDATA}/Wireshark"
+            ],
+            "macos": [
+              "{HOME}/.config/wireshark"
+            ],
+            "linux": [
+              "{HOME}/.config/wireshark"
+            ]
+          }
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -3150,10 +5640,19 @@
       },
       "state": [
         {
+          "id": "data",
           "role": "data",
-          "windows": "{HOME}/Zotero",
-          "macos": "{HOME}/Zotero",
-          "linux": "{HOME}/Zotero",
+          "paths": {
+            "windows": [
+              "{HOME}/Zotero"
+            ],
+            "macos": [
+              "{HOME}/Zotero"
+            ],
+            "linux": [
+              "{HOME}/Zotero"
+            ]
+          },
           "exclude": [
             "**/cache/**",
             "**/*.tmp"
@@ -3164,6 +5663,9 @@
         "zotero",
         "zotero.exe"
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "full"
     },
     {
@@ -3190,19 +5692,40 @@
       },
       "state": [
         {
+          "id": "config",
           "role": "config",
-          "macos": "{HOME}/.zshrc",
-          "linux": "{HOME}/.zshrc"
+          "paths": {
+            "macos": [
+              "{HOME}/.zshrc"
+            ],
+            "linux": [
+              "{HOME}/.zshrc"
+            ]
+          }
         },
         {
+          "id": "config2",
           "role": "config",
-          "macos": "{HOME}/.zprofile",
-          "linux": "{HOME}/.zprofile"
+          "paths": {
+            "macos": [
+              "{HOME}/.zprofile"
+            ],
+            "linux": [
+              "{HOME}/.zprofile"
+            ]
+          }
         },
         {
+          "id": "data",
           "role": "data",
-          "macos": "{HOME}/.oh-my-zsh",
-          "linux": "{HOME}/.oh-my-zsh",
+          "paths": {
+            "macos": [
+              "{HOME}/.oh-my-zsh"
+            ],
+            "linux": [
+              "{HOME}/.oh-my-zsh"
+            ]
+          },
           "exclude": [
             "**/.git/objects/**",
             "**/cache/**",
@@ -3210,6 +5733,9 @@
           ]
         }
       ],
+      "portability": {
+        "carries_data": true
+      },
       "grade": "adapted",
       "note": "Shell configuration often names paths and tools that exist only on the old machine; those lines are reported so you can adjust them."
     }

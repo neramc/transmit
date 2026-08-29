@@ -43,17 +43,69 @@ QStringList toStringList(const QJsonValue& value) {
     return list;
 }
 
+RecipeContent readContent(const QJsonObject& object) {
+    RecipeContent content;
+    content.path = object.value(QStringLiteral("path")).toString();
+    content.role = contentRoleFromName(object.value(QStringLiteral("role")).toString());
+    content.format = object.value(QStringLiteral("format")).toString();
+    content.portable = portabilityFromName(object.value(QStringLiteral("portable")).toString());
+    content.sensitive = object.value(QStringLiteral("sensitive")).toBool(false);
+    content.live = object.value(QStringLiteral("live")).toBool(false);
+    content.note = object.value(QStringLiteral("note")).toString();
+
+    // A cache is never worth carrying and a lock file means nothing off the
+    // machine that made it. Saying so once here means every recipe does not
+    // have to repeat "portable": "never" beside each of them.
+    if (!object.contains(QStringLiteral("portable"))) {
+        if (content.role == ContentRole::Cache || content.role == ContentRole::Lock ||
+            content.role == ContentRole::Log) {
+            content.portable = Portability::Never;
+        } else if (content.role == ContentRole::Credentials) {
+            content.portable = Portability::SameOs;
+        }
+    }
+    if (content.role == ContentRole::Credentials && !object.contains(QStringLiteral("sensitive"))) {
+        content.sensitive = true;
+    }
+
+    for (const QJsonValue& child : object.value(QStringLiteral("contents")).toArray()) {
+        if (child.isObject()) {
+            content.children.push_back(readContent(child.toObject()));
+        }
+    }
+    return content;
+}
+
+/// Reads a state root in either schema.
+///
+/// Version 1 wrote one path per system directly on the object; version 2 puts
+/// a list of candidates under "paths". Both are accepted for good: a user
+/// overlay written against the old shape must keep working, and there is no
+/// version of this program that can be trusted to rewrite somebody's own file
+/// for them.
 RecipeStatePath readStatePath(const QJsonObject& object) {
     RecipeStatePath state;
     state.role = object.value(QStringLiteral("role")).toString(QStringLiteral("config"));
+    state.id = object.value(QStringLiteral("id")).toString(state.role);
+
+    const QJsonObject paths = object.value(QStringLiteral("paths")).toObject();
     for (const QString& os :
          {QStringLiteral("windows"), QStringLiteral("macos"), QStringLiteral("linux")}) {
-        const QString path = object.value(os).toString();
-        if (!path.isEmpty()) {
-            state.byOs.insert(os, path);
+        QStringList candidates = toStringList(paths.value(os));
+        if (candidates.isEmpty()) {
+            candidates = toStringList(object.value(os));  // version 1
+        }
+        if (!candidates.isEmpty()) {
+            state.candidatesByOs.insert(os, candidates);
         }
     }
+
     state.excludePatterns = toStringList(object.value(QStringLiteral("exclude")));
+    for (const QJsonValue& item : object.value(QStringLiteral("contents")).toArray()) {
+        if (item.isObject()) {
+            state.contents.push_back(readContent(item.toObject()));
+        }
+    }
     return state;
 }
 
@@ -67,6 +119,62 @@ RecipeRewriteRule readRewriteRule(const QJsonObject& object) {
     rule.table = object.value(QStringLiteral("table")).toString();
     rule.column = object.value(QStringLiteral("column")).toString();
     return rule;
+}
+
+OsFamily osFromName(const QString& name) {
+    if (name.isEmpty() || name == QLatin1String("*")) {
+        return OsFamily::Unknown;
+    }
+    const auto parsed = format::osFamilyFromName(toUtf8(name));
+    return parsed ? *parsed : OsFamily::Unknown;
+}
+
+RecipeMoveStep readMoveStep(const QJsonObject& object) {
+    RecipeMoveStep step;
+    const QJsonObject when = object.value(QStringLiteral("when")).toObject();
+    step.fromOs = when.value(QStringLiteral("from")).toString(QStringLiteral("*"));
+    step.toOs = when.value(QStringLiteral("to")).toString(QStringLiteral("*"));
+    step.rootId = object.value(QStringLiteral("root")).toString();
+    step.file = object.value(QStringLiteral("file")).toString();
+    step.format = object.value(QStringLiteral("format")).toString();
+    step.action = moveActionFromName(object.value(QStringLiteral("action")).toString());
+    step.keys = toStringList(object.value(QStringLiteral("keys")));
+    step.target = object.value(QStringLiteral("target")).toString();
+    step.note = object.value(QStringLiteral("note")).toString();
+    for (const QJsonValue& item : object.value(QStringLiteral("rewrite")).toArray()) {
+        if (item.isObject()) {
+            step.rewrites.push_back(readRewriteRule(item.toObject()));
+        }
+    }
+    for (const QJsonValue& item : object.value(QStringLiteral("set")).toArray()) {
+        const QJsonObject assignment = item.toObject();
+        step.assignments.push_back(
+            RecipeMoveStep::Assignment{assignment.value(QStringLiteral("key")).toString(),
+                                       assignment.value(QStringLiteral("value")).toString()});
+    }
+    return step;
+}
+
+RecipePortability readPortability(const QJsonObject& object, const AppRecipe& recipe) {
+    RecipePortability portability;
+
+    // Defaulted from the state rather than assumed false: a recipe that names
+    // somewhere its settings live can carry them, and requiring every one of
+    // the seventy-three entries to say so again would only be a way to get it
+    // wrong in a few of them.
+    portability.carriesData =
+        object.value(QStringLiteral("carries_data")).toBool(!recipe.state.isEmpty());
+
+    for (const QJsonValue& item : object.value(QStringLiteral("pairs")).toArray()) {
+        const QJsonObject pair = item.toObject();
+        RecipePortability::Pair entry;
+        entry.from = osFromName(pair.value(QStringLiteral("from")).toString());
+        entry.to = osFromName(pair.value(QStringLiteral("to")).toString());
+        entry.grade = gradeFromName(pair.value(QStringLiteral("grade")).toString());
+        entry.why = pair.value(QStringLiteral("why")).toString();
+        portability.pairs.push_back(entry);
+    }
+    return portability;
 }
 
 /// Whether an installed application answers to a name the recipe lists.
@@ -117,10 +225,6 @@ SplitStatePath splitStatePath(const QString& tokenised) {
 }
 
 }  // namespace
-
-QString RecipeStatePath::forOs(OsFamily os) const {
-    return byOs.value(osKey(os));
-}
 
 RecipeCatalog::RecipeCatalog() = default;
 
@@ -235,9 +339,17 @@ int RecipeCatalog::loadFromJson(const QByteArray& json, QString* errorMessage) {
             }
         }
 
+        for (const QJsonValue& item : object.value(QStringLiteral("move")).toArray()) {
+            if (item.isObject()) {
+                recipe.moves.push_back(readMoveStep(item.toObject()));
+            }
+        }
+
         recipe.quiesceProcesses = toStringList(object.value(QStringLiteral("quiesce")));
         recipe.expectedGrade = gradeFromName(object.value(QStringLiteral("grade")).toString());
         recipe.note = object.value(QStringLiteral("note")).toString();
+        recipe.portability =
+            readPortability(object.value(QStringLiteral("portability")).toObject(), recipe);
 
         // A later definition replaces an earlier one with the same id, which is
         // what lets a user overlay correct a built-in entry.

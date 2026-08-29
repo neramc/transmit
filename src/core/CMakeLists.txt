@@ -4,6 +4,7 @@
 
 add_library(transmit_core STATIC
     continuity/ContinuityTypes.cpp
+    recipe/AppRecipe.cpp
     recipe/RecipeCatalog.cpp
     recipe/AppInventoryPayload.cpp
     recipe/StateRelocator.cpp

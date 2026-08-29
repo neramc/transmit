@@ -34,6 +34,23 @@ ctest --preset default -L fault          # deliberate breakage - see below
 ctest --preset default -L integration    # capture and restore end to end
 ```
 
+The application catalog is data, and is checked as data:
+
+```bash
+python3 -m pip install jsonschema
+python3 -c "import json,jsonschema; jsonschema.validate(
+    json.load(open('resources/app-catalog.json')),
+    json.load(open('resources/app-catalog.schema.json')))"
+scripts/migrate-catalog.py --check resources/app-catalog.json
+./build/tests/integration/transmit_Catalog_test
+```
+
+`scripts/enrich-catalog.py` holds the hand-written half - what is inside each
+application's state folder and what has to happen to it when it moves. Adding
+an application there and re-running both scripts is the way to extend it; only
+put in what is actually known, because an entry guessed at says with the same
+confidence as everything else that a file can be dropped when it cannot.
+
 `-L fault` is the one to run after touching anything that reads or writes a
 file. It fills up a disk part way through a write, pulls a stick out mid-read,
 makes a device store one byte fewer than it was given, cuts an archive off at

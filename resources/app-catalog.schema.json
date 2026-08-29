@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/neramc/transmit/app-catalog.schema.json",
+  "title": "Transmit application catalog",
+  "description": "What Transmit knows about an application: where it keeps its state, what is inside that, and what has to happen to each part when it moves to another system. A user can drop a file in this shape into the configuration directory to describe an application Transmit has never heard of.",
+  "type": "object",
+  "required": ["apps"],
+  "properties": {
+    "$comment": { "type": "string" },
+    "schemaVersion": {
+      "description": "2 for this shape. Version 1 wrote one path per system directly on each state root and had no contents or move rules; it is still read, for ever, so an overlay written against it keeps working.",
+      "type": "integer",
+      "enum": [1, 2]
+    },
+    "version": { "type": "integer" },
+    "apps": { "type": "array", "items": { "$ref": "#/$defs/app" } }
+  },
+  "additionalProperties": false,
+
+  "$defs": {
+    "os": { "enum": ["windows", "macos", "linux", "*"] },
+
+    "tokenisedPath": {
+      "description": "A path starting with a known-folder token, such as {HOME}/.config/app. Anything else resolves to nothing and the application then looks as though it has no state at all.",
+      "type": "string",
+      "pattern": "^\\{[A-Z]+\\}"
+    },
+
+    "app": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": {
+          "description": "Reverse-DNS, stable across versions and systems. A second recipe with the same id replaces the first, which is how an overlay corrects a built-in entry.",
+          "type": "string",
+          "minLength": 3
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "detect": {
+          "description": "What each system's package manager or application registry calls it.",
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
+          }
+        },
+        "install": {
+          "description": "Package names per package manager, for the script the restore writes. Transmit never runs that script itself.",
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "state": { "type": "array", "items": { "$ref": "#/$defs/stateRoot" } },
+        "rewrite": { "type": "array", "items": { "$ref": "#/$defs/rewriteRule" } },
+        "move": { "type": "array", "items": { "$ref": "#/$defs/moveStep" } },
+        "quiesce": {
+          "description": "Processes to ask the user to close, so the state is captured whole rather than half way through a write.",
+          "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
+        },
+        "portability": { "$ref": "#/$defs/portability" },
+        "grade": { "enum": ["full", "adapted", "manual", "impossible"] },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "stateRoot": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Unique within the recipe, so a move step can say which root it means.",
+          "type": "string",
+          "minLength": 1
+        },
+        "role": { "type": "string" },
+        "paths": {
+          "description": "Candidates per system, in order of preference: the first that exists is used. A list rather than one path is what lets a Flatpak or Snap install be found beside a native one.",
+          "type": "object",
+          "properties": {
+            "windows": { "$ref": "#/$defs/pathList" },
+            "macos": { "$ref": "#/$defs/pathList" },
+            "linux": { "$ref": "#/$defs/pathList" }
+          },
+          "additionalProperties": false
+        },
+        "windows": { "$ref": "#/$defs/tokenisedPath" },
+        "macos": { "$ref": "#/$defs/tokenisedPath" },
+        "linux": { "$ref": "#/$defs/tokenisedPath" },
+        "exclude": { "type": "array", "items": { "type": "string" } },
+        "contents": { "type": "array", "items": { "$ref": "#/$defs/content" } }
+      },
+      "additionalProperties": false
+    },
+
+    "pathList": {
+      "oneOf": [
+        { "$ref": "#/$defs/tokenisedPath" },
+        { "type": "array", "items": { "$ref": "#/$defs/tokenisedPath" }, "minItems": 1 }
+      ]
+    },
+
+    "content": {
+      "description": "One thing inside a state folder. Naming what it is decides what happens to it: an index has to be rewritten, a cache is never worth carrying, a credential must not travel unless the archive is encrypted and the user asked for it.",
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "not": { "pattern": "\\.\\." } },
+        "role": {
+          "enum": ["index", "settings", "profile", "database", "credentials", "extension",
+                   "content", "state", "cache", "log", "lock"]
+        },
+        "format": { "enum": ["ini", "json", "text", "plist", "sqlite", "binary"] },
+        "portable": {
+          "description": "always: copies and works. rewrite: works once the paths inside it are corrected. same-os: only meaningful on the same system. never: regenerable or machine-specific.",
+          "enum": ["always", "rewrite", "same-os", "never"]
+        },
+        "sensitive": { "type": "boolean" },
+        "live": {
+          "description": "May be open and being written while the capture runs, so it is read through the consistent-copy path rather than straight off disk.",
+          "type": "boolean"
+        },
+        "note": { "type": "string" },
+        "contents": { "type": "array", "items": { "$ref": "#/$defs/content" } }
+      },
+      "additionalProperties": false
+    },
+
+    "moveStep": {
+      "description": "This file, moving from here to there, is handled like this.",
+      "type": "object",
+      "properties": {
+        "when": {
+          "type": "object",
+          "properties": { "from": { "$ref": "#/$defs/os" }, "to": { "$ref": "#/$defs/os" } },
+          "additionalProperties": false
+        },
+        "root": { "type": "string" },
+        "file": { "type": "string", "not": { "pattern": "\\.\\." } },
+        "format": { "enum": ["ini", "json", "text", "plist", "sqlite", "binary"] },
+        "action": {
+          "enum": ["copy", "skip", "rename", "merge", "regenerate", "rewrite", "drop-keys"]
+        },
+        "keys": { "type": "array", "items": { "type": "string" } },
+        "set": {
+          "description": "For rewrite: settings to force to a fixed value, which is a different job from correcting a path.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "value"],
+            "properties": { "key": { "type": "string" }, "value": { "type": "string" } },
+            "additionalProperties": false
+          }
+        },
+        "rewrite": { "type": "array", "items": { "$ref": "#/$defs/rewriteRule" } },
+        "target": { "type": "string", "not": { "pattern": "\\.\\." } },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "rewriteRule": {
+      "description": "A file whose contents name locations on the old machine, and exactly where those names are. Deliberately narrow: a blanket search and replace across restored files would eventually corrupt something.",
+      "type": "object",
+      "required": ["file"],
+      "properties": {
+        "file": { "type": "string", "not": { "pattern": "\\.\\." } },
+        "format": { "enum": ["ini", "json", "text", "plist", "sqlite"] },
+        "keys": { "type": "array", "items": { "type": "string" } },
+        "pattern": { "type": "string" },
+        "group": { "type": "integer", "minimum": 0 },
+        "table": { "type": "string" },
+        "column": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "portability": {
+      "type": "object",
+      "properties": {
+        "carries_data": {
+          "description": "Whether this application's own data can travel at all. False means Transmit can record that it was installed and nothing more.",
+          "type": "boolean"
+        },
+        "pairs": {
+          "description": "How well it survives one particular journey. The most specific entry wins, so a recipe can say 'adapted everywhere, except to Windows' without repeating itself.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "from": { "$ref": "#/$defs/os" },
+              "to": { "$ref": "#/$defs/os" },
+              "grade": { "enum": ["full", "adapted", "manual", "impossible"] },
+              "why": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

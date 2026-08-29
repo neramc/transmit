@@ -22,6 +22,14 @@ struct InventoryEntry {
     QHash<QString, QString> installIds;
     QList<RecipeStatePath> state;
     QList<RecipeRewriteRule> rewrites;
+    QList<RecipeMoveStep> moves;
+
+    /// Whether this application's own data can travel, as the source
+    /// machine's catalog understood it. Carried rather than looked up again,
+    /// because the target's catalog may be older and would then quietly
+    /// disagree with what the person was shown when they chose.
+    bool carriesData = false;
+
     ContinuityGrade expectedGrade = ContinuityGrade::Full;
     QString note;
 

@@ -321,6 +321,37 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: ctest ${{ matrix.ctest }} --output-on-failure
 
+  # The catalog is the only part of Transmit whose content is data rather than
+  # code, and the only part a user can extend without building anything. Both
+  # of those mean it has to be checked as data.
+  catalog:
+    name: Application catalog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --quiet jsonschema
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libzstd-dev liblzma-dev libssl-dev libsqlite3-dev
+
+      - name: Check it against the schema
+        run: |
+          python3 - <<'PYTHON'
+          import json
+          import jsonschema
+
+          schema = json.load(open("resources/app-catalog.schema.json"))
+          catalog = json.load(open("resources/app-catalog.json"))
+          jsonschema.validate(catalog, schema)
+          print(f"{len(catalog['apps'])} recipes validate against schema "
+                f"{catalog.get('schemaVersion')}")
+          PYTHON
+
+      - name: Check the migration is settled
+        run: scripts/migrate-catalog.py --check resources/app-catalog.json
+
   # Deliberate breakage: a stick that fills up, one that is pulled out, one
   # that stores something shorter than it was given, and single-bit damage
   # everywhere in a finished archive. The gate is that no fault ever produces
