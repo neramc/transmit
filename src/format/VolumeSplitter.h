@@ -118,8 +118,14 @@ public:
     static Result<std::unique_ptr<VolumeSource>> open(const std::filesystem::path& anyPart);
 
     /// Reads `out.size()` bytes starting at a logical offset, transparently
-    /// crossing part boundaries.
+    /// crossing part boundaries. Reads that fail in a way another attempt
+    /// might survive are retried; see setRetryPolicy.
     Status readAt(std::uint64_t logicalOffset, MutableByteView out);
+
+    /// How hard to try when a read fails. The default suits removable media.
+    /// Pass RetryPolicy::once() where a failure has to be reported straight
+    /// away - a corruption check that is meant to find bad reads, say.
+    void setRetryPolicy(const RetryPolicy& retry) noexcept { retry_ = retry; }
 
     [[nodiscard]] std::uint64_t logicalSize() const noexcept { return logicalSize_; }
     [[nodiscard]] const ArchiveUuid& uuid() const noexcept { return uuid_; }
@@ -144,6 +150,7 @@ private:
     std::vector<std::filesystem::path> partPaths_;
     ArchiveUuid uuid_{};
     std::uint64_t logicalSize_ = 0;
+    RetryPolicy retry_;
     bool finalised_ = true;
 };
 

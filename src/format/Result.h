@@ -38,6 +38,15 @@ struct Error {
     ErrorCode code = ErrorCode::Internal;
     std::string message;
 
+    /// The operating system's own number for this, when there was one: errno
+    /// on POSIX, GetLastError on Windows. ErrorCode is deliberately coarse -
+    /// a dozen values covering everything - and that is right for deciding
+    /// what to tell the user, but not for deciding whether trying again could
+    /// possibly help. A full disk and a flaky USB read are both IoError and
+    /// want opposite treatment. Zero means the failure did not come from the
+    /// system.
+    int systemCode = 0;
+
     Error() = default;
     Error(ErrorCode c, std::string msg) : code(c), message(std::move(msg)) {}
     explicit Error(ErrorCode c) : code(c), message(describe(c)) {}

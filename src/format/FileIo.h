@@ -1,10 +1,14 @@
 #pragma once
 
+#include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <thread>
+#include <utility>
 
 #include "format/Bytes.h"
 #include "format/Result.h"
@@ -16,6 +20,52 @@ namespace transmit::format {
 /// non-ASCII names, so the conversion always goes through char8_t.
 std::filesystem::path toFsPath(std::string_view utf8);
 std::string fromFsPath(const std::filesystem::path& path);
+
+/// Whether trying the same operation again could plausibly get a different
+/// answer.
+///
+/// A marginal USB connection, a stick that is still spinning up, a sector that
+/// reads correctly on the second pass: those are worth another attempt, and on
+/// removable media they are the common case rather than the exotic one. A full
+/// disk, a file that belongs to somebody else, a device that has been
+/// unplugged: those will answer the same way for ever, and retrying them costs
+/// the user time and hides the real problem behind a delay.
+[[nodiscard]] bool isTransient(const Error& error) noexcept;
+
+/// How hard to try. The defaults are for removable media, where a second
+/// attempt is cheap and often works; `once()` is for anything that must fail
+/// immediately.
+struct RetryPolicy {
+    int attempts = 3;  ///< total, including the first
+    std::chrono::milliseconds firstDelay{25};
+    std::chrono::milliseconds maximumDelay{400};
+
+    [[nodiscard]] static RetryPolicy once() noexcept {
+        return RetryPolicy{1, std::chrono::milliseconds{0}, std::chrono::milliseconds{0}};
+    }
+};
+
+/// Repeats `operation` while it fails in a way another attempt might fix,
+/// backing off between tries. Anything else - success, or a failure that
+/// repeating cannot help - is returned at once.
+///
+/// `operation` must be safe to run more than once. That rules out anything
+/// that has already consumed part of a stream; whole-file reads and writes
+/// that stage into a temporary are fine, and are what this is used for.
+template<typename Fn>
+auto withRetry(const RetryPolicy& policy, Fn&& operation) -> decltype(operation()) {
+    std::chrono::milliseconds delay = policy.firstDelay;
+    for (int attempt = 1;; ++attempt) {
+        auto result = operation();
+        if (result || attempt >= policy.attempts || !isTransient(result.error())) {
+            return result;
+        }
+        if (delay.count() > 0) {
+            std::this_thread::sleep_for(delay);
+            delay = std::min(delay * 2, policy.maximumDelay);
+        }
+    }
+}
 
 /// Thin RAII wrapper over stdio with Result-based errors and 64-bit offsets.
 /// stdio is used rather than iostreams because it gives direct control over
@@ -69,8 +119,9 @@ private:
 Status syncDirectory(const std::filesystem::path& directory);
 
 /// Reads a whole file. Intended for small files (recipes, reports); the
-/// capture pipeline streams instead.
-Result<ByteBuffer> readWholeFile(const std::filesystem::path& path);
+/// capture pipeline streams instead. Retried, because reading the same file
+/// twice cannot do any harm and once is not always enough on a USB stick.
+Result<ByteBuffer> readWholeFile(const std::filesystem::path& path, const RetryPolicy& retry = {});
 
 /// How far a write is pushed before it is called done.
 enum class Durability {
@@ -89,6 +140,7 @@ enum class Durability {
 /// Writes to a sibling temporary file and renames over the target, so an
 /// interrupted write cannot leave a half-written report or catalog behind.
 Status writeFileAtomically(const std::filesystem::path& path, ByteView data,
-                           Durability durability = Durability::DataAndName);
+                           Durability durability = Durability::DataAndName,
+                           const RetryPolicy& retry = {});
 
 }  // namespace transmit::format

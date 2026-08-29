@@ -1,3 +1,5 @@
+#include <cerrno>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -118,6 +120,105 @@ TEST_F(FileIoTest, KeepsTheOriginalWhenTheReplacementCannotBeWritten) {
     EXPECT_EQ(contentsOf(path), "original");
 
     std::filesystem::remove_all(temporary);
+}
+
+TEST_F(FileIoTest, RetriesOnlyWhatAnotherAttemptCouldFix) {
+    // A full disk, a file that is not ours, an unplugged stick: answering
+    // again costs the user time and changes nothing.
+    Error full(ErrorCode::IoError, "no space");
+    full.systemCode = ENOSPC;
+    EXPECT_FALSE(isTransient(full));
+
+    Error denied(ErrorCode::PermissionDenied, "not yours");
+    denied.systemCode = EACCES;
+    EXPECT_FALSE(isTransient(denied));
+
+    Error gone(ErrorCode::IoError, "unplugged");
+    gone.systemCode = ENODEV;
+    EXPECT_FALSE(isTransient(gone));
+
+    // A bad read off marginal media often works on the next pass.
+    Error flaky(ErrorCode::IoError, "one bad read");
+    flaky.systemCode = EIO;
+    EXPECT_TRUE(isTransient(flaky));
+
+    // Bytes that are already wrong stay wrong however many times they are
+    // read, and a cancellation is a decision rather than a fault.
+    EXPECT_FALSE(isTransient(Error(ErrorCode::CorruptArchive)));
+    EXPECT_FALSE(isTransient(Error(ErrorCode::IntegrityMismatch)));
+    EXPECT_FALSE(isTransient(Error(ErrorCode::Cancelled)));
+    EXPECT_FALSE(isTransient(Error(ErrorCode::EndOfStream)));
+
+    // And a failure the system had no hand in is not guesswork material.
+    EXPECT_FALSE(isTransient(Error(ErrorCode::Internal)));
+}
+
+TEST_F(FileIoTest, StopsRetryingOnceItSucceeds) {
+    int calls = 0;
+    RetryPolicy policy;
+    policy.attempts = 4;
+    policy.firstDelay = std::chrono::milliseconds{0};
+
+    const Status result = withRetry(policy, [&calls]() -> Status {
+        ++calls;
+        if (calls < 3) {
+            Error flaky(ErrorCode::IoError, "bad read");
+            flaky.systemCode = EIO;
+            return flaky;
+        }
+        return ok();
+    });
+
+    EXPECT_TRUE(result);
+    EXPECT_EQ(calls, 3);
+}
+
+TEST_F(FileIoTest, GivesUpAfterTheLastAttempt) {
+    int calls = 0;
+    RetryPolicy policy;
+    policy.attempts = 3;
+    policy.firstDelay = std::chrono::milliseconds{0};
+
+    const Status result = withRetry(policy, [&calls]() -> Status {
+        ++calls;
+        Error flaky(ErrorCode::IoError, "bad read every time");
+        flaky.systemCode = EIO;
+        return flaky;
+    });
+
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error().systemCode, EIO);
+    EXPECT_EQ(calls, 3);
+}
+
+TEST_F(FileIoTest, DoesNotRetryWhatCannotBeFixed) {
+    int calls = 0;
+    RetryPolicy policy;
+    policy.attempts = 5;
+    policy.firstDelay = std::chrono::milliseconds{0};
+
+    const Status result = withRetry(policy, [&calls]() -> Status {
+        ++calls;
+        Error full(ErrorCode::IoError, "the disk is full");
+        full.systemCode = ENOSPC;
+        return full;
+    });
+
+    ASSERT_FALSE(result);
+    EXPECT_EQ(calls, 1) << "a full disk was asked five times whether it was still full";
+}
+
+TEST_F(FileIoTest, RetryPolicyOnceMeansOnce) {
+    int calls = 0;
+    const Status result = withRetry(RetryPolicy::once(), [&calls]() -> Status {
+        ++calls;
+        Error flaky(ErrorCode::IoError, "bad read");
+        flaky.systemCode = EIO;
+        return flaky;
+    });
+
+    EXPECT_FALSE(result);
+    EXPECT_EQ(calls, 1);
 }
 
 }  // namespace

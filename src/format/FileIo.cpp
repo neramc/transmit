@@ -54,7 +54,9 @@ Error errnoError(const std::filesystem::path& path, const char* what) {
     } else if (code == ENOMEM) {
         mapped = ErrorCode::OutOfMemory;
     }
-    return makeError(mapped, what, " '", fromFsPath(path), "': ", describeErrno(code));
+    Error error = makeError(mapped, what, " '", fromFsPath(path), "': ", describeErrno(code));
+    error.systemCode = code;
+    return error;
 }
 
 #if !defined(_WIN32)
@@ -74,6 +76,63 @@ const char* modeString(FileStream::Mode mode) {
 #endif
 
 }  // namespace
+
+bool isTransient(const Error& error) noexcept {
+    // Cancellation is a decision, not a fault, and the archive-level failures
+    // describe bytes that are already wrong - reading them again gives the
+    // same wrong bytes.
+    switch (error.code) {
+        case ErrorCode::PermissionDenied:
+        case ErrorCode::NotFound:
+        case ErrorCode::EndOfStream:
+        case ErrorCode::CorruptArchive:
+        case ErrorCode::UnsupportedVersion:
+        case ErrorCode::UnsupportedCodec:
+        case ErrorCode::IntegrityMismatch:
+        case ErrorCode::WrongPassphrase:
+        case ErrorCode::EncryptionUnavailable:
+        case ErrorCode::InvalidArgument:
+        case ErrorCode::Cancelled:
+            return false;
+        default:
+            break;
+    }
+    if (error.systemCode == 0) {
+        return false;
+    }
+
+#if defined(_WIN32)
+    switch (error.systemCode) {
+        case 21:    // ERROR_NOT_READY - the drive is still coming up
+        case 23:    // ERROR_CRC - a bad read off marginal media
+        case 32:    // ERROR_SHARING_VIOLATION
+        case 33:    // ERROR_LOCK_VIOLATION
+        case 121:   // ERROR_SEM_TIMEOUT
+        case 1117:  // ERROR_IO_DEVICE
+            return true;
+        default:
+            return false;
+    }
+#else
+    switch (error.systemCode) {
+        case EIO:     // one bad read; often fine on the next pass
+        case EINTR:   // a signal arrived mid-call
+        case EAGAIN:  // would block
+        case EBUSY:   // the device is doing something else
+        case ETIMEDOUT:
+        case ENOBUFS:
+            return true;
+
+        // Deliberately absent, because a second attempt cannot change any of
+        // them and pretending otherwise wastes the user's time at exactly the
+        // moment they need a straight answer: ENOSPC and EDQUOT (nowhere to
+        // put it), EROFS (nowhere to put it, permanently), ENODEV and ENXIO
+        // (the stick is gone), EFBIG (too large for this filesystem).
+        default:
+            return false;
+    }
+#endif
+}
 
 std::filesystem::path toFsPath(std::string_view utf8) {
     return std::filesystem::path(
@@ -297,16 +356,22 @@ Status syncDirectory(const std::filesystem::path& directory) {
 #endif
 }
 
-Result<ByteBuffer> readWholeFile(const std::filesystem::path& path) {
-    TRANSMIT_TRY(stream, FileStream::open(path, FileStream::Mode::Read));
-    TRANSMIT_TRY(byteCount, stream.size());
-    ByteBuffer buffer(static_cast<std::size_t>(byteCount));
-    TRANSMIT_CHECK(stream.read(buffer));
-    return buffer;
+Result<ByteBuffer> readWholeFile(const std::filesystem::path& path, const RetryPolicy& retry) {
+    return withRetry(retry, [&path]() -> Result<ByteBuffer> {
+        TRANSMIT_TRY(stream, FileStream::open(path, FileStream::Mode::Read));
+        TRANSMIT_TRY(byteCount, stream.size());
+        ByteBuffer buffer(static_cast<std::size_t>(byteCount));
+        TRANSMIT_CHECK(stream.read(buffer));
+        return buffer;
+    });
 }
 
-Status writeFileAtomically(const std::filesystem::path& path, ByteView data,
-                           Durability durability) {
+namespace {
+
+/// One attempt at the swap. Separated so withRetry can repeat it whole: the
+/// temporary is created fresh each time, so a second attempt starts from the
+/// same place the first did.
+Status writeFileOnce(const std::filesystem::path& path, ByteView data, Durability durability) {
     std::filesystem::path temporary = path;
     temporary += ".transmit-tmp";
 
@@ -343,6 +408,13 @@ Status writeFileAtomically(const std::filesystem::path& path, ByteView data,
         TRANSMIT_CHECK(syncDirectory(parent.empty() ? std::filesystem::path(".") : parent));
     }
     return ok();
+}
+
+}  // namespace
+
+Status writeFileAtomically(const std::filesystem::path& path, ByteView data, Durability durability,
+                           const RetryPolicy& retry) {
+    return withRetry(retry, [&]() -> Status { return writeFileOnce(path, data, durability); });
 }
 
 }  // namespace transmit::format

@@ -376,8 +376,19 @@ Status VolumeSource::readAt(std::uint64_t logicalOffset, MutableByteView out) {
         const auto available = static_cast<std::size_t>(it->payloadLength - withinPart);
         const std::size_t chunk = std::min(available, out.size() - written);
 
-        TRANSMIT_CHECK(it->stream.seek(VolumeHeader::kSize + withinPart));
-        TRANSMIT_CHECK(it->stream.read(out.subspan(written, chunk)));
+        // Retried as a unit. Seek-then-read is safe to repeat - the position
+        // is set explicitly every time - and this is the one place in Transmit
+        // where the bytes are coming off somebody's USB stick, where a read
+        // that fails once and works the second time is ordinary rather than
+        // remarkable. A full disk or an unplugged stick still fails at once;
+        // isTransient decides which is which.
+        const Status attempt = withRetry(retry_, [&]() -> Status {
+            if (auto sought = it->stream.seek(VolumeHeader::kSize + withinPart); !sought) {
+                return sought;
+            }
+            return it->stream.read(out.subspan(written, chunk));
+        });
+        TRANSMIT_CHECK(attempt);
         written += chunk;
     }
     return ok();
