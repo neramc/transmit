@@ -35,17 +35,17 @@ class AppCatalogModel : public QAbstractListModel {
     Q_PROPERTY(int carriesDataCount READ carriesDataCount NOTIFY countsChanged)
     Q_PROPERTY(int selectedCount READ selectedCount NOTIFY selectionChanged)
     Q_PROPERTY(QString filterText READ filterText WRITE setFilterText NOTIFY filterChanged)
-    Q_PROPERTY(bool carriesDataOnly READ carriesDataOnly WRITE setCarriesDataOnly
-                   NOTIFY filterChanged)
+    Q_PROPERTY(
+        bool carriesDataOnly READ carriesDataOnly WRITE setCarriesDataOnly NOTIFY filterChanged)
 
 public:
     enum Roles {
         AppIdRole = Qt::UserRole + 1,
         DisplayNameRole,
-        CarriesDataRole,  ///< its own data can travel, and is here to be read
-        HasStateRole,     ///< at least one of its folders exists on this machine
-        InstalledRole,    ///< the package database knows about it
-        StateSummaryRole, ///< "profile, config" - which roots it has here
+        CarriesDataRole,   ///< its own data can travel, and is here to be read
+        HasStateRole,      ///< at least one of its folders exists on this machine
+        InstalledRole,     ///< the package database knows about it
+        StateSummaryRole,  ///< "profile, config" - which roots it has here
         GradeRole,
         GradeNameRole,
         NoteRole,

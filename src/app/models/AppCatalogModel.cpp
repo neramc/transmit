@@ -119,9 +119,8 @@ QVariant AppCatalogModel::data(const QModelIndex& index, int role) const {
 }
 
 int AppCatalogModel::carriesDataCount() const {
-    return static_cast<int>(std::count_if(
-        rows_.constBegin(), rows_.constEnd(),
-        [](const Row& row) { return carriesData(row.match); }));
+    return static_cast<int>(std::count_if(rows_.constBegin(), rows_.constEnd(),
+                                          [](const Row& row) { return carriesData(row.match); }));
 }
 
 int AppCatalogModel::selectedCount() const {
@@ -166,9 +165,8 @@ void AppCatalogModel::rebuildVisible() {
         // Matched against the id as well as the name, so somebody who knows
         // the application as "chromium" finds it under whatever the catalog
         // decided to call it.
-        if (!needle.isEmpty()
-            && !match.recipe.displayName.contains(needle, Qt::CaseInsensitive)
-            && !match.recipe.id.contains(needle, Qt::CaseInsensitive)) {
+        if (!needle.isEmpty() && !match.recipe.displayName.contains(needle, Qt::CaseInsensitive) &&
+            !match.recipe.id.contains(needle, Qt::CaseInsensitive)) {
             continue;
         }
         visible_.push_back(i);

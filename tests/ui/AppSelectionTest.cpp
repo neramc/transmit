@@ -224,7 +224,8 @@ void AppSelectionTest::everyApplicationIsRecordedForTheReinstallScript() {
     for (const core::AppSelection& answer : answers) {
         QVERIFY2(answer.recordForReinstall,
                  qPrintable(QStringLiteral("%1 was dropped from the inventory by being "
-                                           "deselected").arg(answer.appId)));
+                                           "deselected")
+                                .arg(answer.appId)));
         QVERIFY2(!answer.captureState, qPrintable(answer.appId));
     }
 }
@@ -269,8 +270,7 @@ void AppSelectionTest::closingIsOnlyAskedForTheApplicationsBeingTaken() {
     // shell: the name the check reads is the executable's, not the script's.
     const QString pretend = workspace_->filePath(QStringLiteral("firefox"));
     QVERIFY(QFile::copy(QStringLiteral("/bin/sleep"), pretend));
-    QVERIFY(QFile::setPermissions(pretend, QFile::ReadOwner | QFile::WriteOwner |
-                                               QFile::ExeOwner));
+    QVERIFY(QFile::setPermissions(pretend, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner));
 
     QProcess sleeper;
     sleeper.start(pretend, {QStringLiteral("30")});
@@ -339,7 +339,8 @@ void AppSelectionTest::anImpossibleSizeLimitIsNoLimitAtAll() {
     // A negative or non-finite limit cast straight to an unsigned type becomes
     // an enormous one, which reads as "no limit" - the opposite of what
     // dragging a size control down to nothing means.
-    for (const double impossible : {-1.0, -1e18, 0.5, std::nan(""), -std::numeric_limits<double>::infinity()}) {
+    for (const double impossible :
+         {-1.0, -1e18, 0.5, std::nan(""), -std::numeric_limits<double>::infinity()}) {
         controller.setScope(impossible, 0, QString());
         QCOMPARE(controller.scopeSummary(), QStringLiteral("Everything in the folders you chose"));
     }
@@ -362,8 +363,8 @@ void AppSelectionTest::theApplicationSummarySaysWhichCaseThisIs() {
 
     controller.chooseApplications(&model);
     const QString everything = controller.applicationSummary();
-    QVERIFY2(everything.contains(QStringLiteral("whose data can travel"))
-                 && !everything.contains(QStringLiteral("(s)")),
+    QVERIFY2(everything.contains(QStringLiteral("whose data can travel")) &&
+                 !everything.contains(QStringLiteral("(s)")),
              qPrintable(everything));
 
     model.selectAll(false);

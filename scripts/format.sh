@@ -29,7 +29,13 @@ fi
 
 # The .mm files are Objective-C++ and are easy to forget; they are in the list
 # CI checks, so they are in this one.
-files=$(git ls-files '*.cpp' '*.h' '*.mm')
+#
+# --others as well as the tracked files: a file that has not been added yet is
+# exactly the file this is for. Without it a new source file is skipped here,
+# passes --check, is committed unformatted, and fails in CI - which is the one
+# thing this script exists to prevent. --exclude-standard keeps the build
+# directory out.
+files=$(git ls-files --cached --others --exclude-standard '*.cpp' '*.h' '*.mm')
 
 if [ "${1:-}" = "--check" ]; then
     # shellcheck disable=SC2086

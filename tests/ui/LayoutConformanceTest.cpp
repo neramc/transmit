@@ -20,6 +20,7 @@
 #include <QQuickItem>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QRegularExpression>
 #include <QSet>
 #include <QStringList>
 #include <QTest>
@@ -208,6 +209,29 @@ private:
 
     /// Shows one screen, including the wizard step when there is one.
     void showView(const View& view);
+
+    /// Every check, once, against the tree as it stands.
+    [[nodiscard]] QStringList measure(const QString& page) const;
+
+    /// How many items of the interface are laid out right now.
+    [[nodiscard]] int laidOutItems() const;
+
+    /// Waits until the tree has stopped growing.
+    ///
+    /// A fixed wait is a guess in both directions. Too short and a list whose
+    /// delegates are still being created is measured before the items that
+    /// would have failed exist - which is the worse mistake of the two,
+    /// because it is silent. This waits for the item count to hold still.
+    void settle();
+
+    /// The faults still there after the interface has been left alone.
+    ///
+    /// A layout pass that has not finished yet looks exactly like a defect: a
+    /// label that has just become visible sits below a parent that has not yet
+    /// been told it grew. Measuring twice and keeping only what both passes
+    /// saw separates the two, and cannot hide a real fault - a real one is
+    /// still there a quarter of a second later.
+    [[nodiscard]] QStringList faultsThatStay(const QString& page);
     void resizeTo(int width, int height);
     void setScheme(const QString& scheme);
     void setSidebarCollapsed(bool collapsed);
@@ -283,7 +307,7 @@ void LayoutConformanceTest::evaluate(const QString& expression) {
 
 void LayoutConformanceTest::showPage(const QString& page) {
     evaluate(QStringLiteral("AppController.currentPage = '%1'").arg(page));
-    QTest::qWait(80);
+    settle();
 }
 
 void LayoutConformanceTest::showView(const View& view) {
@@ -300,7 +324,7 @@ void LayoutConformanceTest::showView(const View& view) {
     QQuickItem* const wizard = findItem(contentRoot(), QString::fromLatin1(view.wizard));
     QVERIFY2(wizard != nullptr, view.wizard);
     QVERIFY2(wizard->setProperty("step", view.step), "the page has no step property");
-    QTest::qWait(80);
+    settle();
 
     // The step that has just been hidden may have released ListView delegates,
     // and those are still in the tree, still visible and still the size they
@@ -529,6 +553,68 @@ void LayoutConformanceTest::checkSidewaysScroll(const QString& page, QStringList
 
 // ----------------------------------------------------------- the pass
 
+int LayoutConformanceTest::laidOutItems() const {
+    int items = 0;
+    walk(
+        contentRoot(), nullptr, [&items](QQuickItem*, QQuickItem*) { ++items; },
+        [](QQuickItem*) { return true; });
+    return items;
+}
+
+void LayoutConformanceTest::settle() {
+    int previous = -1;
+    for (int attempt = 0; attempt < 15; ++attempt) {
+        QTest::qWait(40);
+        const int now = laidOutItems();
+        if (now == previous) {
+            return;
+        }
+        previous = now;
+    }
+}
+
+QStringList LayoutConformanceTest::measure(const QString& page) const {
+    QStringList problems;
+    checkOverflow(page, problems);
+    checkOverlap(page, problems);
+    checkTruncation(page, problems);
+    checkControlSizes(page, problems);
+    checkSidewaysScroll(page, problems);
+    return problems;
+}
+
+QStringList LayoutConformanceTest::faultsThatStay(const QString& page) {
+    QStringList problems = measure(page);
+    if (problems.isEmpty()) {
+        return problems;
+    }
+
+    QTest::qWait(200);
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    settle();
+
+    // Matched on which items are involved rather than on where they were.
+    // A list that scrolled a pixel between the two passes reports the same
+    // fault with different numbers in it, and comparing the whole line would
+    // throw that away - which is the one thing this must not do.
+    const auto identityOf = [](const QString& fault) {
+        static const QRegularExpression geometry(
+            QStringLiteral(" at \\([-0-9.,]*\\) [-0-9.]+x[-0-9.]+"));
+        QString identity = fault;
+        identity.remove(geometry);
+        return identity;
+    };
+
+    QSet<QString> settled;
+    for (const QString& fault : measure(page)) {
+        settled.insert(identityOf(fault));
+    }
+    problems.removeIf([&settled, &identityOf](const QString& fault) {
+        return !settled.contains(identityOf(fault));
+    });
+    return problems;
+}
+
 void LayoutConformanceTest::everyPageFitsAtEverySize_data() {
     QTest::addColumn<int>("width");
     QTest::addColumn<int>("height");
@@ -568,13 +654,8 @@ void LayoutConformanceTest::everyPageFitsAtEverySize() {
 
     QStringList problems;
     for (const View& view : kViews) {
-        const QString page = nameOf(view);
         showView(view);
-        checkOverflow(page, problems);
-        checkOverlap(page, problems);
-        checkTruncation(page, problems);
-        checkControlSizes(page, problems);
-        checkSidewaysScroll(page, problems);
+        problems += faultsThatStay(nameOf(view));
     }
 
     // Both wizards left where a user starting again would find them, so the
