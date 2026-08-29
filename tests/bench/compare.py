@@ -42,7 +42,13 @@ def main():
             continue
 
         # A measurement too small to time is not a measurement.
-        if was["medianMs"] < 1.0:
+        #
+        # Five milliseconds, not one: at a millisecond and a half a single
+        # scheduling hiccup on a shared runner is a fifteen percent change, and
+        # a gate that fires on that is a gate people learn to re-run until it
+        # passes. The measurements that matter here - the large-buffer ones -
+        # are two orders of magnitude above this.
+        if was["medianMs"] < 5.0:
             continue
 
         # Neither is one that read nothing. A capture pointed at an empty

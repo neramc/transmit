@@ -9,12 +9,13 @@
     {
       "name": "default",
       "displayName": "Default (release with debug information)",
-      "description": "What most people want: optimised, but still debuggable.",
+      "description": "What most people want: optimised, but still debuggable. Warnings are errors, the same as continuous integration: a warning that only appears there is one found three commits later.",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "TRANSMIT_BUILD_TESTS": "ON"
+        "TRANSMIT_BUILD_TESTS": "ON",
+        "TRANSMIT_WERROR": "ON"
       }
     },
     {

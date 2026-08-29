@@ -411,6 +411,58 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     options.solidBlockSize = request.packaging.solidBlockSize;
     options.recordMd5 = request.packaging.recordMd5;
 
+    const platform::StorageVolume destination = volumeFor(platform_, request.destinationPath);
+
+    // ------------------------------------------------------- can it go there
+    //
+    // Asked here, after the scan and before a single byte is written: a stick
+    // that is write-protected, or plainly too small, should say so now rather
+    // than at ninety-eight percent of an hour's work.
+    if (destination.readOnly) {
+        return fail(
+            QCoreApplication::translate(
+                "Export",
+                "%1 is write-protected, so nothing can be written to it. Some drives have a "
+                "small switch on the side; otherwise choose somewhere else.")
+                .arg(destination.displayName.isEmpty()
+                         ? QDir::toNativeSeparators(request.destinationPath)
+                         : destination.displayName));
+    }
+
+    // Only when the platform actually knows about this volume - a
+    // default-constructed one means "a drive we do not enumerate", and refusing
+    // on a number nobody measured would be worse than trying.
+    if (destination.totalBytes > 0 && scan.totalBytes > 0) {
+        // The archive is compressed, so the uncompressed total is an upper
+        // bound rather than a requirement, and refusing on it would turn away
+        // captures that would have fitted comfortably. What no compression
+        // saves is ninety-five percent of a mixed home directory, so that is
+        // where the refusal sits; between the two, the run goes ahead and the
+        // report says it was foreseeable.
+        const quint64 hopeless = scan.totalBytes / 20;
+        if (destination.freeBytes < hopeless) {
+            return fail(QCoreApplication::translate(
+                            "Export",
+                            "There is %1 free on %2 and %3 to copy. Even compressed, that will "
+                            "not fit.")
+                            .arg(formatBytes(destination.freeBytes),
+                                 destination.displayName.isEmpty()
+                                     ? QDir::toNativeSeparators(request.destinationPath)
+                                     : destination.displayName,
+                                 formatBytes(scan.totalBytes)));
+        }
+        if (destination.freeBytes < scan.totalBytes) {
+            report.notes.push_back(ContinuityNote{
+                ContinuityGrade::Manual, DomainId::Unknown,
+                QCoreApplication::translate("Export", "Space on the drive"),
+                QCoreApplication::translate(
+                    "Export",
+                    "There is %1 free and %2 to copy. It may still fit once compressed, but "
+                    "if it does not, the capture will stop part way.")
+                    .arg(formatBytes(destination.freeBytes), formatBytes(scan.totalBytes))});
+        }
+    }
+
     // On a USB stick the operating system will happily accept gigabytes it has
     // not written yet, so without this the archive looks finished long before
     // it is, a full stick reports ENOSPC only at close, and pulling one out
@@ -420,7 +472,7 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     // page cache is the whole point.
     if (request.packaging.syncIntervalBytes > 0) {
         options.syncIntervalBytes = request.packaging.syncIntervalBytes;
-    } else if (volumeFor(platform_, request.destinationPath).removable) {
+    } else if (destination.removable) {
         options.syncIntervalBytes = kRemovableSyncIntervalBytes;
     }
 

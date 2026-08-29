@@ -21,6 +21,8 @@
 #include "core/utils/Conversions.h"
 #include "platform/PlatformService.h"
 
+#include "FakePlatform.h"
+
 using namespace transmit;
 
 /// End-to-end coverage of the thing the application exists to do: capture a
@@ -52,6 +54,9 @@ private slots:
     void aDateBoundLeavesTheOldFilesBehind();
     void theMoreSpecificRootKeepsTheApplicationItBelongsTo();
     void everyFileGetsItsOwnersNameNotJustTheFirst();
+    void aWriteProtectedDriveIsRefusedBeforeAnythingIsWritten();
+    void aDriveFarTooSmallIsRefusedBeforeAnythingIsWritten();
+    void aDriveThatMightJustFitIsTriedAndSaysSo();
     void cleanupTestCase();
 
 private:
@@ -173,6 +178,106 @@ void ContinuityRoundTripTest::everyFileGetsItsOwnersNameNotJustTheFirst() {
     }
     QVERIFY2(checked > 3, "no files were checked");
 #endif
+}
+
+// The drive as the platform layer would describe it, for the checks that
+// happen before a byte is written.
+namespace {
+
+platform::StorageVolume driveAt(const QString& root, quint64 total, quint64 free,
+                                bool readOnly = false) {
+    platform::StorageVolume volume;
+    volume.displayName = QStringLiteral("Test drive");
+    volume.rootPath = root;
+    volume.fileSystem = QStringLiteral("ext4");
+    volume.totalBytes = total;
+    volume.freeBytes = free;
+    volume.removable = true;
+    volume.readOnly = readOnly;
+    return volume;
+}
+
+}  // namespace
+
+// A stick with its switch flipped used to produce whatever error the first
+// failed write happened to give, after the whole scan had run.
+void ContinuityRoundTripTest::aWriteProtectedDriveIsRefusedBeforeAnythingIsWritten() {
+    const QString destination = workspace_.filePath(QStringLiteral("readonly"));
+    QVERIFY(QDir().mkpath(destination));
+
+    testing::PlatformWithDrives platform(platform::PlatformService::create(),
+                                         {driveAt(destination, 64ULL << 30, 32ULL << 30, true)});
+    core::ExportService exporter(platform);
+    core::CancelToken token;
+
+    core::ExportRequest request;
+    request.destinationPath = destination + QStringLiteral("/refused.txa");
+    request.selection = documentsSelection();
+    request.packaging.preset = format::CompressionPreset::Fast;
+
+    const core::ExportReport report = exporter.run(request, token, {});
+    QVERIFY2(!report.succeeded, "a write-protected drive was written to");
+    QVERIFY2(report.errorMessage.contains(QStringLiteral("write-protected")),
+             qPrintable(report.errorMessage));
+    QVERIFY2(!QFileInfo::exists(request.destinationPath),
+             "nothing should have been created on a drive that cannot be written");
+}
+
+// Refused on the number, not on a guess: no compression saves ninety-five
+// percent of a mixed home directory, so below that it cannot fit however well
+// it compresses.
+void ContinuityRoundTripTest::aDriveFarTooSmallIsRefusedBeforeAnythingIsWritten() {
+    const QString destination = workspace_.filePath(QStringLiteral("tiny"));
+    QVERIFY(QDir().mkpath(destination));
+
+    testing::PlatformWithDrives platform(platform::PlatformService::create(),
+                                         {driveAt(destination, 4096, 1024)});
+    core::ExportService exporter(platform);
+    core::CancelToken token;
+
+    core::ExportRequest request;
+    request.destinationPath = destination + QStringLiteral("/refused.txa");
+    request.selection = documentsSelection();
+    request.packaging.preset = format::CompressionPreset::Fast;
+
+    const core::ExportReport report = exporter.run(request, token, {});
+    QVERIFY2(!report.succeeded, "a drive with a kilobyte free was written to");
+    QVERIFY2(report.errorMessage.contains(QStringLiteral("will not fit")),
+             qPrintable(report.errorMessage));
+    QVERIFY(!QFileInfo::exists(request.destinationPath));
+}
+
+// Between the two, the run goes ahead: the archive is compressed, so the
+// uncompressed total is an upper bound and refusing on it would turn away
+// captures that fit comfortably. The report says it was foreseeable.
+void ContinuityRoundTripTest::aDriveThatMightJustFitIsTriedAndSaysSo() {
+    const QString destination = workspace_.filePath(QStringLiteral("snug"));
+    QVERIFY(QDir().mkpath(destination));
+
+    // Under the uncompressed total, well over a twentieth of it.
+    const core::ScanService scanner(*platform_);
+    core::CancelToken scanToken;
+    const quint64 raw = scanner.scan(documentsSelection(), scanToken, {}).totalBytes;
+    QVERIFY(raw > 20000);
+
+    testing::PlatformWithDrives platform(platform::PlatformService::create(),
+                                         {driveAt(destination, raw, raw / 2)});
+    core::ExportService exporter(platform);
+    core::CancelToken token;
+
+    core::ExportRequest request;
+    request.destinationPath = destination + QStringLiteral("/snug.txa");
+    request.selection = documentsSelection();
+    request.packaging.preset = format::CompressionPreset::Fast;
+
+    const core::ExportReport report = exporter.run(request, token, {});
+    QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
+
+    bool warned = false;
+    for (const core::ContinuityNote& note : report.notes) {
+        warned = warned || note.detail.contains(QStringLiteral("It may still fit"));
+    }
+    QVERIFY2(warned, "the drive was nearly too small and the report did not mention it");
 }
 
 void ContinuityRoundTripTest::cleanupTestCase() {

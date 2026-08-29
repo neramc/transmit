@@ -444,8 +444,8 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
         std::uint64_t blockOffset = 0;
         std::uint64_t withinBlock = 0;
     };
-    std::vector<Placed> placed;
-    placed.reserve(static_cast<std::size_t>(ordered.size()));
+    std::vector<Placed> byPosition;
+    byPosition.reserve(static_cast<std::size_t>(ordered.size()));
     for (const format::ManifestEntry* entry : ordered) {
         Placed item;
         item.entry = entry;
@@ -455,10 +455,10 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
             item.blockOffset = found == blockPositions.end() ? 0 : found->second;
             item.withinBlock = entry->location.offset;
         }
-        placed.push_back(item);
+        byPosition.push_back(item);
     }
 
-    std::stable_sort(placed.begin(), placed.end(), [](const Placed& a, const Placed& b) {
+    std::stable_sort(byPosition.begin(), byPosition.end(), [](const Placed& a, const Placed& b) {
         if (a.order != b.order) {
             return a.order < b.order;
         }
@@ -469,7 +469,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
     });
 
     for (qsizetype i = 0; i < ordered.size(); ++i) {
-        ordered[i] = placed[static_cast<std::size_t>(i)].entry;
+        ordered[i] = byPosition[static_cast<std::size_t>(i)].entry;
     }
 
     quint64 totalBytes = 0;
