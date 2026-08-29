@@ -113,8 +113,13 @@ endif()
 set(TRANSMIT_SQLITE_SOURCE "system ${SQLite3_VERSION}")
 
 # ---------------------------------------------------------------- Qt 6 (app only)
-if(TRANSMIT_BUILD_APP OR TRANSMIT_BUILD_CLI OR TRANSMIT_BUILD_TESTS)
-    if(TRANSMIT_BUILD_APP OR TRANSMIT_BUILD_TESTS)
+# Tied to what is actually built rather than to TRANSMIT_BUILD_TESTS. The
+# format layer has no Qt in it, and neither do the suites that cover it - the
+# unit, property, fault and fuzz binaries link Transmit::Format and nothing
+# else - so a machine building only those (the fuzzing and fault-injection jobs
+# do exactly that) should not have to install Qt Quick to configure.
+if(TRANSMIT_BUILD_APP OR TRANSMIT_BUILD_CLI)
+    if(TRANSMIT_BUILD_APP)
         find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Concurrent Sql Network)
     else()
         find_package(Qt6 6.4 REQUIRED COMPONENTS Core Concurrent Sql Network)

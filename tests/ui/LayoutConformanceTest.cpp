@@ -91,7 +91,8 @@ bool arrangesItsChildren(const QQuickItem* item) {
 }
 
 bool isText(const QQuickItem* item) {
-    return QString::fromLatin1(item->metaObject()->className()).contains(QStringLiteral("QQuickText"));
+    return QString::fromLatin1(item->metaObject()->className())
+        .contains(QStringLiteral("QQuickText"));
 }
 
 /// True only for a Flickable. Text has contentWidth too, so testing for that
@@ -106,7 +107,8 @@ bool isFlickable(const QQuickItem* item) {
 /// A Flickable that is genuinely scrollable in a direction is allowed to hold
 /// content larger than itself in that direction - that is what it is for.
 bool scrollsHorizontally(const QQuickItem* item) {
-    return isFlickable(item) && item->property("contentWidth").toReal() > item->width() + kTolerance;
+    return isFlickable(item) &&
+           item->property("contentWidth").toReal() > item->width() + kTolerance;
 }
 
 bool scrollsVertically(const QQuickItem* item) {
@@ -253,7 +255,8 @@ void LayoutConformanceTest::checkOverflow(const QString& page, QStringList& prob
             }
             const QRectF bounds(0, 0, parent->width(), parent->height());
             const QRectF child(item->x(), item->y(), item->width(), item->height());
-            if (!bounds.adjusted(-kTolerance, -kTolerance, kTolerance, kTolerance).contains(child)) {
+            if (!bounds.adjusted(-kTolerance, -kTolerance, kTolerance, kTolerance)
+                     .contains(child)) {
                 problems << QStringLiteral("%1: %2 sticks out of %3")
                                 .arg(page, describe(item), describe(parent));
             }
@@ -411,8 +414,8 @@ void LayoutConformanceTest::everyPageFitsAtEverySize_data() {
     // every test run and found nothing extra.
     for (const Resolution& resolution : kResolutions) {
         for (const char* scheme : {"light", "dark"}) {
-            QTest::newRow(qPrintable(QStringLiteral("%1 %2").arg(QLatin1String(resolution.name),
-                                                                 QLatin1String(scheme))))
+            QTest::newRow(qPrintable(
+                QStringLiteral("%1 %2").arg(QLatin1String(resolution.name), QLatin1String(scheme))))
                 << resolution.width << resolution.height << QString::fromLatin1(scheme);
         }
     }

@@ -17,9 +17,28 @@
 #include <filesystem>
 #include <fstream>
 
+#if defined(_WIN32)
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 #include "format/Container.h"
 
 #include "fuzz/FuzzMain.h"
+
+namespace {
+
+/// The process id, for a temporary name no other run will collide with.
+int currentProcessId() {
+#if defined(_WIN32)
+    return ::_getpid();
+#else
+    return static_cast<int>(::getpid());
+#endif
+}
+
+}  // namespace
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
     using namespace transmit::format;
@@ -30,7 +49,7 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
     static const std::filesystem::path path = [] {
         std::filesystem::path candidate =
             std::filesystem::temp_directory_path() /
-            ("transmit-fuzz-" + std::to_string(static_cast<int>(::getpid())) + ".txa");
+            ("transmit-fuzz-" + std::to_string(static_cast<int>(currentProcessId())) + ".txa");
         return candidate;
     }();
 

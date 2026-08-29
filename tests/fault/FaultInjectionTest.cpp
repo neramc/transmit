@@ -137,9 +137,9 @@ Fixture writeFixture(const std::filesystem::path& path, std::uint64_t partSize =
 
 /// What happened when a damaged archive was read all the way through.
 enum class ReadOutcome {
-    Refused,       ///< an error was reported: the best possible answer
-    CameBackWhole, ///< read cleanly and every byte matched, so nothing was lost
-    Wrong,         ///< read cleanly and handed back something else. Never allowed.
+    Refused,        ///< an error was reported: the best possible answer
+    CameBackWhole,  ///< read cleanly and every byte matched, so nothing was lost
+    Wrong,          ///< read cleanly and handed back something else. Never allowed.
 };
 
 ReadOutcome readEverything(const std::filesystem::path& path, const Fixture& fixture) {
@@ -213,8 +213,8 @@ TEST_F(FaultInjectionTest, NoSingleBitFlipEverProducesWrongData) {
         const ReadOutcome outcome = readEverything(damaged, fixture);
         ASSERT_NE(outcome, ReadOutcome::Wrong)
             << "flipping bit " << bit << " of byte " << index
-            << " changed the data that came back and nothing said so (seed " << kSeed
-            << ", sample " << sample << ")";
+            << " changed the data that came back and nothing said so (seed " << kSeed << ", sample "
+            << sample << ")";
         (outcome == ReadOutcome::Refused ? refused : survived)++;
     }
 
@@ -244,8 +244,8 @@ TEST_F(FaultInjectionTest, NoAmountOfTruncationEverProducesWrongData) {
     const auto cut = archivePath("cut.txa");
     for (int percent = 1; percent < 100; ++percent) {
         const auto keep = sound.size() * static_cast<std::size_t>(percent) / 100;
-        writeFileBytes(cut, std::vector<char>(sound.begin(), sound.begin() +
-                                                                 static_cast<std::ptrdiff_t>(keep)));
+        writeFileBytes(cut, std::vector<char>(sound.begin(),
+                                              sound.begin() + static_cast<std::ptrdiff_t>(keep)));
 
         const ReadOutcome outcome = readEverything(cut, fixture);
         EXPECT_EQ(outcome, ReadOutcome::Refused)
@@ -262,7 +262,8 @@ TEST_F(FaultInjectionTest, ADamagedPartIsRefusedRatherThanPartlyRead) {
     ASSERT_TRUE(std::filesystem::exists(partPathFor(original, 2)));
 
     std::uint16_t partCount = 0;
-    while (std::filesystem::exists(partPathFor(original, static_cast<std::uint16_t>(partCount + 1)))) {
+    while (
+        std::filesystem::exists(partPathFor(original, static_cast<std::uint16_t>(partCount + 1)))) {
         ++partCount;
     }
 
@@ -274,8 +275,8 @@ TEST_F(FaultInjectionTest, ADamagedPartIsRefusedRatherThanPartlyRead) {
         // rather than the header - the header has its own checksum and is the
         // easy case.
         std::vector<char> broken = sound;
-        broken[broken.size() / 2] = static_cast<char>(
-            static_cast<unsigned char>(broken[broken.size() / 2]) ^ 0xFFu);
+        broken[broken.size() / 2] =
+            static_cast<char>(static_cast<unsigned char>(broken[broken.size() / 2]) ^ 0xFFu);
         writeFileBytes(path, broken);
 
         EXPECT_NE(readEverything(partPathFor(original, 1), fixture), ReadOutcome::Wrong)

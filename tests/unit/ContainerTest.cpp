@@ -2,6 +2,8 @@
 #include <fstream>
 #include <random>
 #include <string>
+#include <thread>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -531,6 +533,90 @@ TEST_F(ContainerTest, RefusesEncryptionWhenTheBuildHasNoOpenSsl) {
     const auto writer = ArchiveWriter::create(archivePath(), options);
     ASSERT_FALSE(writer);
     EXPECT_EQ(writer.error().code, ErrorCode::EncryptionUnavailable);
+}
+
+TEST_F(ContainerTest, PreparesBlocksFromManyThreadsAtOnce) {
+    // The capture pipeline calls prepare() from a pool of workers on one
+    // shared writer while a single thread writes the results out in order.
+    // That is the only concurrency in Transmit that touches user data, so it
+    // is worth checking with a tool that can see it.
+    //
+    // Deliberately std::thread rather than the real pipeline, which goes
+    // through QtConcurrent. ThreadSanitizer cannot see synchronisation that
+    // happens inside an uninstrumented library, so a run against a distribution
+    // build of Qt reports races in Qt's own containers and says nothing at all
+    // about this. Here every frame is instrumented and a report would be real.
+    const auto path = archivePath();
+    ArchiveOptions options;
+    options.preset = CompressionPreset::Fast;
+
+    auto writerResult = ArchiveWriter::create(path, options);
+    ASSERT_TRUE(writerResult) << writerResult.error().toString();
+    auto writer = std::move(writerResult).value();
+
+    constexpr int kThreads = 8;
+    constexpr std::size_t kBlockSize = 32 * 1024;
+
+    std::vector<ByteBuffer> contents;
+    std::vector<std::uint32_t> ids;
+    for (int i = 0; i < kThreads; ++i) {
+        std::mt19937 engine(static_cast<unsigned>(i) + 1);
+        std::uniform_int_distribution<unsigned int> distribution(0, 255);
+        ByteBuffer block(kBlockSize);
+        for (Byte& b : block) {
+            b = static_cast<Byte>(distribution(engine));
+        }
+        contents.push_back(std::move(block));
+        ids.push_back(writer->nextBlockId());
+    }
+
+    std::vector<Result<PreparedBlock>> prepared(kThreads, Result<PreparedBlock>(PreparedBlock{}));
+    std::vector<std::thread> threads;
+    threads.reserve(kThreads);
+    for (int i = 0; i < kThreads; ++i) {
+        threads.emplace_back([&writer, &prepared, &contents, &ids, i] {
+            prepared[static_cast<std::size_t>(i)] = writer->prepare(
+                ids[static_cast<std::size_t>(i)], contents[static_cast<std::size_t>(i)]);
+        });
+    }
+    for (std::thread& thread : threads) {
+        thread.join();
+    }
+
+    Manifest manifest;
+    for (int i = 0; i < kThreads; ++i) {
+        auto& block = prepared[static_cast<std::size_t>(i)];
+        ASSERT_TRUE(block) << block.error().toString();
+        ASSERT_TRUE(writer->writePrepared(*block));
+
+        ManifestEntry entry;
+        entry.id = static_cast<std::uint64_t>(i + 1);
+        entry.type = EntryType::File;
+        entry.path.token = PathTokenId::Documents;
+        entry.path.relative = "block" + std::to_string(i);
+        entry.size = kBlockSize;
+        entry.location = BlockLocation{ids[static_cast<std::size_t>(i)], 0, kBlockSize};
+        entry.contentHash = Blake2b::hash256(contents[static_cast<std::size_t>(i)]);
+        manifest.entries.push_back(std::move(entry));
+    }
+    ASSERT_TRUE(writer->finish(manifest));
+    writer.reset();
+
+    // Every block has to come back exactly as it went in. A race that produced
+    // plausible-but-wrong output would pass a "did it crash" check and fail
+    // this one.
+    auto reader = ArchiveReader::open(path);
+    ASSERT_TRUE(reader) << reader.error().toString();
+    auto loaded = (*reader)->manifest();
+    ASSERT_TRUE(loaded) << loaded.error().toString();
+    ASSERT_EQ((*loaded)->entries.size(), static_cast<std::size_t>(kThreads));
+
+    for (int i = 0; i < kThreads; ++i) {
+        auto content = (*reader)->readEntry((*loaded)->entries[static_cast<std::size_t>(i)]);
+        ASSERT_TRUE(content) << content.error().toString();
+        EXPECT_EQ(*content, contents[static_cast<std::size_t>(i)])
+            << "block " << i << " came back changed";
+    }
 }
 
 TEST_F(ContainerTest, ArchiveUuidRoundTripsThroughItsTextForm) {

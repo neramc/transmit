@@ -24,10 +24,24 @@
 
 namespace transmit::property {
 
+/// std::getenv, without the MSVC deprecation warning that the build treats as
+/// an error. The replacement Microsoft points at allocates, which for reading
+/// two settings once at start-up is a worse trade than one suppression.
+inline const char* environmentValue(const char* name) {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+    return std::getenv(name);
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+}
+
 /// How many cases a suite runs. Small by default so the ordinary test run
 /// stays fast; the nightly job raises it.
 inline int caseCount(int normal = 200) {
-    if (const char* text = std::getenv("TRANSMIT_PROPERTY_CASES")) {
+    if (const char* text = environmentValue("TRANSMIT_PROPERTY_CASES")) {
         const int parsed = std::atoi(text);
         if (parsed > 0) {
             return parsed;
@@ -40,7 +54,7 @@ inline int caseCount(int normal = 200) {
 /// failure, otherwise fixed, because a suite that picks a fresh seed every
 /// time fails on unrelated commits and teaches everyone to ignore it.
 inline std::uint64_t baseSeed() {
-    if (const char* text = std::getenv("TRANSMIT_PROPERTY_SEED")) {
+    if (const char* text = environmentValue("TRANSMIT_PROPERTY_SEED")) {
         return std::strtoull(text, nullptr, 10);
     }
     return 0x7ea11c0ffee1234full;

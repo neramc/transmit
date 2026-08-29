@@ -258,11 +258,22 @@ jobs:
 
   # The sanitisers the asan preset was written for and CI never ran.
   #
-  # Address and undefined behaviour over everything; thread over the
-  # parts that actually have threads - the compression pool hands
-  # buffers to the writer and the controllers emit progress from a
-  # worker. Qt Quick's own threads are noise, so tsan skips the
-  # interface suites.
+  # Address and undefined behaviour over everything.
+  #
+  # Thread over the suites that link no Qt. That is not squeamishness: a
+  # sanitiser cannot see synchronisation performed inside an
+  # uninstrumented library, and Qt here is a distribution build. Run
+  # against the integration suites it reports races in Qt's own
+  # containers - two compression workers reallocating a QArrayData
+  # inside QtConcurrent - which are neither ours nor real, and it says
+  # nothing whatever about our code. Suppressing them would hide the
+  # reports worth having.
+  #
+  # The concurrency that actually touches user data is
+  # ArchiveWriter::prepare being called from many workers at once, and
+  # ContainerTest::PreparesBlocksFromManyThreadsAtOnce exercises exactly
+  # that with plain std::thread, where every frame is instrumented and a
+  # report would be real.
   sanitizers:
     name: Sanitisers (${{ matrix.kind }})
     runs-on: ubuntu-latest
@@ -275,7 +286,7 @@ jobs:
             ctest: --preset asan
           - kind: tsan
             preset: tsan
-            ctest: --test-dir build-tsan -L 'format|integration'
+            ctest: --test-dir build-tsan -L 'format|property|fault'
 
     steps:
       - uses: actions/checkout@v4
