@@ -8,6 +8,7 @@ add_library(transmit_format STATIC
     Result.cpp
     Serialization.cpp
     FileIo.cpp
+    IoHooks.cpp
     PathToken.cpp
     NameSanitizer.cpp
     Manifest.cpp

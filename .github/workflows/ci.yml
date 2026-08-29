@@ -300,6 +300,52 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: ctest ${{ matrix.ctest }} --output-on-failure
 
+  # Deliberate breakage: a stick that fills up, one that is pulled out, one
+  # that stores something shorter than it was given, and single-bit damage
+  # everywhere in a finished archive. The gate is that no fault ever produces
+  # data that reads back clean and wrong.
+  fault-injection:
+    name: Fault injection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libzstd-dev liblzma-dev libssl-dev libsqlite3-dev
+
+      - name: Build
+        run: |
+          cmake -S . -B build-fault -G Ninja \
+                -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+                -DTRANSMIT_BUILD_TESTS=ON -DTRANSMIT_WERROR=ON \
+                -DTRANSMIT_BUILD_APP=OFF -DTRANSMIT_BUILD_CLI=OFF
+          cmake --build build-fault
+
+      - name: Inject faults
+        run: ctest --test-dir build-fault -L fault --output-on-failure
+
+      # Again under the sanitisers. Half of what can go wrong when a write
+      # fails part way through is a buffer that was sized from a number that
+      # never arrived, and that is invisible in a plain build.
+      - name: Build with sanitisers
+        run: |
+          cmake -S . -B build-fault-asan -G Ninja \
+                -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+                -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+                -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+                -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+                -DTRANSMIT_BUILD_TESTS=ON \
+                -DTRANSMIT_BUILD_APP=OFF -DTRANSMIT_BUILD_CLI=OFF
+          cmake --build build-fault-asan
+
+      - name: Inject faults under the sanitisers
+        env:
+          ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1:strict_string_checks=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: ctest --test-dir build-fault-asan -L fault --output-on-failure
+
   # Fuzzing the four places bytes from another machine first arrive.
   # Short on a pull request; the nightly job is where the long runs live.
   fuzz:

@@ -1,11 +1,14 @@
 #include "format/FileIo.h"
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <cstring>
 #include <string>
 #include <system_error>
 #include <utility>
+
+#include "format/IoHooks.h"
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -203,6 +206,12 @@ Status FileStream::read(MutableByteView out) {
     if (out.empty()) {
         return ok();
     }
+    if (const IoHooks* hooks = ioHooks(); hooks != nullptr && hooks->beforeRead) {
+        const auto position = tell();
+        if (auto injected = hooks->beforeRead(path_, position ? *position : 0, out.size())) {
+            return *injected;
+        }
+    }
     const std::size_t got = std::fread(out.data(), 1, out.size(), handle_);
     if (got != out.size()) {
         if (std::feof(handle_) != 0) {
@@ -220,9 +229,33 @@ Status FileStream::write(ByteView data) {
     if (data.empty()) {
         return ok();
     }
-    const std::size_t put = std::fwrite(data.data(), 1, data.size(), handle_);
+    std::size_t offered = data.size();
+    if (const IoHooks* hooks = ioHooks(); hooks != nullptr) {
+        if (hooks->beforeWrite) {
+            const auto position = tell();
+            if (auto injected = hooks->beforeWrite(path_, position ? *position : 0, data.size())) {
+                return *injected;
+            }
+        }
+        if (hooks->writeLimit) {
+            offered = std::min(offered, hooks->writeLimit(path_, data.size()));
+        }
+    }
+    const std::size_t put = std::fwrite(data.data(), 1, offered, handle_);
     if (put != data.size()) {
-        return errnoError(path_, "could not write");
+        // A device that is nearly full takes some of what it was offered and
+        // stops without raising an error. Reporting that as a success is how an
+        // archive ends up short by exactly the amount nobody noticed.
+        //
+        // ferror decides which of the two happened. errno cannot: it is only
+        // meaningful when the call actually failed, and reading it after a
+        // short write reports whatever unrelated thing set it last.
+        if (std::ferror(handle_) != 0) {
+            return errnoError(path_, "could not write");
+        }
+        return makeError(ErrorCode::IoError, "only ", std::to_string(put), " of ",
+                         std::to_string(data.size()), " bytes could be written to '",
+                         fromFsPath(path_), "'");
     }
     return ok();
 }

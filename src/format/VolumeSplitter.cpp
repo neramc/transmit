@@ -308,8 +308,17 @@ Result<std::unique_ptr<VolumeSource>> VolumeSource::open(const std::filesystem::
     for (std::size_t i = 0; i < candidates.size(); ++i) {
         TRANSMIT_TRY(stream, FileStream::open(candidates[i], FileStream::Mode::Read));
 
+        // Retried like every other read from the set: the first thing that
+        // touches somebody's USB stick should not be the one place a single
+        // bad read is fatal.
         std::array<Byte, VolumeHeader::kSize> raw{};
-        TRANSMIT_CHECK(stream.read(raw));
+        const Status headerRead = withRetry(source->retry_, [&stream, &raw]() -> Status {
+            if (auto sought = stream.seek(0); !sought) {
+                return sought;
+            }
+            return stream.read(raw);
+        });
+        TRANSMIT_CHECK(headerRead);
         TRANSMIT_TRY(header, VolumeHeader::decode(raw));
 
         if (i == 0) {

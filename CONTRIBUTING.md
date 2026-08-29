@@ -21,8 +21,29 @@ ctest --preset default
 ```
 
 `scripts/format.sh` without `--check` fixes the formatting instead of
-reporting it. The credential tests skip themselves when no secret service is
-running; to run them for real against a throwaway keyring:
+reporting it.
+
+The suite is grouped by label, so a slice can be run on its own:
+
+```bash
+ctest --preset default -L format         # the archive format, no Qt
+ctest --preset default -L property       # randomised round trips
+ctest --preset default -L fault          # deliberate breakage - see below
+ctest --preset default -L integration    # capture and restore end to end
+```
+
+`-L fault` is the one to run after touching anything that reads or writes a
+file. It fills up a disk part way through a write, pulls a stick out mid-read,
+makes a device store one byte fewer than it was given, cuts an archive off at
+every percentage point, and flips a single bit in each of two thousand places
+in a finished archive. The standard is not that Transmit succeeds - most of
+these cannot succeed - but that it never reports success over data that is not
+what went in. The bit-flip case asserts that all two thousand are caught; if a
+format change makes some of them land where nothing checks, loosen it and
+write the reason next to the new number.
+
+The credential tests skip themselves when no secret service is running; to run
+them for real against a throwaway keyring:
 
 ```bash
 dbus-run-session -- scripts/with-keyring.sh \
