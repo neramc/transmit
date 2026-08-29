@@ -6,6 +6,7 @@
 /// read out of bounds, and never allocate an amount somebody else chose.
 
 #include "format/Manifest.h"
+
 #include "fuzz/FuzzMain.h"
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {

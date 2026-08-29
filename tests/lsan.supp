@@ -1,0 +1,23 @@
+# Leaks the sanitiser reports that are not ours to fix.
+#
+# Narrow on purpose. Turning leak detection off entirely would be one
+# line and would also switch off the only thing here worth having, so
+# each entry names what it covers and why it stays.
+
+# Qt keeps per-application state alive until the process exits and does
+# not free it: the QML type registry, the logging category registry, and
+# the platform plugin's own singletons. These are one-time allocations,
+# not growth, and are reported at exit rather than during the run.
+leak:libQt6Core
+leak:libQt6Qml
+leak:libQt6Quick
+leak:libQt6Gui
+
+# The plugin loader holds the platform plugin open for the life of the
+# process; unloading it at exit would run destructors against a torn-down
+# graphics stack.
+leak:QFactoryLoader
+
+# glibc's name service switch caches the modules it dlopen'd. Reachable
+# for the life of the process by design.
+leak:__nss_module_load

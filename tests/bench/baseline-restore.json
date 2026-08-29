@@ -1,0 +1,17 @@
+{
+    "results": [
+        {
+            "bytesIn": 257948566,
+            "bytesOut": 0,
+            "files": 2033,
+            "medianMs": 1975,
+            "mibPerSecond": 124.55641637874554,
+            "name": "restore",
+            "runsMs": [
+                3581,
+                1975,
+                1972
+            ]
+        }
+    ]
+}

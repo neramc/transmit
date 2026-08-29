@@ -29,6 +29,7 @@ option(TRANSMIT_WERROR        "Treat compiler warnings as errors"      OFF)
 # build still produces the replay binaries, which is what keeps a crasher
 # fixed on a machine that cannot fuzz.
 option(TRANSMIT_BUILD_FUZZERS "Build the fuzz targets with libFuzzer"   OFF)
+option(TRANSMIT_BUILD_BENCH   "Build the benchmark harness"             OFF)
 
 # Interface target carrying the warning set every Transmit target compiles with.
 add_library(transmit_warnings INTERFACE)

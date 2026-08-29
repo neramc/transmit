@@ -18,6 +18,7 @@
 #include <fstream>
 
 #include "format/Container.h"
+
 #include "fuzz/FuzzMain.h"
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {

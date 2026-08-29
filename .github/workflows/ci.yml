@@ -245,3 +245,105 @@ jobs:
           fi
 
           run-clang-tidy-18 -p build -j "$(nproc)" -quiet $files
+
+  # The sanitisers the asan preset was written for and CI never ran.
+  #
+  # Address and undefined behaviour over everything; thread over the
+  # parts that actually have threads - the compression pool hands
+  # buffers to the writer and the controllers emit progress from a
+  # worker. Qt Quick's own threads are noise, so tsan skips the
+  # interface suites.
+  sanitizers:
+    name: Sanitisers (${{ matrix.kind }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - kind: asan-ubsan
+            preset: asan
+            ctest: --preset asan
+          - kind: tsan
+            preset: tsan
+            ctest: --test-dir build-tsan -L 'format|integration'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          modules: 'qtimageformats'
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libzstd-dev liblzma-dev libssl-dev \
+                                  libsqlite3-dev libsecret-1-dev \
+                                  libgl1-mesa-dev libxkbcommon-x11-0
+
+      - name: Build
+        run: |
+          cmake --preset ${{ matrix.preset }}
+          cmake --build --preset ${{ matrix.preset }}
+
+      - name: Test
+        env:
+          # Qt and the QML engine hold allocations at exit by design, so
+          # the suppressions are narrow. detect_leaks=0 would be the easy
+          # way out and would also switch off the thing worth having.
+          ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1:strict_string_checks=1:check_initialization_order=1
+          LSAN_OPTIONS: suppressions=${{ github.workspace }}/tests/lsan.supp
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+          QT_QPA_PLATFORM: offscreen
+        run: ctest ${{ matrix.ctest }} --output-on-failure
+
+  # Fuzzing the four places bytes from another machine first arrive.
+  # Short on a pull request; the nightly job is where the long runs live.
+  fuzz:
+    name: Fuzzing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang-18 libclang-rt-18-dev \
+                                  libzstd-dev liblzma-dev libssl-dev libsqlite3-dev
+
+      - name: Build the fuzzers
+        run: |
+          cmake -S . -B build-fuzz -G Ninja \
+                -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+                -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 \
+                -DTRANSMIT_BUILD_TESTS=ON -DTRANSMIT_BUILD_FUZZERS=ON \
+                -DTRANSMIT_BUILD_APP=OFF -DTRANSMIT_BUILD_CLI=OFF
+          cmake --build build-fuzz
+
+      - name: Fuzz
+        run: |
+          set -e
+          for target in FuzzManifest FuzzContainerOpen FuzzSerialization FuzzPathToken; do
+              echo "::group::$target"
+              mkdir -p "corpus/$target"
+              cp -r "tests/fuzz/corpus/regressions/$target/." "corpus/$target/" 2>/dev/null || true
+              ./build-fuzz/tests/fuzz/transmit_fuzz_$target \
+                  -max_total_time=60 -rss_limit_mb=4096 "corpus/$target"
+              echo "::endgroup::"
+          done
+
+      # A crash leaves its input behind. Keeping it is what lets the fix
+      # come with the case that found it.
+      - name: Keep whatever crashed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashers
+          path: |
+            crash-*
+            timeout-*
+            oom-*
+          if-no-files-found: ignore
