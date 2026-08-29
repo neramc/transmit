@@ -305,6 +305,8 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     const ScanService scanner(platform_);
     ScanResult scan = scanner.scan(selection, cancelToken, progress);
     report.notes += scan.notes;
+    report.incomplete = scan.incomplete();
+    report.unreadablePaths = scan.unreadableDirectories;
 
     if (cancelToken.isCancelled()) {
         return fail(QCoreApplication::translate("Export", "Cancelled."));

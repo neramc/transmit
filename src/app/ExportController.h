@@ -43,6 +43,8 @@ class ExportController : public QObject {
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY finishedChanged)
     Q_PROPERTY(QString summaryText READ summaryText NOTIFY finishedChanged)
     Q_PROPERTY(QStringList archiveParts READ archiveParts NOTIFY finishedChanged)
+    Q_PROPERTY(bool incomplete READ incomplete NOTIFY finishedChanged)
+    Q_PROPERTY(QString incompleteText READ incompleteText NOTIFY finishedChanged)
 
 public:
     explicit ExportController(QObject* parent = nullptr);
@@ -61,6 +63,12 @@ public:
     [[nodiscard]] bool succeeded() const { return report_.succeeded; }
     [[nodiscard]] QString errorMessage() const { return report_.errorMessage; }
     [[nodiscard]] QString summaryText() const;
+
+    /// The capture worked, but some of what was selected could not even be
+    /// looked at. Shown as a warning next to the success, because somebody
+    /// about to wipe this machine has to know before they do.
+    [[nodiscard]] bool incomplete() const { return report_.incomplete; }
+    [[nodiscard]] QString incompleteText() const;
     [[nodiscard]] QStringList archiveParts() const { return report_.archiveParts; }
 
     [[nodiscard]] const core::ExportReport& report() const { return report_; }

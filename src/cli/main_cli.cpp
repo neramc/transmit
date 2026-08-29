@@ -243,8 +243,24 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
     for (const QString& part : report.archiveParts) {
         out() << QStringLiteral("  wrote ") << part << Qt::endl;
     }
+
+    // Said plainly and separately from the notes, because somebody who is
+    // about to wipe this machine needs to know the archive is not everything
+    // they asked for before they do it.
+    if (report.incomplete) {
+        err() << Qt::endl
+              << QStringLiteral(
+                     "Warning: %1 folder(s) could not be opened, so nothing inside them was "
+                     "captured. This archive is not a complete copy of what you selected.")
+                     .arg(report.unreadablePaths.size())
+              << Qt::endl;
+        for (const QString& path : report.unreadablePaths) {
+            err() << QStringLiteral("  ") << path << Qt::endl;
+        }
+    }
+
     printNotes(report.notes);
-    return 0;
+    return report.incomplete ? kPartialExitCode : 0;
 }
 
 int runInspect(const QString& archivePath, const QString& passphrase) {

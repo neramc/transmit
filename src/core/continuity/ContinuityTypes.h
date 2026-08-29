@@ -133,6 +133,13 @@ struct ExportReport {
     qint64 elapsedMilliseconds = 0;
     bool encrypted = false;
 
+    /// Something the selection asked for could not be looked at - almost
+    /// always a folder belonging to another account. The archive is sound and
+    /// everything in it is real; it is just not all of what was asked for, and
+    /// the difference matters to somebody who is about to wipe the machine.
+    bool incomplete = false;
+    QStringList unreadablePaths;
+
     QList<ContinuityNote> notes;
 
     /// storedBytes as a fraction of rawBytes, or 1.0 when nothing was stored.

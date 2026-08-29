@@ -262,6 +262,21 @@ void ScanService::scanRoot(const CaptureRoot& root, const CaptureSelection& sele
         } else if (info.isDir()) {
             item.type = format::EntryType::Directory;
             ++result.directoryCount;
+
+            // Listing a folder needs read, entering it needs execute, and
+            // QDirIterator does neither loudly: it walks straight past a
+            // folder it cannot open, so an entire subtree can be missing from
+            // the capture with nothing in the report to say so. The folder
+            // itself is still recorded - it existed - but the gap is named.
+            if (!info.isReadable() || !info.isExecutable()) {
+                item.problem = QObject::tr("could not be looked inside");
+                result.unreadableDirectories.push_back(absolute);
+                result.notes.push_back(ContinuityNote{
+                    ContinuityGrade::Manual, root.domain, absolute,
+                    QObject::tr("This folder could not be opened, so nothing inside it was "
+                                "captured. It may belong to another user or need administrator "
+                                "rights.")});
+            }
         } else {
             item.type = format::EntryType::File;
             item.size = static_cast<quint64>(std::max<qint64>(info.size(), 0));

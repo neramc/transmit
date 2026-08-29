@@ -8,10 +8,15 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#ifndef Q_OS_WIN
+#include <unistd.h>
+#endif
+
 #include "core/services/ExportService.h"
 #include "core/services/ImportService.h"
 #include "core/services/ProfileService.h"
 #include "core/services/RollbackWriter.h"
+#include "core/services/ScanService.h"
 #include "core/utils/Conversions.h"
 #include "platform/PlatformService.h"
 
@@ -40,6 +45,7 @@ private slots:
     void overlappingRootsCaptureAFileOnlyOnce();
     void foldersAreRestoredBeforeWhatGoesInsideThem();
     void aFolderThatArrivesReadOnlyStillGetsItsContents();
+    void aFolderThatCannotBeOpenedIsReportedRatherThanIgnored();
     void cleanupTestCase();
 
 private:
@@ -739,6 +745,46 @@ void ContinuityRoundTripTest::aFolderThatArrivesReadOnlyStillGetsItsContents() {
                           mode | QFile::WriteOwner);
     QFile::remove(inside.fileName());
     QDir().rmdir(locked);
+#endif
+}
+
+void ContinuityRoundTripTest::aFolderThatCannotBeOpenedIsReportedRatherThanIgnored() {
+#ifdef Q_OS_WIN
+    QSKIP("this is about POSIX modes, which Windows does not have");
+#else
+    if (::geteuid() == 0) {
+        QSKIP("root can open a folder whatever its mode, so there is nothing to not open");
+    }
+
+    const QString shut = sourceHome() + QStringLiteral("/Documents/shut");
+    QDir().mkpath(shut);
+    QFile hidden(shut + QStringLiteral("/unreachable.txt"));
+    QVERIFY(hidden.open(QIODevice::WriteOnly));
+    hidden.write("nobody can get to this\n");
+    hidden.close();
+
+    QVERIFY(QFile::setPermissions(shut, QFile::WriteOwner));
+
+    struct Reopen {
+        QString path;
+        ~Reopen() {
+            QFile::setPermissions(path, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
+        }
+    } const cleanup{shut};
+
+    core::ScanService scanner(*platform_);
+    core::CancelToken token;
+    const core::ScanResult result = scanner.scan(documentsSelection(), token, {});
+
+    // QDirIterator walks straight past a folder it cannot open, so before this
+    // the only evidence was a file count nobody had a reference for.
+    QVERIFY(result.incomplete());
+    QVERIFY2(result.unreadableDirectories.contains(shut),
+             qPrintable(result.unreadableDirectories.join(QStringLiteral(", "))));
+
+    QFile::setPermissions(shut, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
+    QFile::remove(hidden.fileName());
+    QDir().rmdir(shut);
 #endif
 }
 

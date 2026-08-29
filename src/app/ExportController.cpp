@@ -160,6 +160,16 @@ QString ExportController::summaryText() const {
     return text;
 }
 
+QString ExportController::incompleteText() const {
+    if (!report_.incomplete) {
+        return {};
+    }
+    return tr(
+        "%n folder(s) could not be opened, so nothing inside them was captured. This "
+        "archive is not a complete copy of what you selected.",
+        nullptr, static_cast<int>(report_.unreadablePaths.size()));
+}
+
 quint64 ExportController::estimateSize(const QString& profileId) {
     const core::CaptureProfile profile = core::ProfileService::profileById(profileId);
     core::CancelToken token;

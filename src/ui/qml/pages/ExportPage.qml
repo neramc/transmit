@@ -538,6 +538,14 @@ Item {
                 }
 
                 AppInlineMessage {
+                    visible: ExportController.finished && ExportController.succeeded
+                             && ExportController.incomplete
+                    tone: "warning"
+                    title: qsTr("Some folders could not be opened")
+                    body: ExportController.incompleteText
+                }
+
+                AppInlineMessage {
                     visible: ExportController.finished && !ExportController.succeeded
                     tone: "error"
                     title: qsTr("The capture stopped")

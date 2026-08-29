@@ -41,7 +41,18 @@ struct ScanResult {
     quint64 directoryCount = 0;
     quint64 symlinkCount = 0;
     quint64 skippedCount = 0;
+
+    /// Folders the scan could not look inside. QDirIterator walks past those
+    /// without a word, so without this list a capture that missed a whole
+    /// subtree looks exactly like one that had nothing to find there.
+    QStringList unreadableDirectories;
+
     QList<ContinuityNote> notes;
+
+    /// True when something the selection asked for could not even be looked
+    /// at. The capture still runs - most of it is fine - but nothing may
+    /// describe the result as complete.
+    [[nodiscard]] bool incomplete() const noexcept { return !unreadableDirectories.isEmpty(); }
 };
 
 /// Cooperative cancellation shared between the UI and a running job.
