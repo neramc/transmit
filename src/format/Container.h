@@ -224,7 +224,18 @@ public:
     Status verifyAllBlocks(
         const std::function<bool(std::size_t done, std::size_t total)>& progress);
 
+    /// How many decompressed blocks to keep. One is the minimum.
+    ///
+    /// Each one costs the solid block size in memory - 64 MiB by default - so
+    /// this is a memory-against-decompression trade and the caller is the only
+    /// one who knows which side it is on.
     void setBlockCacheLimit(std::size_t blocks) noexcept;
+
+    /// How many blocks were served from the cache rather than decompressed
+    /// again. Exposed so a test can prove the cache is one, rather than
+    /// assuming it from the fact that it exists.
+    [[nodiscard]] std::uint64_t cacheHits() const noexcept { return cacheHits_; }
+    [[nodiscard]] std::uint64_t blocksDecompressed() const noexcept { return blocksRead_; }
 
 private:
     ArchiveReader() = default;
@@ -244,6 +255,9 @@ private:
     /// Reads an entry without considering any attached repair.
     Result<ByteBuffer> readEntryFromThisArchive(const ManifestEntry& entry);
 
+    /// Moves a cached block to the most-recently-used end.
+    void touch(std::uint32_t blockId);
+
     ArchiveHeader header_;
     ArchiveFooter footer_;
     std::unique_ptr<VolumeSource> source_;
@@ -261,6 +275,8 @@ private:
     std::map<std::uint32_t, ByteBuffer> blockCache_;
     std::vector<std::uint32_t> cacheOrder_;
     std::size_t cacheLimit_ = 3;
+    std::uint64_t cacheHits_ = 0;
+    std::uint64_t blocksRead_ = 0;
 };
 
 }  // namespace transmit::format

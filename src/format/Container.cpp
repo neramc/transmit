@@ -584,6 +584,13 @@ Result<ByteBuffer> ArchiveReader::loadBlock(const BlockRecord& record) {
 
 Result<ByteView> ArchiveReader::readBlock(std::uint32_t blockId) {
     if (const auto it = blockCache_.find(blockId); it != blockCache_.end()) {
+        // Touched, so it goes to the back of the queue. Without this the
+        // "cache" is first-in-first-out: a block every entry needs is thrown
+        // away as soon as three others have been read, and a restore that
+        // interleaves two blocks decompresses both of them for every single
+        // file. Sixty-four megabytes of zstd, per file.
+        touch(blockId);
+        ++cacheHits_;
         return ByteView(it->second);
     }
 
@@ -594,6 +601,7 @@ Result<ByteView> ArchiveReader::readBlock(std::uint32_t blockId) {
     }
 
     TRANSMIT_TRY(raw, loadBlock(*record));
+    ++blocksRead_;
 
     // A solid block usually serves many consecutive entries, so a small cache
     // removes most repeated decompression during a restore.
@@ -605,6 +613,16 @@ Result<ByteView> ArchiveReader::readBlock(std::uint32_t blockId) {
     auto [it, inserted] = blockCache_.emplace(blockId, std::move(raw));
     (void)inserted;
     return ByteView(it->second);
+}
+
+void ArchiveReader::touch(std::uint32_t blockId) {
+    const auto position = std::find(cacheOrder_.begin(), cacheOrder_.end(), blockId);
+    if (position == cacheOrder_.end() || position + 1 == cacheOrder_.end()) {
+        return;
+    }
+    // A rotate rather than erase-then-push: the order holds a handful of ids,
+    // and this leaves the rest of them in the order they were used.
+    std::rotate(position, position + 1, cacheOrder_.end());
 }
 
 std::filesystem::path ArchiveReader::repairPathFor(const std::filesystem::path& archive) {

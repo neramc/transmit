@@ -9,6 +9,8 @@
 #include <QTemporaryDir>
 
 #include <optional>
+#include <unordered_map>
+#include <vector>
 
 #include "core/recipe/AppInventoryPayload.h"
 #include "core/recipe/InstallScriptWriter.h"
@@ -417,10 +419,58 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
         }
         ordered.push_back(&entry);
     }
-    std::stable_sort(ordered.begin(), ordered.end(),
-                     [](const format::ManifestEntry* a, const format::ManifestEntry* b) {
-                         return restoreOrder(a->type) < restoreOrder(b->type);
-                     });
+    // Directories first, and then the files in the order they lie in the
+    // archive rather than the order the manifest happens to list them.
+    //
+    // Every file in one solid block is written before the next block is
+    // touched, so each block is decompressed once - and on a stick the reads
+    // go forwards through the file instead of seeking back and forth across
+    // it. Manifest order is capture order, which is close to this but not the
+    // same, and "close" is the difference between one pass and thousands of
+    // seeks on a multi-part archive.
+    //
+    // Where each block sits is worked out once, not inside the comparator: a
+    // sort calls that n log n times and finding a block is a walk down the
+    // block list.
+    std::unordered_map<std::uint32_t, std::uint64_t> blockPositions;
+    blockPositions.reserve(manifest.blocks.size());
+    for (const format::BlockRecord& block : manifest.blocks) {
+        blockPositions.emplace(block.blockId, block.streamOffset);
+    }
+
+    struct Placed {
+        const format::ManifestEntry* entry = nullptr;
+        int order = 0;
+        std::uint64_t blockOffset = 0;
+        std::uint64_t withinBlock = 0;
+    };
+    std::vector<Placed> placed;
+    placed.reserve(static_cast<std::size_t>(ordered.size()));
+    for (const format::ManifestEntry* entry : ordered) {
+        Placed item;
+        item.entry = entry;
+        item.order = restoreOrder(entry->type);
+        if (entry->type == format::EntryType::File) {
+            const auto found = blockPositions.find(entry->location.blockId);
+            item.blockOffset = found == blockPositions.end() ? 0 : found->second;
+            item.withinBlock = entry->location.offset;
+        }
+        placed.push_back(item);
+    }
+
+    std::stable_sort(placed.begin(), placed.end(), [](const Placed& a, const Placed& b) {
+        if (a.order != b.order) {
+            return a.order < b.order;
+        }
+        if (a.blockOffset != b.blockOffset) {
+            return a.blockOffset < b.blockOffset;
+        }
+        return a.withinBlock < b.withinBlock;
+    });
+
+    for (qsizetype i = 0; i < ordered.size(); ++i) {
+        ordered[i] = placed[static_cast<std::size_t>(i)].entry;
+    }
 
     quint64 totalBytes = 0;
     for (const format::ManifestEntry* entry : ordered) {

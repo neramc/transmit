@@ -332,5 +332,86 @@ TEST_F(VerificationTest, AFooterThatNamesADifferentManifestIsRefused) {
     EXPECT_EQ(loaded.error().code, ErrorCode::IntegrityMismatch);
 }
 
+// --------------------------------------------------------- the block cache
+
+// The cache used to be first-in-first-out wearing an LRU's name: a hit did not
+// move the block, so a block every entry needs was thrown away as soon as
+// three others had been read. A restore that alternates between two blocks
+// then decompresses sixty-four megabytes of zstd for every single file.
+TEST_F(VerificationTest, ABlockThatKeepsBeingUsedIsNotEvicted) {
+    const auto path = archivePath();
+
+    // Four files, each large enough to need a block of its own at this solid
+    // block size, so the ids are known and the cache has to make choices.
+    std::vector<std::pair<std::string, ByteBuffer>> files;
+    for (int i = 0; i < 4; ++i) {
+        files.emplace_back("file" + std::to_string(i) + ".bin",
+                           ByteBuffer(6000, static_cast<Byte>('a' + i)));
+    }
+    const Manifest manifest = writeArchive(path, files);
+
+    std::vector<std::uint32_t> blocks;
+    for (const ManifestEntry& entry : manifest.entries) {
+        if (std::find(blocks.begin(), blocks.end(), entry.location.blockId) == blocks.end()) {
+            blocks.push_back(entry.location.blockId);
+        }
+    }
+    ASSERT_GE(blocks.size(), 3U) << "this needs more blocks than the cache can hold";
+
+    auto opening = ArchiveReader::open(path);
+    ASSERT_TRUE(opening);
+    auto reader = std::move(opening).value();
+    reader->setBlockCacheLimit(2);
+
+    // One block used every round, and the other slot rotating through the
+    // rest. Three distinct blocks against a cache of two is the case that
+    // tells the two policies apart: least-recently-used never evicts the hot
+    // one, because it was just used; first-in-first-out evicts it precisely
+    // because it went in first, and reads it again every round.
+    const std::uint32_t hot = blocks.front();
+    for (int round = 0; round < 6; ++round) {
+        ASSERT_TRUE(reader->readBlock(hot));
+        ASSERT_TRUE(reader->readBlock(blocks[1 + static_cast<std::size_t>(round) % 2]));
+    }
+
+    EXPECT_GT(reader->cacheHits(), 0U);
+    // The hot block once, and the two cold ones each time they come round.
+    EXPECT_LE(reader->blocksDecompressed(), 7U)
+        << "the block in constant use was thrown away and read again";
+}
+
+TEST_F(VerificationTest, TheCacheLimitIsHonoured) {
+    const auto path = archivePath();
+
+    std::vector<std::pair<std::string, ByteBuffer>> files;
+    for (int i = 0; i < 5; ++i) {
+        files.emplace_back("file" + std::to_string(i) + ".bin",
+                           ByteBuffer(6000, static_cast<Byte>('a' + i)));
+    }
+    const Manifest manifest = writeArchive(path, files);
+
+    auto opening = ArchiveReader::open(path);
+    ASSERT_TRUE(opening);
+    auto reader = std::move(opening).value();
+    reader->setBlockCacheLimit(1);
+
+    // Two blocks, alternating, with room for one. Every read is a miss, and
+    // nothing is claimed otherwise.
+    std::vector<std::uint32_t> ids;
+    for (const ManifestEntry& entry : manifest.entries) {
+        if (std::find(ids.begin(), ids.end(), entry.location.blockId) == ids.end()) {
+            ids.push_back(entry.location.blockId);
+        }
+    }
+    ASSERT_GE(ids.size(), 2U);
+
+    for (int round = 0; round < 4; ++round) {
+        ASSERT_TRUE(reader->readBlock(ids[0]));
+        ASSERT_TRUE(reader->readBlock(ids[1]));
+    }
+    EXPECT_EQ(reader->cacheHits(), 0U);
+    EXPECT_EQ(reader->blocksDecompressed(), 8U);
+}
+
 }  // namespace
 }  // namespace transmit::format
