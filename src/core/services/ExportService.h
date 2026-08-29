@@ -29,6 +29,13 @@ public:
     [[nodiscard]] quint64 estimateSize(const CaptureSelection& selection,
                                        CancelToken& cancelToken) const;
 
+    /// The drive a path is on, as the platform layer describes it.
+    ///
+    /// Exposed so `plan` and `export` are answering with the same drive: a dry
+    /// run that reported a different amount of free space from the real one
+    /// would be worse than not reporting it.
+    [[nodiscard]] platform::StorageVolume volumeForPath(const QString& path) const;
+
     /// Chooses a split size for a target volume: FAT32 forces splitting, and a
     /// volume that cannot hold the whole archive is reported by the caller.
     [[nodiscard]] static quint64 splitSizeFor(const platform::StorageVolume& volume);

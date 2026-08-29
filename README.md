@@ -270,6 +270,8 @@ transmit-cli inspect ARCHIVE      # where it came from and what is inside
 transmit-cli verify ARCHIVE       # check every block against its hash
                     [--deep]      # and every file against its hash and MD5
                     [--json]      # exit 0 all of it, 2 some of it, 1 none of it
+transmit-cli plan   --out X       # what a capture would do, writing nothing
+                                  # (takes every option export takes)
 transmit-cli repair ARCHIVE       # recover the damaged files from this machine
                     [--from-report verify.json]
 

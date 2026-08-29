@@ -25,6 +25,7 @@
 #include "core/services/ProfileService.h"
 #include "core/services/RepairService.h"
 #include "core/services/RollbackWriter.h"
+#include "core/services/ScanService.h"
 #include "core/services/VerifyService.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
@@ -253,12 +254,129 @@ void printTimings(const QList<core::StageTiming>& stages, qint64 totalMillisecon
     }
 }
 
+/// What a capture would do, without doing any of it.
+///
+/// Built from the same request `export` builds from the same options, so the
+/// two cannot drift: a dry run that described a different capture from the one
+/// that follows is worse than no dry run.
+int printPlan(const platform::PlatformService& platform, const core::ExportService& service,
+              const core::ExportRequest& request) {
+    CancelToken cancelToken;
+    const cli::InterruptHandler interrupts(cancelToken);
+
+    const core::ScanService scanner(platform);
+    const core::ScanResult scan = scanner.scan(request.selection, cancelToken, {});
+    if (cli::InterruptHandler::wasInterrupted()) {
+        return kInterruptedExitCode;
+    }
+
+    out() << Qt::endl << QStringLiteral("What would be captured") << Qt::endl;
+    out() << QStringLiteral("  %1 files, %2 folders, %3 links")
+                 .arg(scan.fileCount)
+                 .arg(scan.directoryCount)
+                 .arg(scan.symlinkCount)
+          << Qt::endl;
+    out() << QStringLiteral("  %1 before compression").arg(core::formatBytes(scan.totalBytes))
+          << Qt::endl;
+
+    if (scan.skippedCount > 0) {
+        out() << QStringLiteral("  %1 left out:").arg(scan.skippedCount) << Qt::endl;
+        for (auto it = scan.skippedByReason.constBegin(); it != scan.skippedByReason.constEnd();
+             ++it) {
+            out() << QStringLiteral("      %1 %2")
+                         .arg(it.value(), 8)
+                         .arg(core::skipReasonName(static_cast<core::SkipReason>(it.key())))
+                  << Qt::endl;
+        }
+    }
+    if (scan.incomplete()) {
+        out() << QStringLiteral("  %1 folder(s) could not be opened at all:")
+                     .arg(scan.unreadableDirectories.size())
+              << Qt::endl;
+        for (const QString& path : scan.unreadableDirectories) {
+            out() << QStringLiteral("      ") << path << Qt::endl;
+        }
+    }
+
+    // ------------------------------------------------------- the drive
+    const platform::StorageVolume drive = service.volumeForPath(request.destinationPath);
+    out() << Qt::endl << QStringLiteral("Where it would go") << Qt::endl;
+    out() << QStringLiteral("  %1").arg(QDir::toNativeSeparators(request.destinationPath))
+          << Qt::endl;
+    if (drive.totalBytes > 0) {
+        out() << QStringLiteral("  %1 (%2), %3 free of %4%5")
+                     .arg(drive.displayName.isEmpty() ? drive.rootPath : drive.displayName,
+                          drive.fileSystem, core::formatBytes(drive.freeBytes),
+                          core::formatBytes(drive.totalBytes),
+                          drive.removable ? QStringLiteral(", removable") : QString())
+              << Qt::endl;
+        if (drive.readOnly) {
+            out() << QStringLiteral("  it is write-protected, so this capture would be refused")
+                  << Qt::endl;
+        } else if (drive.freeBytes < scan.totalBytes / 20) {
+            out() << QStringLiteral("  too small: this capture would be refused") << Qt::endl;
+        } else if (drive.freeBytes < scan.totalBytes) {
+            out() << QStringLiteral(
+                         "  less free than there is to copy; it may still fit once "
+                         "compressed")
+                  << Qt::endl;
+        }
+        if (drive.requiresSplitting()) {
+            out() << QStringLiteral(
+                         "  this filesystem cannot hold a file of 4 GB or more, so the "
+                         "archive would be written in numbered parts")
+                  << Qt::endl;
+        }
+    } else {
+        out() << QStringLiteral(
+                     "  this drive is not one the system enumerates, so there is "
+                     "nothing to say about its free space")
+              << Qt::endl;
+    }
+
+    // ------------------------------------------------------- the steps
+    out() << Qt::endl << QStringLiteral("What would happen, in order") << Qt::endl;
+    const QStringList steps = {
+        QStringLiteral("check the drive: space, write protection, whether it needs splitting"),
+        QStringLiteral("ask which programs are running and holding their data open"),
+        QStringLiteral("take a filesystem snapshot where this system can"),
+        QStringLiteral("read, hash and pack every file"),
+        QStringLiteral("write the parts to the drive"),
+        QStringLiteral("finish: manifest, footer, part headers, and push it all to the device"),
+        request.packaging.writeMd5Sidecar ? QStringLiteral("write the .md5 file beside it")
+                                          : QStringLiteral("no .md5 file (--no-md5-sidecar)"),
+        request.packaging.verifyAfterWriting
+            ? QStringLiteral("read the whole archive back off the drive and check every file")
+            : QStringLiteral("no read-back (--no-verify-after)"),
+    };
+    int number = 1;
+    for (const QString& step : steps) {
+        out() << QStringLiteral("  %1. %2").arg(number++).arg(step) << Qt::endl;
+    }
+
+    out() << Qt::endl << QStringLiteral("How it would be packed") << Qt::endl;
+    out() << QStringLiteral("  compression: %1")
+                 .arg(QString::fromUtf8(format::presetName(request.packaging.preset)))
+          << Qt::endl;
+    out() << QStringLiteral("  encrypted:   %1")
+                 .arg(request.passphrase.isEmpty() ? QStringLiteral("no") : QStringLiteral("yes"))
+          << Qt::endl;
+    out() << QStringLiteral("  per-file MD5: %1")
+                 .arg(request.packaging.recordMd5 ? QStringLiteral("yes") : QStringLiteral("no"))
+          << Qt::endl;
+
+    out() << Qt::endl << QStringLiteral("Nothing was written.") << Qt::endl;
+    printNotes(scan.notes);
+    return 0;
+}
+
 int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption,
               const QCommandLineOption& profileOption, const QCommandLineOption& presetOption,
               const QCommandLineOption& splitOption, const QCommandLineOption& passphraseOption,
               const QCommandLineOption& passphraseFileOption,
               const QCommandLineOption& askPassphraseOption,
-              const QCommandLineOption& domainsOption, const QCommandLineOption& labelOption) {
+              const QCommandLineOption& domainsOption, const QCommandLineOption& labelOption,
+              bool planOnly = false) {
     if (!parser.isSet(outputOption)) {
         return reportError(QStringLiteral("--out is required"));
     }
@@ -468,6 +586,13 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
         return reportError(
             QStringLiteral("capturing saved passwords requires a passphrase; run this from a "
                            "terminal or pass --passphrase-file"));
+    }
+
+    // Everything above built the request the capture would run. `plan` stops
+    // here and describes it, which is the only way the two can agree about
+    // what would happen.
+    if (planOnly) {
+        return printPlan(*platformService, service, request);
     }
 
     CancelToken cancelToken;
@@ -1173,8 +1298,8 @@ int main(int argc, char** argv) {
     parser.addVersionOption();
     parser.addPositionalArgument(
         QStringLiteral("command"),
-        QStringLiteral("export, import, inspect, verify, repair, rollback, apps, profiles, "
-                       "drives or "
+        QStringLiteral("export, plan, import, inspect, verify, repair, rollback, apps, "
+                       "profiles, drives or "
                        "environment"));
     parser.addPositionalArgument(
         QStringLiteral("archive"),
@@ -1372,6 +1497,11 @@ int main(int argc, char** argv) {
         }
         return runVerify(archive, passphraseFor(archive), parser.isSet(QStringLiteral("deep")),
                          parser.isSet(QStringLiteral("json")));
+    }
+    if (command == QLatin1String("plan")) {
+        return runExport(parser, outputOption, profileOption, presetOption, splitOption,
+                         passphraseOption, passphraseFileOption, askPassphraseOption, domainsOption,
+                         labelOption, /*planOnly=*/true);
     }
     if (command == QLatin1String("repair")) {
         if (archive.isEmpty()) {

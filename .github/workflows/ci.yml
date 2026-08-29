@@ -179,10 +179,31 @@ jobs:
           echo "hello" > "$documents/transmit-ci-note.txt"
           printf 'passphrase-for-ci\n' > pw.txt
 
+          # The dry run first, and it must leave nothing behind: `plan` builds
+          # exactly the request `export` builds, so if it writes anything at
+          # all it is writing it during what a person was told was a preview.
+          ./build/transmit-cli plan \
+              --out "$PWD/archive.txa" --profile documents --preset fast \
+              --passphrase-file pw.txt
+          if [ -e "$PWD/archive.txa" ]; then
+              echo "::error::plan wrote an archive"
+              exit 1
+          fi
+
           ./build/transmit-cli export \
               --out "$PWD/archive.txa" --profile documents --preset fast \
               --passphrase-file pw.txt
-          ./build/transmit-cli verify "$PWD/archive.txa" --passphrase-file pw.txt
+          ./build/transmit-cli verify "$PWD/archive.txa" --deep --passphrase-file pw.txt
+
+          # The checksum file next to it is meant to work with the ordinary
+          # tool, so that is what checks it.
+          if command -v md5sum >/dev/null 2>&1; then
+              ( cd "$PWD" && md5sum -c archive.txa.md5 )
+          fi
+
+          # And the repair path on a sound archive, which must recover nothing
+          # and say so rather than inventing work.
+          ./build/transmit-cli repair "$PWD/archive.txa" --passphrase-file pw.txt
           ./build/transmit-cli import "$PWD/archive.txa" --into "$PWD/restored" \
               --passphrase-file pw.txt
           diff "$documents/transmit-ci-note.txt" restored/DOCUMENTS/transmit-ci-note.txt

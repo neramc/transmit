@@ -168,6 +168,10 @@ quint64 ExportService::splitSizeFor(const platform::StorageVolume& volume) {
     return format::kFat32SafePartSize;
 }
 
+platform::StorageVolume ExportService::volumeForPath(const QString& path) const {
+    return volumeFor(platform_, path);
+}
+
 quint64 ExportService::estimateSize(const CaptureSelection& selection,
                                     CancelToken& cancelToken) const {
     const ScanService scanner(platform_);
