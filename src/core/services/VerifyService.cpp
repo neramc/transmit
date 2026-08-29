@@ -68,8 +68,6 @@ QString verifyStatusName(VerifyStatus status) {
     return {};
 }
 
-VerifyService::VerifyService(const platform::PlatformService& platform) : platform_(platform) {}
-
 VerifyReport VerifyService::run(const VerifyRequest& request, CancelToken& cancelToken,
                                 const ProgressCallback& progress) const {
     VerifyReport report;

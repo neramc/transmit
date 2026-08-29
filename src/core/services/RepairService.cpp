@@ -65,7 +65,7 @@ RepairReport RepairService::run(const RepairRequest& request, CancelToken& cance
         verification.passphrase = request.passphrase;
         verification.deep = true;
 
-        const VerifyService verifier(platform_);
+        const VerifyService verifier;
         const VerifyReport verified = verifier.run(verification, cancelToken, progress);
         for (const VerifyFileResult& failure : verified.failures) {
             // A file an existing repair already supplies is in that list

@@ -9,8 +9,8 @@ ctest --preset default
 ```
 
 Other presets: `debug`, `release`, `cli-only` (skips the interface, for
-servers), `asan` (address and undefined-behaviour sanitisers). The dependency
-list is in the README.
+servers), `asan` (address and undefined-behaviour sanitisers) and `clang`. The
+dependency list is in the README.
 
 Before pushing, run what CI runs:
 
@@ -20,7 +20,14 @@ scripts/check-qml-modules.sh       # every .qml registered, both directions
 scripts/check-design-tokens.sh     # no colours or spacing typed into a page
 python3 scripts/check-contrast.py  # the palette is readable in both schemes
 ctest --preset default
+cmake --build --preset clang       # the warnings gcc has not got
 ```
+
+The last one matters more than it looks. Linux builds with gcc and macOS with
+clang, and they do not warn about the same things - `-Wunused-private-field` is
+clang's alone - so a clean gcc build is not evidence of a clean macOS one. The
+`clang` preset builds the same tree with the same `-Werror`, and finds those
+here rather than eight minutes into a runner.
 
 `scripts/format.sh` without `--check` fixes the formatting instead of
 reporting it.

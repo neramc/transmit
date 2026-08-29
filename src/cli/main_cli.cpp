@@ -936,7 +936,7 @@ int runVerify(const QString& archivePath, const QString& passphrase, bool deep, 
     }
 
     const auto platform = platform::PlatformService::create();
-    const core::VerifyService verifier(*platform);
+    const core::VerifyService verifier;
 
     core::VerifyRequest request;
     request.archivePath = archivePath;

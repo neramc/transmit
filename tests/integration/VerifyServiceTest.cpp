@@ -154,7 +154,7 @@ void VerifyServiceTest::anArchiveThatArrivedIntactVerifies() {
     core::VerifyRequest request;
     request.archivePath = archive;
 
-    const core::VerifyService verifier(*platform_);
+    const core::VerifyService verifier;
     const core::VerifyReport report = verifier.run(request, token, {});
 
     QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
@@ -207,7 +207,7 @@ void VerifyServiceTest::aFlippedBitIsNamedAgainstTheFileItRuined() {
     // was, which is the case the per-file check exists to improve on.
     request.useSidecar = false;
 
-    const core::VerifyService verifier(*platform_);
+    const core::VerifyService verifier;
     const core::VerifyReport report = verifier.run(request, token, {});
 
     QVERIFY(!report.everythingMatched());
@@ -250,7 +250,7 @@ void VerifyServiceTest::aReadThatOnlyWorksOnTheSecondTryIsCountedNotHidden() {
     request.archivePath = archive;
     request.useSidecar = false;
 
-    const core::VerifyService verifier(*platform_);
+    const core::VerifyService verifier;
     const core::VerifyReport report = verifier.run(request, token, {});
 
     QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
@@ -290,7 +290,7 @@ void VerifyServiceTest::aDriveThatWillNotGiveAFileBackSaysWhichFile() {
     request.archivePath = archive;
     request.useSidecar = false;
 
-    const core::VerifyService verifier(*platform_);
+    const core::VerifyService verifier;
     const core::VerifyReport report = verifier.run(request, token, {});
 
     QVERIFY(!report.everythingMatched());
@@ -316,7 +316,7 @@ void VerifyServiceTest::aPartThatDoesNotMatchItsChecksumFailsTheRun() {
     core::VerifyRequest request;
     request.archivePath = archive;
 
-    const core::VerifyService verifier(*platform_);
+    const core::VerifyService verifier;
     const core::VerifyReport report = verifier.run(request, token, {});
 
     QVERIFY(!report.succeeded);
@@ -335,7 +335,7 @@ void VerifyServiceTest::theReportSaysWhetherItManagedToReadPastTheCache() {
     core::VerifyRequest request;
     request.archivePath = archive;
 
-    const core::VerifyService verifier(*platform_);
+    const core::VerifyService verifier;
     const core::VerifyReport report = verifier.run(request, token, {});
     QVERIFY(report.succeeded);
 

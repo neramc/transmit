@@ -204,8 +204,9 @@ cmake --build --preset default
 ctest --preset default
 ```
 
-Other presets: `debug`, `release`, `cli-only` (skips the interface, for servers)
-and `asan` (address and undefined-behaviour sanitisers).
+Other presets: `debug`, `release`, `cli-only` (skips the interface, for servers),
+`asan` (address and undefined-behaviour sanitisers) and `clang` (the same build
+with clang, which warns about things gcc does not).
 
 The credential tests need a running secret service, which a build machine
 usually has not got, so they skip themselves when there is none. To run them for

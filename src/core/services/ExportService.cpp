@@ -744,7 +744,7 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         verification.deep = true;
 
         stages.begin(QStringLiteral("verify"));
-        const VerifyService verifier(platform_);
+        const VerifyService verifier;
         const VerifyReport verified = verifier.run(verification, cancelToken, progress);
         stages.end();
 

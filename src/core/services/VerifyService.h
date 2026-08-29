@@ -8,7 +8,6 @@
 
 #include "core/continuity/ContinuityTypes.h"
 #include "core/services/ScanService.h"
-#include "platform/PlatformService.h"
 
 namespace transmit::core {
 
@@ -122,13 +121,8 @@ class VerifyService {
 public:
     using ProgressCallback = std::function<void(const ProgressUpdate&)>;
 
-    explicit VerifyService(const platform::PlatformService& platform);
-
     [[nodiscard]] VerifyReport run(const VerifyRequest& request, CancelToken& cancelToken,
                                    const ProgressCallback& progress = {}) const;
-
-private:
-    const platform::PlatformService& platform_;
 };
 
 }  // namespace transmit::core
