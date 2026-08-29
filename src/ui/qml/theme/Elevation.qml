@@ -15,6 +15,11 @@ QtObject {
     readonly property int borderWidth: 1
     readonly property int focusRingWidth: 2
 
+    /// The ring drawn around a selected radio or checkbox. Thicker than a
+    /// border because it is carrying the selected state, which section 9 says
+    /// may not rest on colour alone.
+    readonly property int selectionRingWidth: 2
+
     /// Shadows are reserved for things that genuinely float above the window:
     /// popups, menus and dialogs.
     readonly property int popupShadowRadius: 24

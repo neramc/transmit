@@ -51,7 +51,7 @@ Item {
             loops: Animation.Infinite
             from: 0
             to: 360
-            duration: 900
+            duration: Motion.loop
         }
     }
 }

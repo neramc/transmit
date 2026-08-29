@@ -26,18 +26,33 @@ QtObject {
                                        : Qt.platform.os === "osx"     ? "Menlo"
                                                                       : "monospace"
 
-    // A restrained scale: five sizes is enough to build a hierarchy, and more
-    // only makes it harder to keep consistent.
-    readonly property int display: 26
-    readonly property int title:   19
-    readonly property int heading: 15
-    readonly property int body:    13
-    readonly property int small:   12
-    readonly property int caption: 11
+    // The hierarchy from docs/design.md section 7, at the smaller end of each
+    // range it gives. A desktop tool wants to be information-dense (section
+    // 36), and the ranges there are written for the whole spread of desktop
+    // applications rather than for one that shows file lists and progress.
+    //
+    // Six sizes. Every one of them earns its place by appearing in the
+    // hierarchy of section 35: a page title, the sentence under it, the
+    // heading of a section, the body, the quieter half of a key-value row, and
+    // a caption. A seventh would only be harder to keep consistent.
+    readonly property int display:      30   ///< the one number on a result screen
+    readonly property int pageTitle:    24
+    readonly property int sectionTitle: 18
+    readonly property int body:         14
+    readonly property int secondary:    13
+    readonly property int caption:      12
 
     readonly property int regular:  Font.Normal
     readonly property int medium:   Font.Medium
     readonly property int semiBold: Font.DemiBold
+    readonly property int bold:     Font.Bold
+
+    // Older names. `title` and `heading` mapped onto the two sizes above them
+    // rather than being dropped, so a page that has not been revisited still
+    // reads sensibly - just at the new scale.
+    readonly property int title:   pageTitle
+    readonly property int heading: sectionTitle
+    readonly property int small:   secondary
 
     /// Line heights as multipliers, for text that wraps.
     readonly property real lineHeightTight:  1.2

@@ -18,7 +18,7 @@ RowLayout {
 
     ColumnLayout {
         Layout.fillWidth: true
-        spacing: 2
+        spacing: Spacing.s4
 
         Text {
             text: row.label
@@ -77,8 +77,8 @@ RowLayout {
                 y: 3
                 width: 16
                 height: 16
-                radius: 8
-                color: "#ffffff"
+                radius: width / 2
+                color: Colors.textOnAccent
 
                 Behavior on x {
                     NumberAnimation { duration: Motion.hover; easing.type: Motion.easing }

@@ -53,7 +53,7 @@ ColumnLayout {
 
                 ColumnLayout {
                     anchors.centerIn: parent
-                    spacing: 2
+                    spacing: Spacing.s4
 
                     Text {
                         Layout.alignment: Qt.AlignHCenter

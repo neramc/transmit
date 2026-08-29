@@ -17,6 +17,8 @@ Before pushing, run what CI runs:
 ```bash
 scripts/format.sh --check          # clang-format-18
 scripts/check-qml-modules.sh       # every .qml registered, both directions
+scripts/check-design-tokens.sh     # no colours or spacing typed into a page
+python3 scripts/check-contrast.py  # the palette is readable in both schemes
 ctest --preset default
 ```
 

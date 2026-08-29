@@ -30,7 +30,7 @@ RowLayout {
             Rectangle {
                 width: 22
                 height: 22
-                radius: 11
+                radius: width / 2
                 color: stepRow.done ? Colors.accent
                      : stepRow.active ? Colors.accentSubtle : "transparent"
                 border.width: stepRow.active || stepRow.done ? 0 : Elevation.borderWidth

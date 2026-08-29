@@ -7,7 +7,7 @@ import Transmit.Theme
 ScrollBar {
     id: control
 
-    padding: 2
+    padding: 2  // token-exempt: the inset of the handle inside its own track, not page spacing
     minimumSize: 0.08
 
     contentItem: Rectangle {

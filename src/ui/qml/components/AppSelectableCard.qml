@@ -45,16 +45,16 @@ AppCard {
             Layout.alignment: Qt.AlignTop
             width: 18
             height: 18
-            radius: 9
+            radius: width / 2
             color: "transparent"
-            border.width: 2
+            border.width: Elevation.selectionRingWidth
             border.color: option.selected ? Colors.accent : Colors.borderStrong
 
             Rectangle {
                 anchors.centerIn: parent
                 width: 8
                 height: 8
-                radius: 4
+                radius: width / 2
                 color: Colors.accent
                 visible: option.selected
             }

@@ -27,8 +27,8 @@ Rectangle {
     // without relying on colour alone.
     Rectangle {
         anchors.fill: parent
-        anchors.margins: 1
-        radius: parent.radius - 1
+        anchors.margins: Elevation.borderWidth
+        radius: parent.radius - Elevation.borderWidth
         color: "transparent"
         border.width: Elevation.borderWidth
         border.color: Colors.accent
