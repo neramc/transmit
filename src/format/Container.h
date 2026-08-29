@@ -81,6 +81,13 @@ struct ArchiveOptions {
     /// - 32 MiB is the usual choice - so a stick that is full or has been
     /// pulled says so part way through rather than at the very end.
     std::uint64_t syncIntervalBytes = 0;
+
+    /// Record each file's MD5 alongside its BLAKE2b hash.
+    ///
+    /// Eighteen bytes an entry - about 18 kB for a hundred thousand files -
+    /// for the ability to check the archive with `md5sum` on a machine that
+    /// has never heard of Transmit. On by default for that reason.
+    bool recordMd5 = true;
 };
 
 /// A block that has been compressed (and encrypted) but not yet written. The
@@ -178,8 +185,14 @@ public:
     [[nodiscard]] std::size_t partCount() const;
     [[nodiscard]] const std::vector<std::filesystem::path>& parts() const;
 
-    /// Reads every block and checks its hash. Used by `transmit verify` and
-    /// before a restore when the user asks for a full check.
+    /// Reads every block and checks everything inside it.
+    ///
+    /// Each block is decompressed once - which checks the block's own hash and,
+    /// when encrypted, its GCM tag - and then every file that lives in it is
+    /// checked against its recorded size, its BLAKE2b hash, and its MD5 where
+    /// one was recorded. Checking the blocks alone, which is all this used to
+    /// do, proves the archive decompresses; it does not prove that the entry
+    /// table still points at the right bytes.
     Status verifyAllBlocks(
         const std::function<bool(std::size_t done, std::size_t total)>& progress);
 
@@ -189,6 +202,13 @@ private:
     ArchiveReader() = default;
 
     Result<ByteBuffer> loadBlock(const BlockRecord& record);
+
+    /// Checks one entry against the bytes of the block it lives in.
+    Status verifyEntryIn(const ManifestEntry& entry, ByteView block) const;
+
+    /// Checks that every entry points somewhere that exists, before anything
+    /// tries to read one. Run once, when the manifest is first loaded.
+    [[nodiscard]] Status validateEntryLocations() const;
 
     ArchiveHeader header_;
     ArchiveFooter footer_;

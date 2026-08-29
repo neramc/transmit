@@ -3,6 +3,7 @@
 
 add_executable(transmit_format_tests
     HashTest.cpp
+    Md5Test.cpp
     SerializationTest.cpp
     PathTokenTest.cpp
     NameSanitizerTest.cpp
@@ -10,7 +11,8 @@ add_executable(transmit_format_tests
     BlockPackerTest.cpp
     ContainerTest.cpp
     FileIoTest.cpp
-    ManifestTest.cpp)
+    ManifestTest.cpp
+    VerificationTest.cpp)
 
 target_link_libraries(transmit_format_tests
     PRIVATE Transmit::Format Transmit::Warnings GTest::gtest GTest::gtest_main)

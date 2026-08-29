@@ -20,8 +20,10 @@
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
 #include "format/BlockPacker.h"
+#include "format/ChecksumSidecar.h"
 #include "format/Container.h"
 #include "format/Serialization.h"
+#include "format/hash/ContentHash.h"
 
 namespace transmit::core {
 namespace {
@@ -356,6 +358,7 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     options.partSize = request.packaging.partSize;
     options.passphrase = toUtf8(request.passphrase);
     options.solidBlockSize = request.packaging.solidBlockSize;
+    options.recordMd5 = request.packaging.recordMd5;
 
     // On a USB stick the operating system will happily accept gigabytes it has
     // not written yet, so without this the archive looks finished long before
@@ -479,7 +482,14 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
 
             const format::ByteView bytes = toByteView(*content);
             entry.size = static_cast<quint64>(bytes.size());
-            entry.contentHash = format::Blake2b::hash256(bytes);
+
+            // Both digests in one walk of the buffer. They answer different
+            // questions: the BLAKE2b is the identity the packer deduplicates
+            // on, the MD5 is what somebody can check with md5sum later.
+            const format::ContentDigests digests =
+                format::hashContent(bytes, request.packaging.recordMd5);
+            entry.contentHash = digests.blake2b;
+            entry.contentMd5 = digests.md5;
 
             auto handle = packer.add(entry.contentHash, bytes);
             if (!handle) {
@@ -557,6 +567,35 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
 
     for (const auto& part : writer->parts()) {
         report.archiveParts.push_back(fromUtf8(format::fromFsPath(part)));
+    }
+
+    // Written after finish(), so it hashes the parts as they will be read -
+    // including the patched headers that finish() goes back and writes.
+    if (request.packaging.writeMd5Sidecar && request.packaging.recordMd5) {
+        const std::filesystem::path sidecarPath =
+            format::toFsPath(toUtf8(request.destinationPath + QStringLiteral(".md5")));
+
+        format::SidecarOptions sidecar;
+        sidecar.archiveName =
+            format::fromFsPath(format::toFsPath(toUtf8(request.destinationPath)).filename());
+        sidecar.includeEntries =
+            !writer->isEncrypted() || request.packaging.sidecarNamesEvenWhenEncrypted;
+
+        const auto written =
+            format::writeChecksumSidecar(sidecarPath, writer->parts(), manifest, sidecar);
+        if (written) {
+            report.checksumSidecar = fromUtf8(format::fromFsPath(*written));
+        } else {
+            // The archive is written and sound. Losing the convenience of an
+            // external checksum file is not a reason to tell somebody their
+            // capture failed, so it is a note rather than an error.
+            report.notes.push_back(ContinuityNote{
+                ContinuityGrade::Manual, format::DomainId::Unknown, report.archiveParts.value(0),
+                QCoreApplication::translate("Export",
+                                            "The archive is complete, but its checksum file "
+                                            "could not be written: %1")
+                    .arg(describeError(written.error()))});
+        }
     }
 
     qCInfo(logCapture) << "captured" << report.fileCount << "files:" << formatBytes(report.rawBytes)

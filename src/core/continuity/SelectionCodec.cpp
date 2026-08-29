@@ -210,6 +210,10 @@ QByteArray SelectionCodec::encode(const CaptureDocument& document) {
     packaging.insert(QStringLiteral("syncIntervalBytes"),
                      static_cast<qint64>(document.packaging.syncIntervalBytes));
     packaging.insert(QStringLiteral("verifyAfterWriting"), document.packaging.verifyAfterWriting);
+    packaging.insert(QStringLiteral("recordMd5"), document.packaging.recordMd5);
+    packaging.insert(QStringLiteral("writeMd5Sidecar"), document.packaging.writeMd5Sidecar);
+    packaging.insert(QStringLiteral("sidecarNamesEvenWhenEncrypted"),
+                     document.packaging.sidecarNamesEvenWhenEncrypted);
     root.insert(QStringLiteral("packaging"), packaging);
 
     return QJsonDocument(root).toJson(QJsonDocument::Indented);
@@ -332,6 +336,11 @@ bool SelectionCodec::decode(const QByteArray& json, CaptureDocument& document,
         std::max<qint64>(0, packaging.value(QStringLiteral("syncIntervalBytes")).toInteger(0)));
     document.packaging.verifyAfterWriting =
         packaging.value(QStringLiteral("verifyAfterWriting")).toBool(true);
+    document.packaging.recordMd5 = packaging.value(QStringLiteral("recordMd5")).toBool(true);
+    document.packaging.writeMd5Sidecar =
+        packaging.value(QStringLiteral("writeMd5Sidecar")).toBool(true);
+    document.packaging.sidecarNamesEvenWhenEncrypted =
+        packaging.value(QStringLiteral("sidecarNamesEvenWhenEncrypted")).toBool(false);
 
     return true;
 }

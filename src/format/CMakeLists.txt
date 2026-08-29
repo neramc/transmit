@@ -15,6 +15,7 @@ add_library(transmit_format STATIC
     VolumeSplitter.cpp
     BlockPacker.cpp
     Container.cpp
+    ChecksumSidecar.cpp
     codec/Codec.cpp
     codec/StoreCodec.cpp
     codec/DeflateCodec.cpp
@@ -22,7 +23,9 @@ add_library(transmit_format STATIC
     codec/XzCodec.cpp
     crypto/ArchiveCipher.cpp
     hash/Blake2b.cpp
-    hash/Crc32.cpp)
+    hash/ContentHash.cpp
+    hash/Crc32.cpp
+    hash/Md5.cpp)
 
 add_library(Transmit::Format ALIAS transmit_format)
 

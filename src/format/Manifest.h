@@ -11,6 +11,7 @@
 #include "format/Result.h"
 #include "format/codec/Codec.h"
 #include "format/hash/Blake2b.h"
+#include "format/hash/Md5.h"
 
 namespace transmit::format {
 
@@ -84,7 +85,20 @@ struct ManifestEntry {
     WindowsMetadata windows;
     std::string symlinkTarget;
     Digest256 contentHash{};
+
+    /// The same bytes under MD5, so the archive can be checked with `md5sum`
+    /// on a machine that has never heard of Transmit. Zero when the archive
+    /// was written without it.
+    ///
+    /// Never an identity: `contentHash` is what decides whether two files are
+    /// the same, here and everywhere else in the format.
+    Digest128 contentMd5{};
+
     BlockLocation location;
+
+    /// Whether an MD5 was recorded for this entry at all, so a missing one
+    /// reads as "not recorded" rather than as a file that hashes to zero.
+    [[nodiscard]] bool hasMd5() const noexcept { return contentMd5 != Digest128{}; }
 
     /// Recipe that claimed this entry, for AppState entries.
     std::string appId;

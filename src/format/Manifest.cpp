@@ -59,6 +59,11 @@ constexpr std::uint32_t kBlockOffset = 18;
 constexpr std::uint32_t kBlockLength = 19;
 constexpr std::uint32_t kAppId = 20;
 constexpr std::uint32_t kCaptureNote = 21;
+
+// Added after the first release of the format. A reader that predates it skips
+// the field, so an archive carrying MD5 still opens on an older build - which
+// is why this is a new tag rather than a change to kHash.
+constexpr std::uint32_t kMd5 = 22;
 }  // namespace entry_field
 
 namespace block_field {
@@ -219,6 +224,9 @@ void writeEntry(ByteWriter& writer, const ManifestEntry& entry) {
     }
     if (entry.hasContent()) {
         writer.putBytes(entry_field::kHash, ByteView(entry.contentHash));
+        if (entry.hasMd5()) {
+            writer.putBytes(entry_field::kMd5, ByteView(entry.contentMd5));
+        }
         writer.putUInt(entry_field::kBlockId, entry.location.blockId);
         writer.putUInt(entry_field::kBlockOffset, entry.location.offset);
         writer.putUInt(entry_field::kBlockLength, entry.location.length);
@@ -318,6 +326,14 @@ Result<ManifestEntry> readEntry(ByteView data) {
                     return makeError(ErrorCode::CorruptArchive, "entry hash has the wrong length");
                 }
                 std::copy(value.begin(), value.end(), entry.contentHash.begin());
+                break;
+            }
+            case entry_field::kMd5: {
+                TRANSMIT_TRY(value, reader.getBytes());
+                if (value.size() != entry.contentMd5.size()) {
+                    return makeError(ErrorCode::CorruptArchive, "entry MD5 has the wrong length");
+                }
+                std::copy(value.begin(), value.end(), entry.contentMd5.begin());
                 break;
             }
             case entry_field::kBlockId: {

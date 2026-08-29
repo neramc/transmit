@@ -75,6 +75,9 @@ void SelectionCodecTest::everyFieldSurvivesTheRoundTrip() {
     original.packaging.workerCount = 3;
     original.packaging.syncIntervalBytes = 32 * 1024 * 1024;
     original.packaging.verifyAfterWriting = false;
+    original.packaging.recordMd5 = false;
+    original.packaging.writeMd5Sidecar = false;
+    original.packaging.sidecarNamesEvenWhenEncrypted = true;
 
     const QByteArray encoded = core::SelectionCodec::encode(original);
 
@@ -120,6 +123,10 @@ void SelectionCodecTest::everyFieldSurvivesTheRoundTrip() {
     QCOMPARE(restored.packaging.workerCount, original.packaging.workerCount);
     QCOMPARE(restored.packaging.syncIntervalBytes, original.packaging.syncIntervalBytes);
     QCOMPARE(restored.packaging.verifyAfterWriting, original.packaging.verifyAfterWriting);
+    QCOMPARE(restored.packaging.recordMd5, original.packaging.recordMd5);
+    QCOMPARE(restored.packaging.writeMd5Sidecar, original.packaging.writeMd5Sidecar);
+    QCOMPARE(restored.packaging.sidecarNamesEvenWhenEncrypted,
+             original.packaging.sidecarNamesEvenWhenEncrypted);
 }
 
 void SelectionCodecTest::aShortDocumentTakesTheDefaults() {
@@ -137,6 +144,9 @@ void SelectionCodecTest::aShortDocumentTakesTheDefaults() {
     QVERIFY(document.selection.scope.isUnrestricted());
     QCOMPARE(document.selection.appMode, core::AppSelectionMode::All);
     QVERIFY(document.packaging.verifyAfterWriting);
+    QVERIFY(document.packaging.recordMd5);
+    QVERIFY(document.packaging.writeMd5Sidecar);
+    QVERIFY(!document.packaging.sidecarNamesEvenWhenEncrypted);
     QCOMPARE(document.packaging.solidBlockSize, format::kDefaultSolidBlockSize);
 }
 

@@ -215,6 +215,22 @@ struct PackagingOptions {
     /// Read the archive back and check every file against its recorded hash,
     /// as soon as it is written and before the drive is unplugged.
     bool verifyAfterWriting = true;
+
+    /// Record each file's MD5 in the manifest, so the archive can be checked
+    /// with an ordinary md5sum. Costs eighteen bytes an entry.
+    bool recordMd5 = true;
+
+    /// Write the `.md5` file beside the archive.
+    ///
+    /// Follows recordMd5 unless somebody says otherwise. For an encrypted
+    /// archive the file names are left out of it - the point of encrypting one
+    /// is that they are not readable from the drive.
+    bool writeMd5Sidecar = true;
+
+    /// List the archive's contents in the sidecar even though the archive is
+    /// encrypted. A deliberate choice: it puts every path on the drive in
+    /// plain text next to the thing that was encrypted to hide them.
+    bool sidecarNamesEvenWhenEncrypted = false;
 };
 
 struct ExportRequest {
@@ -260,6 +276,10 @@ struct ExportReport {
     QString errorMessage;
 
     QStringList archiveParts;
+
+    /// The `.md5` file written beside the archive, empty when none was.
+    QString checksumSidecar;
+
     QString archiveId;
     quint64 fileCount = 0;
     quint64 directoryCount = 0;

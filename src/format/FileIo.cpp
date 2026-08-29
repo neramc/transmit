@@ -448,4 +448,31 @@ Status writeFileAtomically(const std::filesystem::path& path, ByteView data, Dur
     return withRetry(retry, [&]() -> Status { return writeFileOnce(path, data, durability); });
 }
 
+Result<bool> dropFromPageCache(const std::filesystem::path& path) {
+#if defined(__linux__)
+    const int descriptor = ::open(path.c_str(), O_RDONLY);
+    if (descriptor < 0) {
+        return errnoError(path, "could not open");
+    }
+    // Length zero means "to the end of the file". Only clean pages go, which
+    // is why the caller has to have synced first.
+    const int result = ::posix_fadvise(descriptor, 0, 0, POSIX_FADV_DONTNEED);
+    ::close(descriptor);
+    if (result != 0) {
+        // posix_fadvise returns the error rather than setting errno, so it has
+        // to be put back for the shared helper to read.
+        errno = result;
+        return errnoError(path, "could not drop the cache for");
+    }
+    return true;
+#else
+    // macOS has F_NOCACHE, which stops a descriptor caching what it reads from
+    // now on but does not evict what is already there; Windows needs the file
+    // reopened with FILE_FLAG_NO_BUFFERING and its alignment rules. Neither is
+    // eviction, and claiming otherwise would make the report a lie.
+    (void)path;
+    return false;
+#endif
+}
+
 }  // namespace transmit::format

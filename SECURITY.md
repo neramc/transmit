@@ -44,6 +44,23 @@ than after a failed decryption.
 **The Flatpak manifest grants no network access.** Transmit has no reason to
 talk to anything.
 
+**MD5 confirms a transfer and decides nothing.** Every file also carries an MD5,
+and the `.md5` file beside an archive lets somebody check a drive with a tool
+that has never heard of Transmit. That is all it is for. MD5 collisions can be
+constructed in seconds, so it is never an identity: whether two files are the
+same, which block a file deduplicates onto, whether a block came back intact
+and whether an encrypted archive is authentic are decided by BLAKE2b and
+AES-256-GCM, and a matching MD5 alone is never accepted as proof of anything.
+It is implemented in this repository rather than called through OpenSSL because
+a FIPS-mode build refuses MD5, and a check that quietly becomes optional
+depending on how the runtime was configured is not a check.
+
+**An encrypted archive's `.md5` file does not list its contents.** The point of
+encrypting one is that the names of somebody's files are not readable from the
+drive; a sidecar listing every path beside it would hand them over in plain
+text. The parts are still listed, so the drive can still be checked.
+`--md5-sidecar-names` overrides this, and says so.
+
 ## What is on the drive
 
 An encrypted archive is only as good as where the passphrase is. If credentials

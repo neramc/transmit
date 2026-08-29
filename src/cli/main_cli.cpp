@@ -342,6 +342,16 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
     if (parser.isSet(QStringLiteral("no-verify-after"))) {
         request.packaging.verifyAfterWriting = false;
     }
+    if (parser.isSet(QStringLiteral("no-md5"))) {
+        request.packaging.recordMd5 = false;
+        request.packaging.writeMd5Sidecar = false;
+    }
+    if (parser.isSet(QStringLiteral("no-md5-sidecar"))) {
+        request.packaging.writeMd5Sidecar = false;
+    }
+    if (parser.isSet(QStringLiteral("md5-sidecar-names"))) {
+        request.packaging.sidecarNamesEvenWhenEncrypted = true;
+    }
 
     // ------------------------------------------------ which applications
     if (parser.isSet(QStringLiteral("apps"))) {
@@ -972,6 +982,17 @@ int main(int argc, char** argv) {
                            QStringLiteral("size")),
         QCommandLineOption(QStringLiteral("no-verify-after"),
                            QStringLiteral("Do not read the archive back after writing it.")),
+        QCommandLineOption(QStringLiteral("no-md5"),
+                           QStringLiteral("Do not record an MD5 for each file. Saves 18 bytes a "
+                                          "file and gives up being able to check the archive "
+                                          "with md5sum.")),
+        QCommandLineOption(QStringLiteral("no-md5-sidecar"),
+                           QStringLiteral("Keep the per-file MD5s in the archive but do not "
+                                          "write the .md5 file beside it.")),
+        QCommandLineOption(QStringLiteral("md5-sidecar-names"),
+                           QStringLiteral("List the file names in the .md5 file even when the "
+                                          "archive is encrypted. They will be readable by "
+                                          "anyone holding the drive.")),
         QCommandLineOption(QStringLiteral("selection-file"),
                            QStringLiteral("Read every choice from this file, then apply any "
                                           "options given here on top."),

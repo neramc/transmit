@@ -3,7 +3,10 @@
 #include <algorithm>
 #include <chrono>
 #include <functional>
+#include <unordered_map>
+#include <vector>
 
+#include "format/hash/ContentHash.h"
 #include "format/hash/Crc32.h"
 
 namespace transmit::format {
@@ -413,9 +416,86 @@ Result<const Manifest*> ArchiveReader::manifest() {
     record.encrypted = isEncrypted();
 
     TRANSMIT_TRY(raw, loadBlock(record));
+
+    // The footer is the last thing written and the only thing that says an
+    // archive is finished, so it gets to have an opinion about which manifest
+    // belongs to it. The block's own header proves it is intact; this proves
+    // it is the one the footer committed to. Read since the format was
+    // written, compared for the first time here.
+    const Digest256 digest = Blake2b::hash256(raw);
+    if (!std::equal(footer_.manifestHash.begin(), footer_.manifestHash.end(), digest.begin())) {
+        return makeError(ErrorCode::IntegrityMismatch,
+                         "the manifest is not the one this archive was closed with");
+    }
+
     TRANSMIT_TRY(parsed, Manifest::deserialize(raw));
     manifest_ = std::move(parsed);
+
+    if (Status located = validateEntryLocations(); !located) {
+        manifest_.reset();
+        return located.error();
+    }
     return &manifest_.value();
+}
+
+Status ArchiveReader::validateEntryLocations() const {
+    if (!manifest_.has_value()) {
+        return ok();
+    }
+
+    // Blocks by id, so a hundred thousand entries do not each walk the block
+    // list looking for theirs.
+    std::unordered_map<std::uint32_t, const BlockRecord*> blocks;
+    blocks.reserve(manifest_->blocks.size());
+    for (const BlockRecord& block : manifest_->blocks) {
+        blocks.emplace(block.blockId, &block);
+    }
+
+    for (const ManifestEntry& entry : manifest_->entries) {
+        if (!entry.hasContent()) {
+            continue;
+        }
+        const auto found = blocks.find(entry.location.blockId);
+        if (found == blocks.end()) {
+            return makeError(ErrorCode::CorruptArchive, "'", entry.path.toDisplayString(),
+                             "' names a block that is not in this archive");
+        }
+        // Checked here rather than when the entry is read, so an archive whose
+        // table is wrong says so when it is opened - not half way through a
+        // restore that has already written a thousand files.
+        const std::uint64_t end = entry.location.offset + entry.location.length;
+        if (end < entry.location.offset || end > found->second->rawSize) {
+            return makeError(ErrorCode::CorruptArchive, "'", entry.path.toDisplayString(),
+                             "' points outside block ", std::to_string(entry.location.blockId));
+        }
+        if (entry.location.length != entry.size) {
+            return makeError(ErrorCode::CorruptArchive, "'", entry.path.toDisplayString(),
+                             "' is a different length from the space reserved for it");
+        }
+    }
+    return ok();
+}
+
+Status ArchiveReader::verifyEntryIn(const ManifestEntry& entry, ByteView block) const {
+    const std::uint64_t end = entry.location.offset + entry.location.length;
+    if (end > block.size()) {
+        return makeError(ErrorCode::CorruptArchive, "'", entry.path.toDisplayString(),
+                         "' points outside its block");
+    }
+
+    const ByteView slice = block.subspan(static_cast<std::size_t>(entry.location.offset),
+                                         static_cast<std::size_t>(entry.location.length));
+    const ContentDigests digests = hashContent(slice, entry.hasMd5());
+
+    if (digests.blake2b != entry.contentHash) {
+        return makeError(ErrorCode::IntegrityMismatch, "'", entry.path.toDisplayString(),
+                         "' does not match its recorded hash");
+    }
+    if (entry.hasMd5() && digests.md5 != entry.contentMd5) {
+        return makeError(ErrorCode::IntegrityMismatch, "'", entry.path.toDisplayString(),
+                         "' does not match its recorded MD5");
+    }
+    return ok();
 }
 
 Result<ByteBuffer> ArchiveReader::loadBlock(const BlockRecord& record) {
@@ -538,9 +618,29 @@ Status ArchiveReader::verifyAllBlocks(
     TRANSMIT_TRY(loaded, manifest());
     const std::size_t total = loaded->blocks.size();
 
+    // The entries that live in each block, so a block is decompressed once and
+    // everything inside it is checked while it is in hand. Going the other way
+    // round - a pass over the entries - would decompress a 64 MiB block again
+    // for every one of the thousands of files in it.
+    std::unordered_map<std::uint32_t, std::vector<const ManifestEntry*>> byBlock;
+    for (const ManifestEntry& entry : loaded->entries) {
+        if (entry.hasContent()) {
+            byBlock[entry.location.blockId].push_back(&entry);
+        }
+    }
+
     for (std::size_t i = 0; i < total; ++i) {
+        const BlockRecord& record = loaded->blocks[i];
+
         // loadBlock already checks the hash and, when encrypted, the GCM tag.
-        TRANSMIT_CHECK(loadBlock(loaded->blocks[i]));
+        TRANSMIT_TRY(raw, loadBlock(record));
+
+        if (const auto found = byBlock.find(record.blockId); found != byBlock.end()) {
+            for (const ManifestEntry* entry : found->second) {
+                TRANSMIT_CHECK(verifyEntryIn(*entry, raw));
+            }
+        }
+
         if (progress && !progress(i + 1, total)) {
             return makeError(ErrorCode::Cancelled, "verification was cancelled");
         }

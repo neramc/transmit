@@ -143,4 +143,21 @@ Status writeFileAtomically(const std::filesystem::path& path, ByteView data,
                            Durability durability = Durability::DataAndName,
                            const RetryPolicy& retry = {});
 
+/// Asks the operating system to forget its cached copy of a file.
+///
+/// Verification that reads back what is still in the page cache is not
+/// verification: it proves the bytes the writer produced, not the bytes the
+/// drive kept. Dropping the cache first is what makes reading it back mean
+/// something.
+///
+/// Returns true when the cache was actually dropped, false when this system
+/// has no way to ask - which is not an error, but it is something the report
+/// has to say out loud rather than let somebody assume otherwise. Linux can do
+/// it with posix_fadvise; macOS and Windows have no per-file eviction short of
+/// reopening with caching disabled, so they answer false.
+///
+/// The file must already have been synced: eviction only discards pages that
+/// have been written back, so an unsynced file quietly stays cached.
+Result<bool> dropFromPageCache(const std::filesystem::path& path);
+
 }  // namespace transmit::format
