@@ -20,7 +20,10 @@ Rectangle {
                                            : Colors.border
 
     Behavior on border.color {
-        ColorAnimation { duration: Motion.hover; easing.type: Motion.easing }
+        ColorAnimation {
+            duration: Motion.duration(Motion.hover)
+            easing.type: Motion.easing
+        }
     }
 
     // A selected card gets a second inner ring so selection reads clearly

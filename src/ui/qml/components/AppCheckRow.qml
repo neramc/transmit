@@ -69,7 +69,10 @@ RowLayout {
             opacity: toggle.enabled ? 1.0 : 0.5
 
             Behavior on color {
-                ColorAnimation { duration: Motion.hover; easing.type: Motion.easing }
+                ColorAnimation {
+                    duration: Motion.duration(Motion.hover)
+                    easing.type: Motion.easing
+                }
             }
 
             Rectangle {
@@ -81,7 +84,10 @@ RowLayout {
                 color: Colors.textOnAccent
 
                 Behavior on x {
-                    NumberAnimation { duration: Motion.hover; easing.type: Motion.easing }
+                    NumberAnimation {
+                        duration: Motion.duration(Motion.hover)
+                        easing.type: Motion.easing
+                    }
                 }
             }
         }

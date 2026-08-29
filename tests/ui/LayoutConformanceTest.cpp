@@ -14,6 +14,7 @@
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
 #include <QQmlExpression>
 #include <QQuickItem>
 #include <QQuickStyle>
@@ -64,6 +65,15 @@ QString describe(const QQuickItem* item) {
     }
     if (!item->objectName().isEmpty()) {
         name += QStringLiteral("[%1]").arg(item->objectName());
+    }
+    // The QML file it came from. Without it a failure names a class - and
+    // "QQuickItem" is every plain Item in the interface, which is no help at
+    // all when the point of the message is to say where to go and look.
+    if (const QQmlContext* context = qmlContext(item); context != nullptr) {
+        const QString file = context->baseUrl().fileName();
+        if (!file.isEmpty()) {
+            name += QStringLiteral(" (%1)").arg(file);
+        }
     }
     return QStringLiteral("%1 at (%2,%3) %4x%5")
         .arg(name)
@@ -132,6 +142,7 @@ private:
     void showPage(const QString& page);
     void resizeTo(int width, int height);
     void setScheme(const QString& scheme);
+    void setSidebarCollapsed(bool collapsed);
     void evaluate(const QString& expression);
     [[nodiscard]] QQuickWindow* window() const;
     [[nodiscard]] QQuickItem* contentRoot() const;
@@ -207,6 +218,12 @@ void LayoutConformanceTest::showPage(const QString& page) {
     QTest::qWait(80);
 }
 
+void LayoutConformanceTest::setSidebarCollapsed(bool collapsed) {
+    evaluate(QStringLiteral("shell.sidebarCollapsed = %1")
+                 .arg(collapsed ? QStringLiteral("true") : QStringLiteral("false")));
+    QTest::qWait(60);
+}
+
 void LayoutConformanceTest::setScheme(const QString& scheme) {
     evaluate(QStringLiteral("AppController.themeMode = '%1'").arg(scheme));
     QTest::qWait(60);
@@ -257,8 +274,17 @@ void LayoutConformanceTest::checkOverflow(const QString& page, QStringList& prob
             const QRectF child(item->x(), item->y(), item->width(), item->height());
             if (!bounds.adjusted(-kTolerance, -kTolerance, kTolerance, kTolerance)
                      .contains(child)) {
-                problems << QStringLiteral("%1: %2 sticks out of %3")
-                                .arg(page, describe(item), describe(parent));
+                // A few levels of ancestry, which is what turns "a QQuickItem
+                // is too wide" into somewhere to go and look. The whole chain
+                // reaches the window and is mostly noise.
+                QString chain;
+                int levels = 0;
+                for (QQuickItem* up = parent; up != nullptr && levels < 3;
+                     up = up->parentItem(), ++levels) {
+                    chain += QStringLiteral(" < ") + describe(up);
+                }
+                problems
+                    << QStringLiteral("%1: %2 sticks out of%3").arg(page, describe(item), chain);
             }
         },
         [](QQuickItem* item) {
@@ -407,16 +433,25 @@ void LayoutConformanceTest::everyPageFitsAtEverySize_data() {
     QTest::addColumn<int>("width");
     QTest::addColumn<int>("height");
     QTest::addColumn<QString>("scheme");
+    QTest::addColumn<bool>("collapsed");
 
-    // One row per window size and scheme, with the pages walked inside it.
-    // Splitting the five checks into five slots meant resizing the window five
-    // times over for the same measurements, which took a minute and a half of
-    // every test run and found nothing extra.
+    // One row per window size, scheme and sidebar state, with the pages walked
+    // inside it. Splitting the five checks into five slots meant resizing the
+    // window five times over for the same measurements, which took a minute
+    // and a half of every test run and found nothing extra.
+    //
+    // The collapsed sidebar is a genuinely different layout - 176 pixels move
+    // from the navigation to the page - so it is a dimension here rather than
+    // something checked once and assumed.
     for (const Resolution& resolution : kResolutions) {
         for (const char* scheme : {"light", "dark"}) {
-            QTest::newRow(qPrintable(
-                QStringLiteral("%1 %2").arg(QLatin1String(resolution.name), QLatin1String(scheme))))
-                << resolution.width << resolution.height << QString::fromLatin1(scheme);
+            for (const bool collapsed : {false, true}) {
+                QTest::newRow(qPrintable(QStringLiteral("%1 %2%3").arg(
+                    QLatin1String(resolution.name), QLatin1String(scheme),
+                    collapsed ? QStringLiteral(" collapsed") : QString())))
+                    << resolution.width << resolution.height << QString::fromLatin1(scheme)
+                    << collapsed;
+            }
         }
     }
 }
@@ -425,9 +460,11 @@ void LayoutConformanceTest::everyPageFitsAtEverySize() {
     QFETCH(int, width);
     QFETCH(int, height);
     QFETCH(QString, scheme);
+    QFETCH(bool, collapsed);
 
     setScheme(scheme);
     resizeTo(width, height);
+    setSidebarCollapsed(collapsed);
 
     QStringList problems;
     for (const char* name : kPages) {
@@ -440,10 +477,14 @@ void LayoutConformanceTest::everyPageFitsAtEverySize() {
         checkSidewaysScroll(page, problems);
     }
 
-    QVERIFY2(problems.isEmpty(), qPrintable(QStringLiteral("at %1x%2 in %3:\n%4")
-                                                .arg(width)
-                                                .arg(height)
-                                                .arg(scheme, problems.join(u'\n'))));
+    QVERIFY2(
+        problems.isEmpty(),
+        qPrintable(QStringLiteral("at %1x%2 in %3 with the sidebar %4:\n%5")
+                       .arg(width)
+                       .arg(height)
+                       .arg(scheme,
+                            collapsed ? QStringLiteral("collapsed") : QStringLiteral("expanded"),
+                            problems.join(u'\n'))));
 }
 
 QTEST_MAIN(LayoutConformanceTest)

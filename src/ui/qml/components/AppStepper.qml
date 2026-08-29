@@ -37,7 +37,10 @@ RowLayout {
                 border.color: Colors.border
 
                 Behavior on color {
-                    ColorAnimation { duration: Motion.panel; easing.type: Motion.easing }
+                    ColorAnimation {
+                        duration: Motion.duration(Motion.panel)
+                        easing.type: Motion.easing
+                    }
                 }
 
                 Text {
@@ -52,16 +55,30 @@ RowLayout {
                 }
             }
 
+            // Elides rather than pushing the row wider than the page. Five
+            // steps of full-length labels need about 1030 pixels, and the
+            // content area at 1280 with the sidebar open is 992 - so without
+            // this the last step simply hangs off the right of the window.
             Text {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                Layout.preferredWidth: implicitWidth
+                Layout.maximumWidth: implicitWidth
                 text: stepRow.modelData
+                elide: Text.ElideRight
                 color: stepRow.active ? Colors.textPrimary : Colors.textSecondary
                 font.family: Typography.family
-                font.pixelSize: Typography.small
+                font.pixelSize: Typography.secondary
                 font.weight: stepRow.active ? Typography.medium : Typography.regular
             }
 
+            // The connector takes up the slack on a wide window and gives it
+            // back first on a narrow one, so the labels are the last thing to
+            // be shortened rather than the first.
             Rectangle {
-                Layout.preferredWidth: Spacing.lg
+                Layout.fillWidth: true
+                Layout.preferredWidth: Spacing.s16
+                Layout.minimumWidth: Spacing.s8
                 height: Elevation.borderWidth
                 color: Colors.border
                 visible: stepRow.index < stepper.steps.length - 1

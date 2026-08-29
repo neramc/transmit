@@ -32,7 +32,10 @@ TextField {
                                           : Colors.border
 
         Behavior on border.color {
-            ColorAnimation { duration: Motion.hover; easing.type: Motion.easing }
+            ColorAnimation {
+                duration: Motion.duration(Motion.hover)
+                easing.type: Motion.easing
+            }
         }
     }
 }

@@ -9,18 +9,33 @@ import Transmit.Theme
 /// It behaves as a tab list for the keyboard and for screen readers: arrow
 /// keys move between destinations, and each entry reports whether it is the
 /// one showing.
+///
+/// It collapses to a column of icons (docs/design.md section 4). At 1280 wide
+/// - the smallest size the application has to be useful at - a fixed 240 is a
+/// fifth of the window given permanently to five words.
 Rectangle {
     id: sidebar
 
     property string currentPage: "home"
 
+    /// Icons only, with the label in a tooltip.
+    property bool compact: false
+
     /// [{ page, label, icon }]
     property var entries: []
 
     signal navigate(string page)
+    signal toggleRequested()
 
-    implicitWidth: Sizing.sidebarWidth
+    implicitWidth: compact ? Sizing.sidebarWidthCompact : Sizing.sidebarWidth
     color: Colors.surfaceSunken
+
+    Behavior on implicitWidth {
+        NumberAnimation {
+            duration: Motion.duration(Motion.panel)
+            easing.type: Motion.easing
+        }
+    }
 
     Accessible.role: Accessible.PageTabList
 
@@ -33,30 +48,33 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: Spacing.md
-        spacing: Spacing.xs
+        anchors.margins: Spacing.s12
+        spacing: Spacing.s4
 
         // The application's name, so the window says what it is even when the
-        // title bar is hidden by a tiling window manager.
+        // title bar is hidden by a tiling window manager. Compact keeps the
+        // mark alone: it is the same shape as the icon in the dock.
         RowLayout {
             Layout.fillWidth: true
-            Layout.leftMargin: Spacing.sm
-            Layout.topMargin: Spacing.sm
-            Layout.bottomMargin: Spacing.md
-            spacing: Spacing.sm
+            Layout.topMargin: Spacing.s8
+            Layout.bottomMargin: Spacing.s12
+            spacing: Spacing.s8
 
             AppIcon {
                 name: "drive"
                 size: Sizing.iconSizeLarge
-                color: Colors.accent
+                color: Colors.accentText
+                Layout.leftMargin: sidebar.compact ? 0 : Spacing.s8
+                Layout.alignment: sidebar.compact ? Qt.AlignHCenter : Qt.AlignLeft
             }
 
             Text {
                 Layout.fillWidth: true
+                visible: !sidebar.compact
                 text: qsTr("Transmit")
                 color: Colors.textPrimary
                 font.family: Typography.family
-                font.pixelSize: Typography.title
+                font.pixelSize: Typography.sectionTitle
                 font.weight: Typography.semiBold
                 elide: Text.ElideRight
             }
@@ -88,7 +106,7 @@ Rectangle {
 
                 Rectangle {
                     anchors.fill: parent
-                    radius: Radius.md
+                    radius: Radius.control
                     color: entry.current ? Colors.accentSubtle
                          : hover.hovered  ? Colors.surface
                                           : "transparent"
@@ -105,16 +123,19 @@ Rectangle {
                         radius: parent.radius
                         color: "transparent"
                         border.width: Elevation.focusRingWidth
-                        border.color: Colors.accent
+                        border.color: Colors.focusRing
                         visible: entry.activeFocus
                     }
                 }
 
-                // The current item is marked with a bar as well as a tint, so
-                // it is still obvious at low contrast settings.
+                // The current item is marked three ways - a tint, a bar and a
+                // heavier label - because section 15 forbids saying it with
+                // colour alone, and because two of the three survive being
+                // printed, photographed or looked at by somebody who cannot
+                // tell violet from grey.
                 Rectangle {
-                    width: 3
-                    height: parent.height - Spacing.sm * 2
+                    width: Elevation.activeIndicatorWidth
+                    height: parent.height - Spacing.s8 * 2
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     radius: Radius.pill
@@ -124,22 +145,24 @@ Rectangle {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: Spacing.md
-                    anchors.rightMargin: Spacing.sm
-                    spacing: Spacing.sm
+                    anchors.leftMargin: sidebar.compact ? 0 : Spacing.s12
+                    anchors.rightMargin: sidebar.compact ? 0 : Spacing.s8
+                    spacing: Spacing.s8
 
                     AppIcon {
                         name: entry.modelData.icon !== undefined ? entry.modelData.icon : ""
-                        size: Sizing.iconSize
-                        color: entry.current ? Colors.accent : Colors.textSecondary
-                        Layout.alignment: Qt.AlignVCenter
+                        size: Sizing.iconSizeMedium
+                        color: entry.current ? Colors.accentText : Colors.textSecondary
+                        Layout.alignment: sidebar.compact ? Qt.AlignCenter : Qt.AlignVCenter
+                        Layout.fillWidth: sidebar.compact
                     }
 
                     Text {
                         Layout.fillWidth: true
+                        visible: !sidebar.compact
                         text: entry.modelData.label
                         elide: Text.ElideRight
-                        color: entry.current ? Colors.accent : Colors.textPrimary
+                        color: entry.current ? Colors.accentText : Colors.textPrimary
                         font.family: Typography.family
                         font.pixelSize: Typography.body
                         font.weight: entry.current ? Typography.semiBold : Typography.regular
@@ -149,6 +172,13 @@ Rectangle {
                 HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
                 TapHandler { onTapped: sidebar.navigate(entry.modelData.page) }
 
+                // Only when the label is not on screen. Section 27: a tooltip
+                // on a button that already says what it does is noise.
+                AppToolTip {
+                    text: entry.modelData.label
+                    visible: sidebar.compact && hover.hovered
+                }
+
                 Accessible.role: Accessible.PageTab
                 Accessible.name: entry.modelData.label
                 Accessible.selected: entry.current
@@ -157,5 +187,13 @@ Rectangle {
         }
 
         Item { Layout.fillHeight: true }
+
+        AppIconButton {
+            Layout.alignment: sidebar.compact ? Qt.AlignHCenter : Qt.AlignLeft
+            glyph: sidebar.compact ? "chevron-right" : "chevron-left"
+            text: sidebar.compact ? qsTr("Expand the sidebar") : qsTr("Collapse the sidebar")
+            tooltip: text + qsTr(" (Ctrl+B)")
+            onClicked: sidebar.toggleRequested()
+        }
     }
 }

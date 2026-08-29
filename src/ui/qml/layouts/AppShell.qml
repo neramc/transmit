@@ -18,6 +18,20 @@ Item {
 
     property var reportModel: null
 
+    /// Whether the sidebar is showing icons only. Section 32 asks for the
+    /// navigation to collapse on its own once the window is small; below that
+    /// it is the user's choice, remembered by Ctrl+B.
+    property bool sidebarCollapsed: false
+    readonly property bool sidebarCompact: sidebarCollapsed || width < Sizing.smallWindow
+
+    function toggleSidebar() {
+        // A window narrow enough to force the collapse cannot be expanded out
+        // of it; saying so is better than a shortcut that silently does
+        // nothing.
+        if (width >= Sizing.smallWindow)
+            sidebarCollapsed = !sidebarCollapsed;
+    }
+
     /// Exposed so the window can put a dialog in front of the whole shell.
     readonly property alias dialogs: dialogHost
 
@@ -51,10 +65,16 @@ Item {
 
         AppSidebar {
             id: sidebar
+            // Named so the interface tests can measure it: whether the
+            // sidebar really got narrower is not something a property called
+            // "compact" can prove on its own.
+            objectName: "sidebar"
             Layout.fillHeight: true
             currentPage: AppController.currentPage
+            compact: shell.sidebarCompact
             entries: shell.navigation
             onNavigate: (page) => AppController.currentPage = page
+            onToggleRequested: shell.toggleSidebar()
         }
 
         ColumnLayout {

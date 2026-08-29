@@ -18,6 +18,18 @@ Item {
     /// the laziness above can be asserted rather than assumed.
     property var loadedPages: []
 
+    /// Section 32 asks for reduced density on a narrower window: at 1280 wide
+    /// - the smallest the application has to be useful at - 32 on each side is
+    /// five per cent of the window given to nothing at all.
+    ///
+    /// It lives here rather than in the theme because it needs a threshold
+    /// from Sizing and a value from Spacing, and a singleton in the theme
+    /// module cannot import that module - the engine rejects the pair as a
+    /// cycle. One consumer, so nothing is duplicated by keeping it here.
+    readonly property int pageInset: view.width < Sizing.smallWindow ? Spacing.s16
+                                   : view.width < Sizing.mediumWindow ? Spacing.s24
+                                                                      : Spacing.s32
+
     Repeater {
         model: view.pages
 
@@ -28,8 +40,15 @@ Item {
 
             readonly property bool current: view.currentPage === slot.modelData.page
 
-            anchors.fill: parent
-            anchors.margins: Spacing.xxl
+            // Section 6: content stops growing past a readable width.
+            readonly property int inset: view.pageInset
+
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.topMargin: inset
+            anchors.bottomMargin: inset
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: Math.min(view.width - inset * 2, Sizing.maxContentWidth)
 
             sourceComponent: slot.modelData.component
             asynchronous: true

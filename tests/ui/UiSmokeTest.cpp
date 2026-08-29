@@ -75,6 +75,8 @@ private slots:
     void reducedMotionSilencesTheAnimations();
     void aLongReportRendersWithoutWarnings();
     void theCaptureWizardAsksWhatIsRunning();
+    void theSidebarCollapsesAndComesBack();
+    void aNarrowWindowCollapsesTheSidebarOnItsOwn();
     void confirmingADialogRunsTheAction();
     void dismissingADialogRunsNothing();
 
@@ -298,6 +300,58 @@ void UiSmokeTest::theCaptureWizardAsksWhatIsRunning() {
 
     evaluate(QStringLiteral("AppController.currentPage = 'home'"));
     settle(120);
+}
+
+void UiSmokeTest::theSidebarCollapsesAndComesBack() {
+    QVERIFY(window() != nullptr);
+    window()->resize(1280, 720);
+    settle(120);
+
+    QVERIFY2(!evaluate(QStringLiteral("shell.sidebarCompact")).toBool(),
+             "a window this wide should start with the sidebar open");
+    QObject* const bar = named("sidebar");
+    QVERIFY(bar != nullptr);
+    const qreal wide = bar->property("width").toReal();
+    QVERIFY(wide > 0);
+
+    evaluate(QStringLiteral("shell.toggleSidebar()"));
+    settle(250);
+    QVERIFY(evaluate(QStringLiteral("shell.sidebarCompact")).toBool());
+    const qreal narrow = bar->property("width").toReal();
+    QVERIFY2(narrow < wide, "the sidebar did not actually get narrower");
+
+    // The labels go, the destinations do not: every page must still be
+    // reachable, which is the whole point of collapsing rather than hiding.
+    QCOMPARE(bar->property("entries").toList().size(), 5);
+
+    evaluate(QStringLiteral("shell.toggleSidebar()"));
+    settle(250);
+    QVERIFY(!evaluate(QStringLiteral("shell.sidebarCompact")).toBool());
+    QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join(u'\n')));
+}
+
+void UiSmokeTest::aNarrowWindowCollapsesTheSidebarOnItsOwn() {
+    QVERIFY(window() != nullptr);
+    window()->resize(1280, 720);
+    settle(120);
+    QVERIFY(!evaluate(QStringLiteral("shell.sidebarCompact")).toBool());
+
+    // Section 32: below the small breakpoint the navigation collapses without
+    // being asked, because 240 of an 800-wide window is most of the page.
+    window()->resize(800, 600);
+    settle(200);
+    QVERIFY2(evaluate(QStringLiteral("shell.sidebarCompact")).toBool(),
+             "a narrow window should collapse the sidebar by itself");
+
+    // And the toggle cannot undo that: there is no room for it.
+    evaluate(QStringLiteral("shell.toggleSidebar()"));
+    settle(120);
+    QVERIFY(evaluate(QStringLiteral("shell.sidebarCompact")).toBool());
+
+    window()->resize(1280, 720);
+    settle(200);
+    QVERIFY(!evaluate(QStringLiteral("shell.sidebarCompact")).toBool());
+    QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join(u'\n')));
 }
 
 void UiSmokeTest::confirmingADialogRunsTheAction() {

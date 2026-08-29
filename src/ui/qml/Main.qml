@@ -60,6 +60,12 @@ ApplicationWindow {
         sequences: [StandardKey.Preferences, "Ctrl+,"]
         onActivated: AppController.currentPage = "settings"
     }
+    // Ctrl+B on Windows and Linux, Cmd+B on macOS - the convention every
+    // editor with a sidebar uses. There is no StandardKey for it.
+    Shortcut {
+        sequences: ["Ctrl+B"]
+        onActivated: shell.toggleSidebar()
+    }
     Shortcut {
         sequences: [StandardKey.Cancel]
         onActivated: if (AppController.currentPage !== "home")

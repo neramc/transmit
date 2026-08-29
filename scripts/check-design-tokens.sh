@@ -77,7 +77,12 @@ scan '\bfont\.family:[[:space:]]*"' \
 # Animations that do not pass through Motion.duration() ignore the "reduce
 # motion" preference, which makes the setting a lie. Section 28 and the
 # accessibility section both depend on it.
-hits=$(grep -nE '\bduration:[[:space:]]*[0-9]+' $qml_files | grep -v 'token-exempt:' || true)
+#
+# Both a bare number and a token used without the wrapper are caught, because
+# Motion.duration() is the thing that returns 0 when the preference is set -
+# "duration: Motion.hover" animates at full length however it is set.
+hits=$(grep -nE '\bduration:[[:space:]]*([0-9]+|Motion\.[A-Za-z]+([^(A-Za-z]|$))' $qml_files \
+       | grep -v 'token-exempt:' || true)
 if [ -n "$hits" ]; then
     while IFS= read -r hit; do report "  $hit"; done <<< "$hits"
     report "^^^ an animation that ignores the reduce-motion setting."

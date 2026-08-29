@@ -30,7 +30,10 @@ ProgressBar {
 
             Behavior on width {
                 enabled: !control.indeterminate
-                NumberAnimation { duration: Motion.panel; easing.type: Motion.easing }
+                NumberAnimation {
+                    duration: Motion.duration(Motion.panel)
+                    easing.type: Motion.easing
+                }
             }
 
             // Stopped rather than sped up when motion is reduced. A bar that
@@ -39,8 +42,8 @@ ProgressBar {
             SequentialAnimation on x {
                 running: control.indeterminate && control.visible && !Motion.reduced
                 loops: Animation.Infinite
-                NumberAnimation { from: 0; to: control.width * 0.7; duration: Motion.loop; easing.type: Easing.InOutQuad }
-                NumberAnimation { from: control.width * 0.7; to: 0; duration: Motion.loop; easing.type: Easing.InOutQuad }
+                NumberAnimation { from: 0; to: control.width * 0.7; duration: Motion.loop; easing.type: Easing.InOutQuad }  // token-exempt: the whole animation is stopped by running: !Motion.reduced above
+                NumberAnimation { from: control.width * 0.7; to: 0; duration: Motion.loop; easing.type: Easing.InOutQuad }  // token-exempt: the whole animation is stopped by running: !Motion.reduced above
             }
         }
     }

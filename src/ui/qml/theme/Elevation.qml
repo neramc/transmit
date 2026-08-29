@@ -15,6 +15,10 @@ QtObject {
     readonly property int borderWidth: 1
     readonly property int focusRingWidth: 2
 
+    /// The bar beside the current navigation entry. Wider than a border
+    /// because it is one of the three things saying which page you are on.
+    readonly property int activeIndicatorWidth: 3
+
     /// The ring drawn around a selected radio or checkbox. Thicker than a
     /// border because it is carrying the selected state, which section 9 says
     /// may not rest on colour alone.

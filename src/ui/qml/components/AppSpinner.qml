@@ -51,7 +51,7 @@ Item {
             loops: Animation.Infinite
             from: 0
             to: 360
-            duration: Motion.loop
+            duration: Motion.loop  // token-exempt: running already excludes Motion.reduced
         }
     }
 }
