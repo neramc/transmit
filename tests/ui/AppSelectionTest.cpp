@@ -18,6 +18,7 @@
 #include "app/ExportController.h"
 #include "app/models/AppCatalogModel.h"
 #include "core/continuity/ContinuityTypes.h"
+#include "core/recipe/RecipeCatalog.h"
 #include "core/services/ExportService.h"
 #include "platform/PlatformService.h"
 
@@ -44,6 +45,16 @@ private:
     /// Fills the model and waits for the worker to answer.
     void load(app::AppCatalogModel& model);
 
+    /// Creates the state folders the catalog declares for this system.
+    void plantState(const platform::PlatformService& platform);
+
+    /// The same for one named application. False when the catalog puts its
+    /// state somewhere outside the fake home on this system, which is not a
+    /// failure - it is a test that cannot run here.
+    bool plantStateFor(const platform::PlatformService& platform, const QString& appId);
+    bool plantStateOf(const core::AppRecipe& recipe, const format::PathTokenMap& folders,
+                      format::OsFamily os);
+
     /// The row showing this application, or -1.
     [[nodiscard]] static int rowOf(const app::AppCatalogModel& model, const QString& appId);
 
@@ -55,33 +66,18 @@ private:
     /// True when this platform resolves its known folders from the environment,
     /// so the fake home below is the one the detection actually reads.
     bool homeIsHonoured_ = false;
+
+    /// The application ids whose state folders the fixture created, taken from
+    /// the catalog so they are right on whichever system this is.
+    QStringList planted_;
 };
 
 void AppSelectionTest::initTestCase() {
     workspace_ = std::make_unique<QTemporaryDir>();
     QVERIFY(workspace_->isValid());
 
-    // A home directory with a few applications' state in it, so the detection
-    // has something to find on a machine that may have nothing installed at
-    // all. Every one of these is a recipe that says its data can travel.
     home_ = workspace_->filePath(QStringLiteral("home"));
-    QVERIFY(QDir().mkpath(home_ + QStringLiteral("/.mozilla/firefox/abcd.default")));
-    QVERIFY(QDir().mkpath(home_ + QStringLiteral("/.ssh")));
     QVERIFY(QDir().mkpath(home_ + QStringLiteral("/.config")));
-
-    const auto write = [](const QString& path, const char* contents) {
-        QFile file(path);
-        if (!file.open(QIODevice::WriteOnly)) {
-            return false;
-        }
-        file.write(contents);
-        return true;
-    };
-    QVERIFY(write(home_ + QStringLiteral("/.bashrc"), "# nothing in particular\n"));
-    QVERIFY(write(home_ + QStringLiteral("/.gitconfig"), "[user]\n\tname = Someone\n"));
-    QVERIFY(write(home_ + QStringLiteral("/.ssh/config"), "Host example\n"));
-    QVERIFY(write(home_ + QStringLiteral("/.mozilla/firefox/profiles.ini"),
-                  "[Profile0]\nPath=abcd.default\nIsRelative=1\n"));
 
     qputenv("HOME", home_.toUtf8());
     qputenv("XDG_CONFIG_HOME", (home_ + QStringLiteral("/.config")).toUtf8());
@@ -94,6 +90,85 @@ void AppSelectionTest::initTestCase() {
     const auto platform = platform::PlatformService::create();
     const auto base = platform->knownFolders().base(format::PathTokenId::Home);
     homeIsHonoured_ = base && QString::fromStdString(*base) == home_;
+    if (!homeIsHonoured_) {
+        return;
+    }
+
+    plantState(*platform);
+    QVERIFY2(!planted_.isEmpty(),
+             "the catalog declares no state folder inside the home directory on this system");
+}
+
+void AppSelectionTest::plantState(const platform::PlatformService& platform) {
+    // A home directory with a few applications' state in it, so the detection
+    // has something to find on a machine that may have nothing installed at
+    // all.
+    //
+    // The paths come from the catalog rather than being written out here: the
+    // same application keeps its settings somewhere different on each system,
+    // and a fixture that plants ~/.mozilla/firefox tests nothing on macOS,
+    // where Firefox has never put a profile there. Asking the catalog is also
+    // the only version of this that cannot rot when a recipe is corrected.
+    core::RecipeCatalog catalog;
+    catalog.loadDefaults();
+
+    const format::PathTokenMap folders = platform.knownFolders();
+    const format::OsFamily os = platform.environment().os;
+
+    for (const core::AppRecipe& recipe : catalog.recipes()) {
+        if (!recipe.portability.carriesData) {
+            continue;
+        }
+        if (plantStateOf(recipe, folders, os)) {
+            planted_.push_back(recipe.id);
+        }
+        if (planted_.size() >= 4) {
+            break;
+        }
+    }
+}
+
+bool AppSelectionTest::plantStateOf(const core::AppRecipe& recipe,
+                                    const format::PathTokenMap& folders, format::OsFamily os) {
+    for (const core::RecipeStatePath& state : recipe.state) {
+        const QStringList candidates = state.candidatesForOs(os);
+        if (candidates.isEmpty()) {
+            continue;
+        }
+        const QString resolved =
+            core::RecipeCatalog::resolveStatePath(candidates.constFirst(), folders);
+        // Only inside the fake home: creating anything anywhere else would be
+        // writing into whoever is running the tests.
+        if (resolved.isEmpty() || !resolved.startsWith(home_)) {
+            continue;
+        }
+
+        // Made as a directory with a marker inside, whether the real thing is
+        // a file or a folder. What is being tested is that Transmit notices
+        // the state is here, and existence is the whole of that question.
+        if (!QDir().mkpath(resolved)) {
+            continue;
+        }
+        QFile marker(resolved + QStringLiteral("/planted-by-the-test"));
+        if (!marker.open(QIODevice::WriteOnly)) {
+            continue;
+        }
+        marker.write("so the folder is not empty\n");
+        return true;
+    }
+    return false;
+}
+
+bool AppSelectionTest::plantStateFor(const platform::PlatformService& platform,
+                                     const QString& appId) {
+    core::RecipeCatalog catalog;
+    catalog.loadDefaults();
+
+    const core::AppRecipe recipe = catalog.recipeById(appId);
+    if (!recipe.isValid()) {
+        return false;
+    }
+    return plantStateOf(recipe, platform.knownFolders(), platform.environment().os);
 }
 
 void AppSelectionTest::cleanupTestCase() {
@@ -132,7 +207,7 @@ void AppSelectionTest::theListSeparatesWhatTravelsFromWhatIsOnlyNoted() {
 
     QVERIFY2(model.totalCount() > 0, "nothing at all was recognised");
     QVERIFY2(model.carriesDataCount() > 0,
-             "the fake home holds Firefox, SSH and Git state and none was found");
+             "state folders were planted in the fake home and none was found");
 
     // Filtered to the ones worth deciding about, which is what the page shows
     // on arrival.
@@ -143,8 +218,11 @@ void AppSelectionTest::theListSeparatesWhatTravelsFromWhatIsOnlyNoted() {
                  qPrintable(at(model, row, app::AppCatalogModel::AppIdRole).toString()));
     }
 
-    QVERIFY2(rowOf(model, QStringLiteral("org.mozilla.firefox")) >= 0,
-             "a Firefox profile is sitting in the fake home and was not found");
+    for (const QString& appId : planted_) {
+        QVERIFY2(rowOf(model, appId) >= 0,
+                 qPrintable(
+                     QStringLiteral("%1 has state in the fake home and was not found").arg(appId)));
+    }
 
     // And everything chosen to start with, because there is no reason to have
     // found it otherwise.
@@ -166,8 +244,11 @@ void AppSelectionTest::theFilterHidesRowsWithoutForgettingThem() {
     QCOMPARE(model.rowCount(), all);
     QVERIFY2(model.rowCount() >= carrying, "showing more hid something");
 
-    model.setFilterText(QStringLiteral("firefox"));
-    QVERIFY2(model.rowCount() > 0, "Firefox is in the list and the search did not find it");
+    // An id, which is unique, so this matches exactly the one row.
+    model.setFilterText(planted_.constFirst());
+    QVERIFY2(model.rowCount() > 0, qPrintable(QStringLiteral("%1 is in the list and the search "
+                                                             "did not find it")
+                                                  .arg(planted_.constFirst())));
     QVERIFY2(model.rowCount() < all, "the search matched everything");
     QCOMPARE(model.totalCount(), all);
 
@@ -189,7 +270,7 @@ void AppSelectionTest::clearingWhatIsShownLeavesTheRestAlone() {
     const int chosenToStart = model.selectedCount();
     QVERIFY2(chosenToStart > 1, "this needs more than one application to be meaningful");
 
-    model.setFilterText(QStringLiteral("firefox"));
+    model.setFilterText(planted_.constFirst());
     const int showing = model.rowCount();
     QVERIFY(showing >= 1);
     QVERIFY(showing < chosenToStart);
@@ -265,6 +346,15 @@ void AppSelectionTest::closingIsOnlyAskedForTheApplicationsBeingTaken() {
 #ifndef Q_OS_LINUX
     QSKIP("the process name a running program reports is read differently on each platform");
 #else
+    const auto platform = platform::PlatformService::create();
+
+    // Firefox has to be one of the applications the machine appears to have,
+    // or its quiesce names are never collected and this would be measuring
+    // nothing.
+    if (!plantStateFor(*platform, QStringLiteral("org.mozilla.firefox"))) {
+        QSKIP("the catalog puts Firefox's state outside the fake home on this system");
+    }
+
     // A process that reports itself as "firefox", which is one of the names the
     // Firefox recipe asks to be closed. Copied rather than started under a
     // shell: the name the check reads is the executable's, not the script's.
@@ -276,7 +366,6 @@ void AppSelectionTest::closingIsOnlyAskedForTheApplicationsBeingTaken() {
     sleeper.start(pretend, {QStringLiteral("30")});
     QVERIFY2(sleeper.waitForStarted(5000), qPrintable(sleeper.errorString()));
 
-    const auto platform = platform::PlatformService::create();
     const core::ExportService service(*platform);
 
     core::CaptureSelection everything;
