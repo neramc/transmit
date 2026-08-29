@@ -1,6 +1,10 @@
 {
   "version": 3,
-  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
   "configurePresets": [
     {
       "name": "default",
@@ -52,23 +56,70 @@
         "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
         "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
       }
+    },
+    {
+      "name": "tsan",
+      "inherits": "debug",
+      "displayName": "Thread sanitiser",
+      "description": "For the compression pool and the controllers: workers hand buffers to the writer thread and emit progress at the interface.",
+      "binaryDir": "${sourceDir}/build-tsan",
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer -g",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=thread"
+      }
     }
   ],
   "buildPresets": [
-    { "name": "default", "configurePreset": "default" },
-    { "name": "debug", "configurePreset": "debug" },
-    { "name": "release", "configurePreset": "release" },
-    { "name": "cli-only", "configurePreset": "cli-only" },
-    { "name": "asan", "configurePreset": "asan" }
+    {
+      "name": "default",
+      "configurePreset": "default"
+    },
+    {
+      "name": "debug",
+      "configurePreset": "debug"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "cli-only",
+      "configurePreset": "cli-only"
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan"
+    },
+    {
+      "name": "tsan",
+      "configurePreset": "tsan"
+    }
   ],
   "testPresets": [
     {
       "name": "default",
       "configurePreset": "default",
-      "output": { "outputOnFailure": true },
-      "execution": { "noTestsAction": "error" }
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
     },
-    { "name": "debug", "inherits": "default", "configurePreset": "debug" },
-    { "name": "asan", "inherits": "default", "configurePreset": "asan" }
+    {
+      "name": "debug",
+      "inherits": "default",
+      "configurePreset": "debug"
+    },
+    {
+      "name": "asan",
+      "inherits": "default",
+      "configurePreset": "asan"
+    },
+    {
+      "name": "tsan",
+      "inherits": "default",
+      "configurePreset": "tsan"
+    }
   ]
 }

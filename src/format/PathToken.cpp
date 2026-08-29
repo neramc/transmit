@@ -267,6 +267,37 @@ TokenizedPath PathTokenMap::tokenize(std::string_view absolutePath) const {
     return TokenizedPath{bestToken, std::move(relative)};
 }
 
+namespace {
+
+/// Whether `candidate` is `base` or sits under it. Both are expected to be
+/// normalised already.
+///
+/// The comparison is on whole components: "/home/bob2" must not count as
+/// being inside "/home/bob", which a plain prefix test would allow.
+bool isWithin(std::string_view base, std::string_view candidate, OsFamily family) {
+    if (base.empty()) {
+        return true;
+    }
+    const bool caseBlind = usesWindowsPathStyle(family);
+
+    std::string left(base);
+    std::string right(candidate);
+    if (caseBlind) {
+        std::transform(left.begin(), left.end(), left.begin(), lowerAscii);
+        std::transform(right.begin(), right.end(), right.begin(), lowerAscii);
+    }
+    while (left.size() > 1 && left.back() == '/') {
+        left.pop_back();
+    }
+
+    if (right.size() < left.size() || right.compare(0, left.size(), left) != 0) {
+        return false;
+    }
+    return right.size() == left.size() || left.back() == '/' || right[left.size()] == '/';
+}
+
+}  // namespace
+
 Result<std::string> PathTokenMap::resolve(const TokenizedPath& path) const {
     if (path.token == PathTokenId::Absolute) {
         if (path.relative.empty()) {
@@ -280,7 +311,24 @@ Result<std::string> PathTokenMap::resolve(const TokenizedPath& path) const {
         return makeError(ErrorCode::NotFound, "this machine has no location for {",
                          std::string(tokenName(path.token)), "}");
     }
-    return joinPath(it->second, path.relative);
+
+    const std::string joined = joinPath(it->second, path.relative);
+
+    // The last line of defence for "restore into this folder".
+    //
+    // A relative path comes out of an archive, and an archive can say
+    // anything: "../../.bashrc" under {DOCUMENTS} resolves to a file two
+    // levels above the folder the user pointed at. NameSanitizer refuses a
+    // ".." component before it reaches here, but this is the layer that
+    // actually promises the destination is respected, so it checks rather
+    // than assumes.
+    const std::string base = normalizePath(it->second, family_);
+    const std::string resolved = normalizePath(joined, family_);
+    if (!isWithin(base, resolved, family_)) {
+        return makeError(ErrorCode::InvalidArgument, "\"", path.relative, "\" points outside {",
+                         std::string(tokenName(path.token)), "}");
+    }
+    return resolved;
 }
 
 PathTokenMap PathTokenMap::defaultsFor(OsFamily family, std::string_view homeDirectory) {

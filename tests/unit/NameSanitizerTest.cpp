@@ -143,5 +143,30 @@ TEST(Reset, ClearsCollisionStateBetweenRuns) {
     EXPECT_EQ(sanitizer.sanitizeRelativePath("a/notes.txt"), "a/notes.txt");
 }
 
+/// A restore joins the archive's relative path onto a known folder, so a
+/// component that climbs writes outside the folder the user chose. An
+/// archive can claim any path it likes, so this is refused rather than
+/// trusted. Found by the path property suite.
+TEST(Traversal, AParentReferenceIsRenamedOnEveryPlatform) {
+    for (const OsFamily target : {OsFamily::Linux, OsFamily::MacOs, OsFamily::Windows}) {
+        NameSanitizer sanitizer(SanitizeOptions::forTarget(target));
+
+        EXPECT_EQ(sanitizer.sanitizeComponent(".."), "__") << "target " << static_cast<int>(target);
+
+        const std::string safe = sanitizer.sanitizeRelativePath("../../.bashrc");
+        EXPECT_EQ(safe, "__/__/.bashrc") << "target " << static_cast<int>(target);
+    }
+}
+
+/// Only the component that *is* ".." climbs. A name that merely contains
+/// two dots is ordinary and must survive untouched, or a restore starts
+/// renaming files nobody asked it to.
+TEST(Traversal, ANameThatMerelyContainsDotsIsLeftAlone) {
+    NameSanitizer sanitizer(SanitizeOptions::forTarget(OsFamily::Linux));
+    EXPECT_EQ(sanitizer.sanitizeComponent("a..b"), "a..b");
+    EXPECT_EQ(sanitizer.sanitizeComponent("..hidden"), "..hidden");
+    EXPECT_EQ(sanitizer.sanitizeRelativePath("notes../file.txt"), "notes../file.txt");
+}
+
 }  // namespace
 }  // namespace transmit::format

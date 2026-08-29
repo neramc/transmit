@@ -218,10 +218,30 @@ jobs:
       - name: Check every QML file is registered
         run: scripts/check-qml-modules.sh
 
+      # The full build rather than cli-only: clang-tidy reads a compile
+      # database, and the application layer is only in one when the interface
+      # is built. That layer holds the controllers, which is where the
+      # threading is.
       - name: Configure
-        run: cmake --preset cli-only
+        run: cmake --preset default
+
+      - name: Build
+        run: cmake --build --preset default
 
       - name: Static analysis
         run: |
-          files=$(git ls-files 'src/format/*.cpp' 'src/core/*.cpp' 'src/platform/linux/*.cpp')
-          clang-tidy-18 -p build-cli $files
+          # Everything this machine can compile. Windows and macOS sources are
+          # not in a Linux compile database at all, so they are excluded here
+          # and covered by the three-platform build job instead.
+          files=$(git ls-files src/ | grep -E '\.cpp$' | grep -vE '^src/platform/(windows|macos)/')
+          count=$(printf '%s\n' "$files" | wc -l)
+          echo "analysing $count files"
+
+          # A pathspec that stops matching is silent - the step would pass
+          # having analysed nothing at all. This is the tripwire for that.
+          if [ "$count" -lt 50 ]; then
+              echo "::error::only $count files matched; the file list has stopped working"
+              exit 1
+          fi
+
+          run-clang-tidy-18 -p build -j "$(nproc)" -quiet $files

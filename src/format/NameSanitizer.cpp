@@ -113,6 +113,20 @@ std::string NameSanitizer::sanitizeComponent(std::string_view component,
         return "_";
     }
 
+    // ".." is a reserved name on every system, not a Windows quirk: a restore
+    // joins this onto a known folder, and a component that climbs out of it
+    // writes wherever the archive says rather than where the user pointed. An
+    // archive can claim any path it likes, so this has to be refused here even
+    // though nothing Transmit writes would produce one.
+    //
+    // Renamed rather than dropped. Dropping it would silently change what the
+    // path means - "a/../b" and "a/b" would become the same entry - and the
+    // rename shows up in the report, so a person can see it happened.
+    if (component == "..") {
+        note(RenameReason::ReservedName);
+        return "__";
+    }
+
     std::string result;
     result.reserve(component.size());
 

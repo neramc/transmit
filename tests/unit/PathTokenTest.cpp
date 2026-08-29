@@ -111,5 +111,45 @@ TEST(ToNativePath, UsesTheTargetSeparator) {
     EXPECT_EQ(toNativePath("/home/bob/file.txt", OsFamily::Linux), "/home/bob/file.txt");
 }
 
+/// The layer that actually promises "restore into this folder". Even if a
+/// path reaches here with a parent reference still in it - a hand-built
+/// archive, a future caller that forgets to sanitise - resolving it must
+/// refuse rather than hand back a path outside the folder.
+TEST(Resolve, RefusesARelativePathThatClimbsOutOfItsFolder) {
+    const PathTokenMap map = PathTokenMap::defaultsFor(OsFamily::Linux, "/home/bob");
+
+    for (const char* relative :
+         {"../.bashrc", "../../etc/passwd", "a/../../../tmp/x", "./../outside"}) {
+        const auto resolved = map.resolve(TokenizedPath{PathTokenId::Documents, relative});
+        EXPECT_FALSE(resolved) << relative << " resolved to "
+                               << (resolved ? *resolved : std::string());
+        if (!resolved) {
+            EXPECT_EQ(resolved.error().code, ErrorCode::InvalidArgument);
+        }
+    }
+}
+
+/// The check is on whole components: a sibling folder whose name merely
+/// starts with the same letters is still outside.
+TEST(Resolve, ASiblingWithASharedPrefixIsStillOutside) {
+    PathTokenMap map(OsFamily::Linux);
+    map.setBase(PathTokenId::Documents, "/home/bob");
+
+    EXPECT_FALSE(map.resolve(TokenizedPath{PathTokenId::Documents, "../bob2/secret"}));
+    EXPECT_TRUE(map.resolve(TokenizedPath{PathTokenId::Documents, "notes/a.txt"}));
+}
+
+/// Ordinary paths keep working, including the ones that walk down and back
+/// up inside the folder.
+TEST(Resolve, StillResolvesPathsThatStayInside) {
+    const PathTokenMap map = PathTokenMap::defaultsFor(OsFamily::Linux, "/home/bob");
+    const auto base = map.base(PathTokenId::Documents);
+    ASSERT_TRUE(base.has_value());
+
+    const auto resolved = map.resolve(TokenizedPath{PathTokenId::Documents, "a/b/../c.txt"});
+    ASSERT_TRUE(resolved) << resolved.error().toString();
+    EXPECT_EQ(*resolved, *base + "/a/c.txt");
+}
+
 }  // namespace
 }  // namespace transmit::format
