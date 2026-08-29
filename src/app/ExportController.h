@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "app/models/AppCatalogModel.h"
 #include "app/models/ContinuityReportModel.h"
 #include "core/continuity/ContinuityTypes.h"
 #include "core/services/ExportService.h"
@@ -45,6 +46,8 @@ class ExportController : public QObject {
     Q_PROPERTY(QStringList archiveParts READ archiveParts NOTIFY finishedChanged)
     Q_PROPERTY(bool incomplete READ incomplete NOTIFY finishedChanged)
     Q_PROPERTY(QString incompleteText READ incompleteText NOTIFY finishedChanged)
+    Q_PROPERTY(QString scopeSummary READ scopeSummary NOTIFY scopeChanged)
+    Q_PROPERTY(QString applicationSummary READ applicationSummary NOTIFY scopeChanged)
 
 public:
     explicit ExportController(QObject* parent = nullptr);
@@ -79,6 +82,14 @@ public:
     [[nodiscard]] bool checkingPrograms() const { return checkingPrograms_; }
     [[nodiscard]] bool programsChecked() const { return programsChecked_; }
 
+    /// What the limits on the files add up to, in one line. "Everything" when
+    /// nothing has been narrowed, which is the state a user should be able to
+    /// recognise without reading three controls.
+    [[nodiscard]] QString scopeSummary() const;
+
+    /// The same for the per-application choice.
+    [[nodiscard]] QString applicationSummary() const;
+
 public slots:
     /// Starts a capture. `destinationFolder` is where the archive is written;
     /// the file name is derived from the machine name and the date.
@@ -106,6 +117,29 @@ public slots:
     /// rather than showing what was true several minutes ago.
     void forgetRunningPrograms();
 
+    /// Takes the per-application answer from the model the interface showed.
+    ///
+    /// Read here rather than held by the model so that the capture and the
+    /// "what should I close first" check are asking the same question - the
+    /// model belongs to a page that may already have been left behind.
+    void chooseApplications(AppCatalogModel* model);
+
+    /// Back to carrying every application's data, which is the default and
+    /// what a profile on its own means.
+    void carryEveryApplication();
+
+    /// Limits which files are taken.
+    ///
+    /// `maximumFileSize` is in bytes and 0 means no limit; `modifiedWithinDays`
+    /// is 0 for any age; `excludedExtensions` is a free-text list such as
+    /// "iso, vmdk dmg" - punctuation and dots are ignored, because a person
+    /// typing a list of file types should not have to guess the separator.
+    void setScope(double maximumFileSize, int modifiedWithinDays,
+                  const QString& excludedExtensions);
+
+    /// Everything again: no size limit, no age limit, no excluded types.
+    void clearScope();
+
     /// Whether this system has a credential store worth offering.
     [[nodiscard]] bool secretsAvailable();
 
@@ -130,6 +164,7 @@ signals:
     void progressChanged();
     void finishedChanged();
     void reportReady();
+    void scopeChanged();
 
 private:
     void handleProgress(const core::ProgressUpdate& update);
@@ -139,9 +174,9 @@ private:
     /// What a profile plus the user's tick boxes actually add up to. Shared by
     /// the capture and the pre-flight check so the check cannot be answering a
     /// different question from the one the capture will ask.
-    [[nodiscard]] static core::CaptureSelection selectionFor(const QString& profileId,
-                                                             const QStringList& domains,
-                                                             bool includeSecrets);
+    [[nodiscard]] core::CaptureSelection selectionFor(const QString& profileId,
+                                                      const QStringList& domains,
+                                                      bool includeSecrets) const;
 
     std::unique_ptr<platform::PlatformService> platform_;
     std::unique_ptr<core::ExportService> service_;
@@ -152,6 +187,11 @@ private:
     QStringList programsToClose_;
     bool checkingPrograms_ = false;
     bool programsChecked_ = false;
+    core::ScopeRule scope_;
+    QList<core::AppSelection> apps_;
+    core::AppSelectionMode appMode_ = core::AppSelectionMode::All;
+    int appsChosen_ = 0;
+    int appsOffered_ = 0;
     core::ProgressUpdate progress_;
     core::ExportReport report_;
     qint64 startedAtMs_ = 0;

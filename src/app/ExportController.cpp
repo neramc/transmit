@@ -4,6 +4,9 @@
 #include <QDir>
 #include <QtConcurrent/QtConcurrentRun>
 
+#include <algorithm>
+#include <cmath>
+
 #include "core/secrets/SecretsDomain.h"
 #include "core/services/ProfileService.h"
 #include "core/utils/Conversions.h"
@@ -44,7 +47,7 @@ ExportController::~ExportController() {
 
 core::CaptureSelection ExportController::selectionFor(const QString& profileId,
                                                       const QStringList& domains,
-                                                      bool includeSecrets) {
+                                                      bool includeSecrets) const {
     core::CaptureSelection selection = core::ProfileService::profileById(profileId).selection;
 
     if (!domains.isEmpty()) {
@@ -58,7 +61,113 @@ core::CaptureSelection ExportController::selectionFor(const QString& profileId,
     if (includeSecrets) {
         selection.domains.insert(static_cast<int>(format::DomainId::Secrets));
     }
+
+    // The profile decides which folders; these decide how much of them. Kept
+    // apart deliberately, so switching profile does not silently discard the
+    // limits somebody set, and narrowing the scope does not change what a
+    // profile means.
+    selection.scope = scope_;
+    selection.appMode = appMode_;
+    selection.apps = apps_;
     return selection;
+}
+
+void ExportController::chooseApplications(AppCatalogModel* model) {
+    if (model == nullptr) {
+        return;
+    }
+    apps_ = model->selection();
+    appMode_ = core::AppSelectionMode::Explicit;
+
+    appsOffered_ = model->carriesDataCount();
+    appsChosen_ = static_cast<int>(
+        std::count_if(apps_.constBegin(), apps_.constEnd(),
+                      [](const core::AppSelection& app) { return app.captureState; }));
+
+    // The pre-flight answer was about a different set of applications, so it
+    // is no longer an answer to this question.
+    forgetRunningPrograms();
+    emit scopeChanged();
+}
+
+void ExportController::carryEveryApplication() {
+    if (appMode_ == core::AppSelectionMode::All && apps_.isEmpty()) {
+        return;
+    }
+    apps_.clear();
+    appMode_ = core::AppSelectionMode::All;
+    appsChosen_ = 0;
+    appsOffered_ = 0;
+    forgetRunningPrograms();
+    emit scopeChanged();
+}
+
+void ExportController::setScope(double maximumFileSize, int modifiedWithinDays,
+                                const QString& excludedExtensions) {
+    core::ScopeRule rule;
+
+    // Guarded rather than cast straight through: QML hands this over as a
+    // double, and a negative or non-finite one would wrap to an enormous
+    // limit - which reads as "no limit" and is the opposite of what somebody
+    // dragging a size control down would mean.
+    if (std::isfinite(maximumFileSize) && maximumFileSize >= 1.0) {
+        rule.maximumFileSize = static_cast<quint64>(maximumFileSize);
+    }
+    if (modifiedWithinDays > 0) {
+        rule.modifiedSince = QDateTime::currentDateTime().addDays(-modifiedWithinDays);
+    }
+    for (const QString& piece : excludedExtensions.split(
+             QRegularExpression(QStringLiteral("[^A-Za-z0-9_+-]+")), Qt::SkipEmptyParts)) {
+        rule.excludeExtensions.insert(piece.toLower());
+    }
+
+    scope_ = rule;
+    emit scopeChanged();
+}
+
+void ExportController::clearScope() {
+    if (scope_.isUnrestricted()) {
+        return;
+    }
+    scope_ = {};
+    emit scopeChanged();
+}
+
+QString ExportController::scopeSummary() const {
+    if (scope_.isUnrestricted()) {
+        return tr("Everything in the folders you chose");
+    }
+
+    QStringList parts;
+    if (scope_.maximumFileSize > 0) {
+        parts << tr("nothing over %1").arg(formatBytes(scope_.maximumFileSize));
+    }
+    if (scope_.modifiedSince.isValid()) {
+        const qint64 days = scope_.modifiedSince.daysTo(QDateTime::currentDateTime());
+        parts << (days == 1 ? tr("nothing untouched since yesterday")
+                            : tr("nothing untouched for %1 days").arg(days));
+    }
+    if (!scope_.excludeExtensions.isEmpty()) {
+        QStringList kinds(scope_.excludeExtensions.constBegin(),
+                          scope_.excludeExtensions.constEnd());
+        kinds.sort();
+        parts << tr("no .%1 files").arg(kinds.join(QStringLiteral(", .")));
+    }
+    return parts.join(QStringLiteral("; "));
+}
+
+QString ExportController::applicationSummary() const {
+    if (appMode_ != core::AppSelectionMode::Explicit) {
+        return tr("Every program whose data can travel");
+    }
+    if (appsChosen_ == 0) {
+        return tr("No program data - only the list of what you had installed");
+    }
+    if (appsOffered_ > 0 && appsChosen_ >= appsOffered_) {
+        return appsChosen_ == 1 ? tr("The one program whose data can travel")
+                                : tr("All %1 programs whose data can travel").arg(appsChosen_);
+    }
+    return tr("%1 of %2 programs").arg(appsChosen_).arg(appsOffered_);
 }
 
 void ExportController::checkForRunningPrograms(const QString& profileId,

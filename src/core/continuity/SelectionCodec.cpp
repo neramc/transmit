@@ -86,12 +86,10 @@ QJsonObject encodeScope(const ScopeRule& scope) {
 
 ScopeRule decodeScope(const QJsonObject& object) {
     ScopeRule scope;
-    scope.maximumFileSize =
-        static_cast<quint64>(std::max<qint64>(0, object.value(QStringLiteral("maximumFileSize"))
-                                                     .toInteger(0)));
-    scope.minimumFileSize =
-        static_cast<quint64>(std::max<qint64>(0, object.value(QStringLiteral("minimumFileSize"))
-                                                     .toInteger(0)));
+    scope.maximumFileSize = static_cast<quint64>(
+        std::max<qint64>(0, object.value(QStringLiteral("maximumFileSize")).toInteger(0)));
+    scope.minimumFileSize = static_cast<quint64>(
+        std::max<qint64>(0, object.value(QStringLiteral("minimumFileSize")).toInteger(0)));
     scope.includeExtensions = toStringSet(object.value(QStringLiteral("includeExtensions")));
     scope.excludeExtensions = toStringSet(object.value(QStringLiteral("excludeExtensions")));
     if (object.contains(QStringLiteral("modifiedSince"))) {
@@ -205,8 +203,7 @@ QByteArray SelectionCodec::encode(const CaptureDocument& document) {
 
     QJsonObject packaging;
     packaging.insert(QStringLiteral("preset"), nameOfPreset(document.packaging.preset));
-    packaging.insert(QStringLiteral("partSize"),
-                     static_cast<qint64>(document.packaging.partSize));
+    packaging.insert(QStringLiteral("partSize"), static_cast<qint64>(document.packaging.partSize));
     packaging.insert(QStringLiteral("blockSize"),
                      static_cast<qint64>(document.packaging.solidBlockSize));
     packaging.insert(QStringLiteral("workers"), document.packaging.workerCount);
@@ -281,8 +278,8 @@ bool SelectionCodec::decode(const QByteArray& json, CaptureDocument& document,
             // A selection is a file somebody may have been sent. A root that
             // climbs out of the folder it names would read from somewhere the
             // person never chose.
-            return fail(QObject::tr("A capture root may not contain \"..\": %1")
-                            .arg(capture.relative));
+            return fail(
+                QObject::tr("A capture root may not contain \"..\": %1").arg(capture.relative));
         }
 
         const QString domainText = object.value(QStringLiteral("domain")).toString();
@@ -326,9 +323,9 @@ bool SelectionCodec::decode(const QByteArray& json, CaptureDocument& document,
     }
     document.packaging.partSize = static_cast<quint64>(
         std::max<qint64>(0, packaging.value(QStringLiteral("partSize")).toInteger(0)));
-    document.packaging.solidBlockSize = static_cast<quint64>(std::max<qint64>(
-        1, packaging.value(QStringLiteral("blockSize"))
-               .toInteger(static_cast<qint64>(format::kDefaultSolidBlockSize))));
+    document.packaging.solidBlockSize = static_cast<quint64>(
+        std::max<qint64>(1, packaging.value(QStringLiteral("blockSize"))
+                                .toInteger(static_cast<qint64>(format::kDefaultSolidBlockSize))));
     document.packaging.workerCount =
         std::max(0, packaging.value(QStringLiteral("workers")).toInt(0));
     document.packaging.syncIntervalBytes = static_cast<quint64>(

@@ -45,6 +45,31 @@ constexpr Resolution kResolutions[] = {
 
 constexpr const char* kPages[] = {"home", "export", "import", "report", "settings"};
 
+/// One screen to measure.
+///
+/// A wizard step is a screen like any other, and the two wizards hold nine of
+/// them between them. Walking only what a page shows on arrival would leave
+/// every one of those unmeasured - which is how the stepper's labels came to
+/// hang off the right of a 1280-wide window without anything noticing.
+struct View {
+    const char* page;
+    const char* wizard;  ///< objectName of the page's root, or nullptr
+    int step;
+};
+
+constexpr View kViews[] = {
+    {"home", nullptr, 0},        {"export", "exportPage", 0}, {"export", "exportPage", 1},
+    {"export", "exportPage", 2}, {"export", "exportPage", 3}, {"export", "exportPage", 4},
+    {"import", "importPage", 0}, {"import", "importPage", 1}, {"import", "importPage", 2},
+    {"import", "importPage", 3}, {"report", nullptr, 0},      {"settings", nullptr, 0},
+};
+
+QString nameOf(const View& view) {
+    return view.wizard == nullptr
+               ? QString::fromLatin1(view.page)
+               : QStringLiteral("%1 step %2").arg(QLatin1String(view.page)).arg(view.step + 1);
+}
+
 /// Sub-pixel positions are ordinary in Qt Quick - a centred item in a
 /// container of odd width sits on a half pixel - and none of the faults this
 /// looks for are half a pixel wide.
@@ -105,6 +130,28 @@ bool cameFromQml(const QQuickItem* item) {
     return qmlContext(item) != nullptr;
 }
 
+/// The item with this objectName, anywhere below `root`.
+///
+/// Not findChild(): a page is created by a Loader, which keeps it without
+/// making itself its QObject parent, so the pages are not children of the
+/// window in the sense findChild means. They are children of it on screen,
+/// which is the tree this walks.
+QQuickItem* findItem(QQuickItem* root, const QString& objectName) {
+    if (root == nullptr) {
+        return nullptr;
+    }
+    if (root->objectName() == objectName) {
+        return root;
+    }
+    const QList<QQuickItem*> children = root->childItems();
+    for (QQuickItem* child : children) {
+        if (QQuickItem* found = findItem(child, objectName); found != nullptr) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
 /// True for a Row, Column, RowLayout, GridLayout and so on - anything whose
 /// job is to place its children so they do not collide. Matched on the type
 /// name because the layout classes are not in a public header this test can
@@ -158,6 +205,9 @@ private slots:
 
 private:
     void showPage(const QString& page);
+
+    /// Shows one screen, including the wizard step when there is one.
+    void showView(const View& view);
     void resizeTo(int width, int height);
     void setScheme(const QString& scheme);
     void setSidebarCollapsed(bool collapsed);
@@ -234,6 +284,29 @@ void LayoutConformanceTest::evaluate(const QString& expression) {
 void LayoutConformanceTest::showPage(const QString& page) {
     evaluate(QStringLiteral("AppController.currentPage = '%1'").arg(page));
     QTest::qWait(80);
+}
+
+void LayoutConformanceTest::showView(const View& view) {
+    showPage(QString::fromLatin1(view.page));
+    if (view.wizard == nullptr) {
+        return;
+    }
+
+    // Set on the page object rather than through the shell's scope: the page
+    // is behind a Loader and its id is not in scope anywhere the expression
+    // could be evaluated. Going straight at the property also skips goTo(),
+    // which is what is wanted - the check for running programs belongs to a
+    // user pressing Continue, not to a measurement.
+    QQuickItem* const wizard = findItem(contentRoot(), QString::fromLatin1(view.wizard));
+    QVERIFY2(wizard != nullptr, view.wizard);
+    QVERIFY2(wizard->setProperty("step", view.step), "the page has no step property");
+    QTest::qWait(80);
+
+    // The step that has just been hidden may have released ListView delegates,
+    // and those are still in the tree, still visible and still the size they
+    // were, until the deferred deletion runs.
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    QTest::qWait(20);
 }
 
 void LayoutConformanceTest::setSidebarCollapsed(bool collapsed) {
@@ -494,14 +567,23 @@ void LayoutConformanceTest::everyPageFitsAtEverySize() {
     setSidebarCollapsed(collapsed);
 
     QStringList problems;
-    for (const char* name : kPages) {
-        const QString page = QString::fromLatin1(name);
-        showPage(page);
+    for (const View& view : kViews) {
+        const QString page = nameOf(view);
+        showView(view);
         checkOverflow(page, problems);
         checkOverlap(page, problems);
         checkTruncation(page, problems);
         checkControlSizes(page, problems);
         checkSidewaysScroll(page, problems);
+    }
+
+    // Both wizards left where a user starting again would find them, so the
+    // next data row does not begin half way through one.
+    for (const char* wizard : {"exportPage", "importPage"}) {
+        if (QQuickItem* const page = findItem(contentRoot(), QString::fromLatin1(wizard));
+            page != nullptr) {
+            page->setProperty("step", 0);
+        }
     }
 
     QVERIFY2(

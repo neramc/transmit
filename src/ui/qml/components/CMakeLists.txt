@@ -9,6 +9,7 @@ qt_add_qml_module(transmit_qml_components
         AppBadge.qml
         AppButton.qml
         AppCard.qml
+        AppCheckBox.qml
         AppCheckRow.qml
         AppCommandPalette.qml
         AppComboBox.qml
@@ -22,6 +23,7 @@ qt_add_qml_module(transmit_qml_components
         AppProgressBar.qml
         AppScrollBar.qml
         AppScrollView.qml
+        AppSearchField.qml
         AppSectionHeader.qml
         AppSelectableCard.qml
         AppSeparator.qml

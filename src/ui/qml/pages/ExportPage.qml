@@ -11,6 +11,11 @@ import Transmit.Theme
 Item {
     id: page
 
+    // How the layout test reaches this page to walk it a step at a time. A
+    // wizard step is a screen like any other, and one that is only ever
+    // measured on its first step is one whose later steps are unmeasured.
+    objectName: "exportPage"
+
     /// Handed down by the shell rather than found through the scope chain, so
     /// moving a page cannot quietly break its bindings.
     required property var reportModel
@@ -47,15 +52,54 @@ Item {
         return domains
     }
 
-    readonly property var stepTitles: [qsTr("What to take"), qsTr("Where to put it"),
-                                       qsTr("Options"), qsTr("Progress")]
+    // How much of each folder comes. Held as the index of a choice rather than
+    // a number so the control and the value cannot drift apart.
+    property int sizeLimitChoice: 0
+    property int ageLimitChoice: 0
+    property string excludedExtensions: ""
+
+    readonly property var sizeLimits: [
+        { bytes: 0,           label: qsTr("No limit") },
+        { bytes: 104857600,   label: qsTr("Skip files over 100 MB") },
+        { bytes: 1073741824,  label: qsTr("Skip files over 1 GB") },
+        { bytes: 4294967296,  label: qsTr("Skip files over 4 GB") },
+        { bytes: 17179869184, label: qsTr("Skip files over 16 GB") }
+    ]
+
+    readonly property var ageLimits: [
+        { days: 0,    label: qsTr("However old") },
+        { days: 30,   label: qsTr("Changed in the last month") },
+        { days: 183,  label: qsTr("Changed in the last six months") },
+        { days: 365,  label: qsTr("Changed in the last year") },
+        { days: 1095, label: qsTr("Changed in the last three years") }
+    ]
+
+    readonly property var stepTitles: [qsTr("What to take"), qsTr("Which programs"),
+                                       qsTr("Where to put it"), qsTr("Options"),
+                                       qsTr("Progress")]
+
+    /// Hands the file limits to the controller. Applied as they are set rather
+    /// than at Start, so the size estimate and the "what should I close first"
+    /// check are answering the question the user has actually asked.
+    function applyScope() {
+        ExportController.setScope(page.sizeLimits[page.sizeLimitChoice].bytes,
+                                  page.ageLimits[page.ageLimitChoice].days,
+                                  page.excludedExtensions)
+    }
 
     function goTo(next) {
+        // The per-application answer goes with the user as they leave the step
+        // that makes it, for the same reason: the check on the next step but
+        // one has to be about the programs actually being carried.
+        if (next > 1) {
+            ExportController.chooseApplications(appCatalog)
+        }
+
         step = next
 
         // The answer goes stale the moment the user closes something, so it is
         // asked afresh each time they arrive at the last step before Start.
-        if (next === 2 && page.includeAppState) {
+        if (next === 3 && page.includeAppState) {
             ExportController.forgetRunningPrograms()
             ExportController.checkForRunningPrograms(page.profileId, page.selectedDomains)
         }
@@ -71,7 +115,12 @@ Item {
         includeAppList  = domains.indexOf("apps") >= 0
     }
 
-    Component.onCompleted: adoptProfileDomains(profileId)
+    Component.onCompleted: {
+        adoptProfileDomains(profileId)
+        appCatalog.refresh()
+    }
+
+    AppCatalogModel { id: appCatalog }
 
     ColumnLayout {
         anchors.fill: parent
@@ -193,6 +242,119 @@ Item {
                         }
                     }
 
+                    AppCard {
+                        Layout.fillWidth: true
+                        implicitHeight: scopeColumn.implicitHeight + Spacing.cardPadding * 2
+
+                        ColumnLayout {
+                            id: scopeColumn
+                            anchors.fill: parent
+                            anchors.margins: Spacing.cardPadding
+                            spacing: Spacing.s12
+
+                            Text {
+                                text: qsTr("How much of each folder?")
+                                color: Colors.textPrimary
+                                font.family: Typography.family
+                                font.pixelSize: Typography.body
+                                font.weight: Typography.semiBold
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                text: qsTr("Left alone, everything in those folders comes. These "
+                                         + "are for the case where it will not fit, or where most "
+                                         + "of it is not worth carrying.")
+                                color: Colors.textSecondary
+                                font.family: Typography.family
+                                font.pixelSize: Typography.caption
+                                wrapMode: Text.WordWrap
+                                lineHeight: Typography.lineHeightNormal
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Spacing.controlGap
+
+                                AppLabelledField {
+                                    Layout.fillWidth: true
+                                    label: qsTr("Large files")
+
+                                    AppComboBox {
+                                        model: page.sizeLimits
+                                        textRole: "label"
+                                        currentIndex: page.sizeLimitChoice
+                                        onActivated: {
+                                            page.sizeLimitChoice = currentIndex
+                                            page.applyScope()
+                                        }
+                                        Accessible.name: qsTr("Skip files larger than")
+                                    }
+                                }
+
+                                AppLabelledField {
+                                    Layout.fillWidth: true
+                                    label: qsTr("Old files")
+
+                                    AppComboBox {
+                                        model: page.ageLimits
+                                        textRole: "label"
+                                        currentIndex: page.ageLimitChoice
+                                        onActivated: {
+                                            page.ageLimitChoice = currentIndex
+                                            page.applyScope()
+                                        }
+                                        Accessible.name: qsTr("Only files changed recently")
+                                    }
+                                }
+                            }
+
+                            AppLabelledField {
+                                Layout.fillWidth: true
+                                label: qsTr("Kinds of file to leave behind")
+                                helperText: qsTr("Separated however you like. Disc images and "
+                                                + "virtual machines are the usual candidates - "
+                                                + "they are large and you can make them again.")
+
+                                AppTextField {
+                                    placeholderText: qsTr("for example: iso, vmdk, dmg")
+                                    text: page.excludedExtensions
+                                    onTextChanged: {
+                                        page.excludedExtensions = text
+                                        page.applyScope()
+                                    }
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Spacing.controlGap
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: ExportController.scopeSummary
+                                    color: Colors.textSecondary
+                                    font.family: Typography.family
+                                    font.pixelSize: Typography.caption
+                                    wrapMode: Text.WordWrap
+                                }
+
+                                AppButton {
+                                    text: qsTr("Reset")
+                                    variant: "ghost"
+                                    visible: page.sizeLimitChoice !== 0 || page.ageLimitChoice !== 0
+                                             || page.excludedExtensions !== ""
+                                    onClicked: {
+                                        page.sizeLimitChoice = 0
+                                        page.ageLimitChoice = 0
+                                        page.excludedExtensions = ""
+                                        ExportController.clearScope()
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     AppInlineMessage {
                         visible: page.includeSecrets
                         tone: "warning"
@@ -205,6 +367,202 @@ Item {
             }
 
             // ---------------------------------------------------- step 2
+            ColumnLayout {
+                spacing: Spacing.sectionGap
+
+                AppSectionHeader {
+                    title: qsTr("Which programs should bring their data?")
+                    subtitle: qsTr("A program marked \"data travels\" keeps its settings and its "
+                                 + "own files: Transmit knows where that program puts them on "
+                                 + "both systems, and corrects what is written inside. The rest "
+                                 + "are still written down, so the restore can offer to install "
+                                 + "them again - but there is nothing of theirs to carry.")
+                }
+
+                AppInlineMessage {
+                    Layout.fillWidth: true
+                    visible: !page.includeAppState
+                    tone: "info"
+                    title: qsTr("Program data is not being taken")
+                    body: qsTr("You turned off \"Program data and settings\" on the previous "
+                             + "step, so nothing here will be carried. The list of what you had "
+                             + "installed is still recorded.")
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Spacing.controlGap
+                    enabled: page.includeAppState
+
+                    AppSearchField {
+                        id: appSearch
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: Sizing.maxTextWidth
+                        placeholderText: qsTr("Search programs")
+                        onTextChanged: appCatalog.filterText = text
+                    }
+
+                    AppCheckBox {
+                        text: qsTr("Only the ones whose data can travel")
+                        checked: appCatalog.carriesDataOnly
+                        onToggled: appCatalog.carriesDataOnly = checked
+                    }
+                }
+
+                ListView {
+                    id: appList
+                    objectName: "applicationList"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    spacing: Spacing.s4
+                    enabled: page.includeAppState
+                    opacity: page.includeAppState ? 1.0 : 0.5
+                    model: appCatalog
+                    ScrollBar.vertical: AppScrollBar {}
+
+                    delegate: AppCard {
+                        id: appRow
+
+                        required property int index
+                        required property string appId
+                        required property string displayName
+                        required property bool carriesData
+                        required property bool installed
+                        required property string gradeName
+                        required property string stateSummary
+                        required property bool selected
+
+                        width: appList.width
+                        implicitHeight: appRowLayout.implicitHeight + Spacing.s16 * 2
+                        interactive: appRow.carriesData
+                        onClicked: {
+                            if (appRow.carriesData) {
+                                appCatalog.setSelected(appRow.index, !appRow.selected)
+                            }
+                        }
+
+                        RowLayout {
+                            id: appRowLayout
+                            anchors.fill: parent
+                            anchors.margins: Spacing.s16
+                            spacing: Spacing.controlGap
+
+                            AppCheckBox {
+                                checked: appRow.selected
+                                // Nothing of theirs can travel, so a tick would
+                                // be promising something Transmit cannot do.
+                                enabled: appRow.carriesData
+                                Accessible.name: qsTr("Carry the data of %1").arg(appRow.displayName)
+                                onToggled: appCatalog.setSelected(appRow.index, checked)
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: Spacing.s4
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: appRow.displayName
+                                    color: Colors.textPrimary
+                                    font.family: Typography.family
+                                    font.pixelSize: Typography.body
+                                    elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: appRow.carriesData
+                                          ? qsTr("Keeps: %1").arg(appRow.stateSummary)
+                                          : appRow.installed
+                                            ? qsTr("Installed - recorded for the reinstall script")
+                                            : qsTr("Found by its settings folder")
+                                    color: Colors.textSecondary
+                                    font.family: Typography.family
+                                    font.pixelSize: Typography.caption
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            AppBadge {
+                                text: appRow.carriesData ? qsTr("Data travels") : qsTr("List only")
+                                tone: appRow.carriesData ? "success" : "neutral"
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+
+                            AppBadge {
+                                text: appRow.gradeName
+                                visible: appRow.carriesData
+                                tone: "info"
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+                        }
+                    }
+
+                    AppSpinner {
+                        anchors.centerIn: parent
+                        running: appCatalog.loading
+                        size: Sizing.iconSizeLarge
+                    }
+
+                    AppEmptyState {
+                        anchors.centerIn: parent
+                        width: parent.width * 0.7
+                        visible: appList.count === 0 && !appCatalog.loading
+                        glyph: "apps"
+                        title: appCatalog.totalCount === 0
+                               ? qsTr("No programs recognised")
+                               : qsTr("Nothing matches that")
+                        body: appCatalog.totalCount === 0
+                              ? qsTr("Transmit could not match anything on this computer to its "
+                                   + "catalogue. Your files and desktop settings still travel.")
+                              : qsTr("Try a shorter search, or show the programs whose data "
+                                   + "cannot travel.")
+                        actionText: appCatalog.totalCount === 0
+                                    ? qsTr("Look again") : qsTr("Show everything")
+                        onActionTriggered: {
+                            if (appCatalog.totalCount === 0) {
+                                appCatalog.refresh()
+                            } else {
+                                appSearch.text = ""
+                                appCatalog.carriesDataOnly = false
+                            }
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Spacing.controlGap
+                    enabled: page.includeAppState
+
+                    AppButton {
+                        text: qsTr("Select those that can travel")
+                        onClicked: appCatalog.selectThoseThatCarryData()
+                    }
+
+                    AppButton {
+                        text: qsTr("Select none")
+                        variant: "ghost"
+                        onClicked: appCatalog.selectAll(false)
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Text {
+                        text: qsTr("%1 of %2 shown, %3 chosen")
+                              .arg(appList.count).arg(appCatalog.totalCount)
+                              .arg(appCatalog.selectedCount)
+                        color: Colors.textSecondary
+                        font.family: Typography.family
+                        font.pixelSize: Typography.caption
+                        elide: Text.ElideRight
+                        Layout.maximumWidth: implicitWidth
+                    }
+                }
+            }
+
+            // ---------------------------------------------------- step 3
             ColumnLayout {
                 spacing: Spacing.lg
 
@@ -289,7 +647,7 @@ Item {
                 }
             }
 
-            // ---------------------------------------------------- step 3
+            // ---------------------------------------------------- step 4
             AppScrollView {
                 id: optionScroller
 
@@ -486,7 +844,7 @@ Item {
                 }
             }
 
-            // ---------------------------------------------------- step 4
+            // ---------------------------------------------------- step 5
             ColumnLayout {
                 spacing: Spacing.lg
 
@@ -596,7 +954,7 @@ Item {
                 text: qsTr("Back")
                 variant: "ghost"
                 visible: page.step > 0 && !ExportController.running
-                          && !(page.step === 3 && ExportController.finished)
+                          && !(page.step === 4 && ExportController.finished)
                 onClicked: page.goTo(page.step - 1)
             }
 
@@ -620,18 +978,18 @@ Item {
             AppButton {
                 text: qsTr("Continue")
                 variant: "primary"
-                visible: page.step < 2
-                enabled: page.step !== 1 || page.destinationFolder !== ""
+                visible: page.step < 3
+                enabled: page.step !== 2 || page.destinationFolder !== ""
                 onClicked: page.goTo(page.step + 1)
             }
 
             AppButton {
                 text: qsTr("Start")
                 variant: "primary"
-                visible: page.step === 2
+                visible: page.step === 3
                 enabled: page.passphraseValid
                 onClicked: {
-                    page.goTo(3)
+                    page.goTo(4)
                     ExportController.start(page.profileId, page.destinationFolder, page.preset,
                                            page.encryptionOn ? page.passphrase : "",
                                            page.destinationRequiresSplit, page.label,
@@ -641,7 +999,7 @@ Item {
 
             AppButton {
                 text: qsTr("Show the drive")
-                visible: page.step === 3 && ExportController.finished
+                visible: page.step === 4 && ExportController.finished
                          && ExportController.succeeded
                 onClicked: AppController.revealInFileManager(page.destinationFolder)
             }
@@ -649,7 +1007,7 @@ Item {
             AppButton {
                 text: qsTr("See the full report")
                 variant: "primary"
-                visible: page.step === 3 && ExportController.finished
+                visible: page.step === 4 && ExportController.finished
                 onClicked: {
                     ExportController.populateReport(page.reportModel)
                     AppController.currentPage = "report"

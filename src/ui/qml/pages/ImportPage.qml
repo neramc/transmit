@@ -11,6 +11,11 @@ import Transmit.Theme
 Item {
     id: page
 
+    // How the layout test reaches this page to walk it a step at a time. A
+    // wizard step is a screen like any other, and one that is only ever
+    // measured on its first step is one whose later steps are unmeasured.
+    objectName: "importPage"
+
     /// Handed down by the shell rather than found through the scope chain, so
     /// moving a page cannot quietly break its bindings.
     required property var reportModel

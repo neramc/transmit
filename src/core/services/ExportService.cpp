@@ -109,7 +109,13 @@ QList<platform::RunningApp> ExportService::applicationsToClose(
 
     QStringList quiesce;
     for (const MatchedApp& match : matched) {
-        quiesce += match.recipe.quiesceProcesses;
+        // Only the applications whose data is actually being taken. Asking
+        // somebody to close a browser whose profile was deselected is asking
+        // them to stop work for nothing, and it teaches them to ignore the
+        // list - including the entries that mattered.
+        if (selection.capturesStateOf(match.recipe.id)) {
+            quiesce += match.recipe.quiesceProcesses;
+        }
     }
     return platform_.runningApplications(quiesce);
 }

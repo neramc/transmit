@@ -34,10 +34,10 @@ void SelectionCodecTest::everyFieldSurvivesTheRoundTrip() {
     original.selection.scope.minimumFileSize = 16;
     original.selection.scope.includeExtensions = {QStringLiteral("txt"), QStringLiteral("md")};
     original.selection.scope.excludeExtensions = {QStringLiteral("iso")};
-    original.selection.scope.modifiedSince = QDateTime::fromString(
-        QStringLiteral("2024-01-01T00:00:00"), Qt::ISODate);
-    original.selection.scope.modifiedBefore = QDateTime::fromString(
-        QStringLiteral("2026-01-01T00:00:00"), Qt::ISODate);
+    original.selection.scope.modifiedSince =
+        QDateTime::fromString(QStringLiteral("2024-01-01T00:00:00"), Qt::ISODate);
+    original.selection.scope.modifiedBefore =
+        QDateTime::fromString(QStringLiteral("2026-01-01T00:00:00"), Qt::ISODate);
     original.selection.scope.excludePatterns = {QStringLiteral("**/node_modules/**")};
     original.selection.scope.followSymlinks = true;
     original.selection.scope.includeHidden = false;
@@ -146,9 +146,9 @@ void SelectionCodecTest::theSameSelectionAlwaysProducesTheSameBytes() {
     // useless for telling two captures apart.
     core::CaptureDocument document;
     document.selection.domains = {static_cast<int>(format::DomainId::UserData)};
-    document.selection.scope.includeExtensions = {
-        QStringLiteral("txt"), QStringLiteral("md"),  QStringLiteral("odt"),
-        QStringLiteral("pdf"), QStringLiteral("rtf"), QStringLiteral("doc")};
+    document.selection.scope.includeExtensions = {QStringLiteral("txt"), QStringLiteral("md"),
+                                                  QStringLiteral("odt"), QStringLiteral("pdf"),
+                                                  QStringLiteral("rtf"), QStringLiteral("doc")};
 
     const QByteArray first = core::SelectionCodec::encode(document);
     for (int attempt = 0; attempt < 20; ++attempt) {
@@ -195,10 +195,9 @@ void SelectionCodecTest::nonsenseIsReportedRatherThanGuessedAt() {
     QVERIFY(!core::SelectionCodec::decode(QByteArray(R"({"domains": []})"), document, &error));
     QVERIFY(!error.isEmpty());
 
-    QVERIFY(!core::SelectionCodec::decode(
-        QByteArray(R"({"domains": ["userdata"],
+    QVERIFY(!core::SelectionCodec::decode(QByteArray(R"({"domains": ["userdata"],
                        "roots": [{"token": "{NOWHERE}", "domain": "userdata"}]})"),
-        document, &error));
+                                          document, &error));
     QVERIFY2(error.contains(QStringLiteral("NOWHERE")), qPrintable(error));
 
     QVERIFY(!core::SelectionCodec::decode(

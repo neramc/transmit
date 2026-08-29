@@ -182,6 +182,19 @@ Canvas {
             poly([3, 19, 3, 5.5, 9.5, 5.5, 11.5, 8.5, 21, 8.5, 21, 19], true);
             break;
 
+        case "search":
+            circle(10.5, 10.5, 6.5, false);
+            line(15.2, 15.2, 20, 20);
+            break;
+
+        // A grid of tiles: the list of installed programs.
+        case "apps":
+            box(3.5, 3.5, 7, 7, 1.5);
+            box(13.5, 3.5, 7, 7, 1.5);
+            box(3.5, 13.5, 7, 7, 1.5);
+            box(13.5, 13.5, 7, 7, 1.5);
+            break;
+
         default:
             break;
         }
