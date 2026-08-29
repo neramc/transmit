@@ -94,6 +94,10 @@ bool archiveIsEncrypted(const QString& archivePath) {
 /// the prompt should look like to whatever ran us.
 constexpr int kInterruptedExitCode = 130;
 
+/// Some of it worked and some did not. Distinct from 1, which means the
+/// whole command failed and the machine was not changed.
+constexpr int kPartialExitCode = 2;
+
 void printProgress(const core::ProgressUpdate& update) {
     static qint64 lastLength = 0;
     QString line = update.stage;
@@ -364,7 +368,14 @@ int runImport(QCommandLineParser& parser, const QString& archivePath,
             }
             return kInterruptedExitCode;
         }
-        return reportError(report.errorMessage);
+        // A run where some files landed and some did not is neither a
+        // success nor a plain error: the machine has been changed. Say so
+        // and carry on printing the summary, so the caller can see what
+        // did work and where the undo point is.
+        if (!report.partial()) {
+            return reportError(report.errorMessage);
+        }
+        err() << QStringLiteral("warning: ") << report.errorMessage << Qt::endl;
     }
 
     out() << (request.dryRun ? QStringLiteral("Would restore %1 items, skipping %2")
@@ -372,6 +383,11 @@ int runImport(QCommandLineParser& parser, const QString& archivePath,
                  .arg(report.filesRestored)
                  .arg(report.filesSkipped)
           << Qt::endl;
+    if (report.filesFailed > 0) {
+        out() << QStringLiteral("  %1 could not be restored - see the notes below")
+                     .arg(report.filesFailed)
+              << Qt::endl;
+    }
     if (!request.dryRun) {
         out() << QStringLiteral("  %1 written").arg(core::formatBytes(report.bytesWritten))
               << Qt::endl;
@@ -399,7 +415,10 @@ int runImport(QCommandLineParser& parser, const QString& archivePath,
         }
     }
     printNotes(report.notes);
-    return 0;
+
+    // 0 all of it, 2 some of it, 1 none of it. A script that only checks
+    // for zero should not be told a half-restored machine was fine.
+    return report.filesFailed > 0 ? kPartialExitCode : 0;
 }
 
 int runVerify(const QString& archivePath, const QString& passphrase) {

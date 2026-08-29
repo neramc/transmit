@@ -28,6 +28,7 @@ private slots:
     void aRestoreOffersAnUndoPoint();
     void keepingTheRestoreClearsUpAfterItself();
     void undoingPutsTheMachineBack();
+    void aRestoreThatCouldNotWriteSaysSoAndStaysUndoable();
 
 private:
     /// Captures a small home directory and returns the archive path.
@@ -180,4 +181,32 @@ void RestoreUndoTest::undoingPutsTheMachineBack() {
 }
 
 QTEST_MAIN(RestoreUndoTest)
+/// A restore that could not write reported success and exit 0, which made
+/// the most common real failure - a destination that turns out not to be
+/// writable - invisible to every caller. Worse, undo was gated on that
+/// same flag, so a half-changed machine had the undo button switched off.
+void RestoreUndoTest::aRestoreThatCouldNotWriteSaysSoAndStaysUndoable() {
+    const QString archive = captureSomething();
+    if (archive.isEmpty()) {
+        QSKIP("this platform does not resolve its known folders from HOME");
+    }
+
+    // The destination is an ordinary file, so every attempt to create a
+    // folder under it fails. Permission bits would have been the obvious
+    // way to arrange this and root ignores them; a file is a file for
+    // everybody.
+    const QString destination = workspace_->filePath(QStringLiteral("not-a-folder"));
+    QFile blocker(destination);
+    QVERIFY(blocker.open(QIODevice::WriteOnly));
+    blocker.write("in the way\n");
+    blocker.close();
+
+    app::ImportController controller;
+    restoreInto(controller, archive, destination);
+
+    QVERIFY2(controller.isFinished(), "the restore should have finished rather than hung");
+    QVERIFY2(!controller.succeeded(), "a restore that wrote nothing must not report success");
+    QVERIFY2(!controller.errorMessage().isEmpty(), "it has to say what went wrong");
+}
+
 #include "RestoreUndoTest.moc"

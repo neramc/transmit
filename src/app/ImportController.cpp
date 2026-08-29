@@ -62,7 +62,10 @@ ImportController::~ImportController() {
 }
 
 bool ImportController::canUndo() const {
-    return !undoUsed_ && !undoing_ && finished_ && report_.succeeded && !wasDryRun_ &&
+    // Deliberately not gated on success. A restore that half worked is
+    // exactly when somebody wants the machine put back, and gating this
+    // on report_.succeeded took undo away in the one case it is for.
+    return !undoUsed_ && !undoing_ && finished_ && !wasDryRun_ &&
            !report_.rollbackArchivePath.isEmpty();
 }
 
@@ -107,15 +110,26 @@ void ImportController::handleUndoFinished() {
         return;
     }
 
-    // Used, whatever the individual errors were: the archive has been applied
-    // and running it a second time would not improve matters.
     undoUsed_ = true;
-    forgetUndoPoint();
 
     undoSummary_ = tr("Put back %n file(s)", nullptr, result->filesRestored) +
                    tr(" and removed %n that the restore had added.", nullptr, result->filesRemoved);
     for (const QString& error : result->errors) {
         undoSummary_ += QLatin1Char('\n') + error;
+    }
+
+    if (result->errors.isEmpty()) {
+        forgetUndoPoint();
+    } else {
+        // The archive holds the only remaining copy of whatever could not
+        // be put back. Deleting it here - which is what used to happen,
+        // errors or not - threw those originals away for good, and a
+        // locked file is the expected failure, not a rare one.
+        undoSummary_ +=
+            QLatin1Char('\n') +
+            tr("The undo point is kept at %1. Close whatever is holding those files and run "
+               "\"transmit-cli rollback\" on it again.")
+                .arg(report_.rollbackArchivePath);
     }
 
     qCInfo(logRestore) << "undo restored" << result->filesRestored << "and removed"

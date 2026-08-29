@@ -19,10 +19,20 @@ namespace transmit::core {
 /// Undoing then means putting the first set back and deleting the second.
 class RollbackWriter {
 public:
+    struct CaptureResult {
+        /// Empty when nothing would be overwritten and there is nothing
+        /// to undo.
+        QString archivePath;
+
+        /// Paths that exist and could not be read in full, so they are
+        /// not in the archive. The restore must leave these alone: it
+        /// would be replacing something it cannot put back.
+        QStringList unbackedUp;
+    };
+
     /// `targets` is every path the restore intends to write.
-    /// Returns the archive path, or an empty string when nothing would change.
-    [[nodiscard]] static format::Result<QString> capture(const QStringList& targets,
-                                                         const QString& directory);
+    [[nodiscard]] static format::Result<CaptureResult> capture(const QStringList& targets,
+                                                               const QString& directory);
 
     /// Reverses a restore from the archive `capture` produced.
     struct UndoResult {

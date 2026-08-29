@@ -28,8 +28,8 @@
 #include "core/services/ImportService.h"
 #include "core/services/ProfileService.h"
 #include "core/utils/Conversions.h"
-#include "format/hash/Blake2b.h"
 #include "format/Serialization.h"
+#include "format/hash/Blake2b.h"
 #include "platform/PlatformService.h"
 
 namespace {
@@ -129,8 +129,8 @@ int writeCorpus(const QString& directory, const QString& profileName, quint32 se
         written += static_cast<quint64>(content.size());
     }
 
-    out() << "wrote " << match->fileCount << " files, "
-          << core::formatBytes(written) << " into " << directory << Qt::endl;
+    out() << "wrote " << match->fileCount << " files, " << core::formatBytes(written) << " into "
+          << directory << Qt::endl;
     return 0;
 }
 
@@ -171,12 +171,12 @@ void report(const std::vector<RunResult>& results, const QString& jsonPath) {
         out() << QStringLiteral("%1  %2 ms  %3")
                      .arg(result.name, -28)
                      .arg(median(result.milliseconds), 9, 'f', 1)
-                     .arg(result.bytesIn > 0
-                              ? QStringLiteral("%1 MiB/s").arg(
-                                    static_cast<double>(result.bytesIn) /
-                                        (median(result.milliseconds) / 1000.0) / (1024.0 * 1024.0),
-                                    0, 'f', 1)
-                              : QString())
+                     .arg(result.bytesIn > 0 ? QStringLiteral("%1 MiB/s")
+                                                   .arg(static_cast<double>(result.bytesIn) /
+                                                            (median(result.milliseconds) / 1000.0) /
+                                                            (1024.0 * 1024.0),
+                                                        0, 'f', 1)
+                                             : QString())
               << Qt::endl;
     }
 
@@ -199,8 +199,8 @@ void report(const std::vector<RunResult>& results, const QString& jsonPath) {
 
 // ------------------------------------------------------------ the runs
 
-int runCapture(const QString& corpus, const QString& archive, const QString& presetName,
-               int repeat, const QString& jsonPath) {
+int runCapture(const QString& corpus, const QString& archive, const QString& presetName, int repeat,
+               const QString& jsonPath) {
     const auto preset = format::presetFromName(core::toUtf8(presetName));
     if (!preset) {
         out() << "unknown preset: " << presetName << Qt::endl;
@@ -219,7 +219,8 @@ int runCapture(const QString& corpus, const QString& archive, const QString& pre
 
         core::ExportRequest request;
         request.destinationPath = archive;
-        request.selection = core::ProfileService::profileById(QStringLiteral("documents")).selection;
+        request.selection =
+            core::ProfileService::profileById(QStringLiteral("documents")).selection;
         request.preset = *preset;
 
         core::CancelToken token;
@@ -318,9 +319,8 @@ int main(int argc, char** argv) {
 
     const QCommandLineOption outOption(QStringLiteral("out"), QStringLiteral("Where to write."),
                                        QStringLiteral("path"));
-    const QCommandLineOption corpusOption(QStringLiteral("corpus"),
-                                          QStringLiteral("Corpus directory."),
-                                          QStringLiteral("path"));
+    const QCommandLineOption corpusOption(
+        QStringLiteral("corpus"), QStringLiteral("Corpus directory."), QStringLiteral("path"));
     const QCommandLineOption archiveOption(QStringLiteral("archive"), QStringLiteral("Archive."),
                                            QStringLiteral("path"));
     const QCommandLineOption intoOption(QStringLiteral("into"), QStringLiteral("Restore into."),

@@ -190,9 +190,24 @@ struct ImportReport {
     QString errorMessage;
 
     quint64 filesRestored = 0;
+
+    /// Left alone on purpose: a conflict policy said so, or the system
+    /// cannot represent the item at all. Not a fault.
     quint64 filesSkipped = 0;
+
+    /// Tried and could not be done: unreadable from the archive,
+    /// unwritable to disk, a folder that could not be created. Every one
+    /// of these is a file the user expected and has not got.
+    quint64 filesFailed = 0;
+
     quint64 bytesWritten = 0;
     qint64 elapsedMilliseconds = 0;
+
+    /// True when some files were restored and some failed. The run is
+    /// neither a success to report nor an error to hand back, and the
+    /// difference matters most to the undo point: a half-restored
+    /// machine is exactly when somebody wants to put it back.
+    [[nodiscard]] bool partial() const noexcept { return filesFailed > 0 && filesRestored > 0; }
 
     QString rollbackArchivePath;
 

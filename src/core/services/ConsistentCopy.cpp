@@ -4,6 +4,8 @@
 #include <QFileInfo>
 #include <QTemporaryDir>
 
+#include <string>
+
 #include <sqlite3.h>
 
 #include "core/utils/Conversions.h"
@@ -122,7 +124,22 @@ format::Result<QByteArray> readFile(const QString& path, quint64 expectedSize) {
         return format::makeError(format::ErrorCode::IoError, "could not read '", toUtf8(path),
                                  "': ", toUtf8(file.errorString()));
     }
-    Q_UNUSED(expectedSize);
+
+    // The size the scan saw, checked rather than ignored.
+    //
+    // A file that is smaller than it was is the case that matters: the
+    // archive would hold the truncated bytes with a hash that matches
+    // them, and nothing anywhere would say the file had been cut short.
+    // Growing is ordinary - a log, a database - and only worth noting.
+    if (expectedSize > 0) {
+        const auto actual = static_cast<quint64>(content.size());
+        if (actual < expectedSize) {
+            return format::makeError(format::ErrorCode::IoError, "'", toUtf8(path), "' was ",
+                                     std::to_string(expectedSize), " bytes when it was found and ",
+                                     std::to_string(actual),
+                                     " when it was read; it is being written to right now");
+        }
+    }
     return content;
 }
 

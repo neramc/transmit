@@ -6,6 +6,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QSaveFile>
+#include <QSet>
 #include <QTemporaryDir>
 
 #include <optional>
@@ -397,6 +398,10 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
         totalBytes += entry->size;
     }
 
+    // Paths the undo point does not cover, so the write loop must not
+    // touch them.
+    QSet<QString> unbackedUp;
+
     if (request.createRollback && !request.dryRun) {
         QStringList intended;
         intended.reserve(ordered.size());
@@ -421,7 +426,21 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
 
         auto rollback = RollbackWriter::capture(intended, directory);
         if (rollback) {
-            report.rollbackArchivePath = *rollback;
+            report.rollbackArchivePath = rollback->archivePath;
+
+            // A file that could not be read in full is not in the undo
+            // point, so restoring over it would replace something that
+            // cannot be put back. Left alone instead, and said so.
+            for (const QString& path : rollback->unbackedUp) {
+                unbackedUp.insert(path);
+                report.notes.push_back(ContinuityNote{
+                    ContinuityGrade::Manual, DomainId::Unknown, path,
+                    QCoreApplication::translate(
+                        "Import",
+                        "This file could not be read in full, so it could not be saved for "
+                        "undo. It was left as it is rather than replaced.")});
+            }
+
             if (!report.rollbackArchivePath.isEmpty()) {
                 report.notes.push_back(ContinuityNote{
                     ContinuityGrade::Full, DomainId::Unknown,
@@ -466,7 +485,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
             report.notes.push_back(ContinuityNote{ContinuityGrade::Manual, entry.domain,
                                                   fromUtf8(entry.path.toDisplayString()),
                                                   describeError(resolved.error())});
-            ++report.filesSkipped;
+            ++report.filesFailed;
             continue;
         }
 
@@ -483,6 +502,17 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
 
         // ------------------------------------------------ conflicts
         const bool exists = QFileInfo::exists(targetPath);
+        // Nothing may overwrite a file the undo point could not save.
+        if (exists && unbackedUp.contains(targetPath)) {
+            item.skipped = true;
+            item.grade = ContinuityGrade::Manual;
+            item.note = QCoreApplication::translate(
+                "Import", "Left alone: it could not be saved for undo first.");
+            ++report.filesSkipped;
+            report.items.push_back(item);
+            continue;
+        }
+
         if (exists && entry.type != format::EntryType::Directory) {
             switch (request.conflictPolicy) {
                 case ConflictPolicy::Skip:
@@ -532,7 +562,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                         ContinuityNote{ContinuityGrade::Manual, entry.domain, targetPath,
                                        QCoreApplication::translate(
                                            "Import", "This folder could not be created.")});
-                    ++report.filesSkipped;
+                    ++report.filesFailed;
                     continue;
                 }
                 applyMetadata(targetPath, entry, targetOs);
@@ -581,7 +611,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                         ContinuityNote{ContinuityGrade::Manual, entry.domain, targetPath,
                                        QCoreApplication::translate(
                                            "Import", "This symbolic link could not be created.")});
-                    ++report.filesSkipped;
+                    ++report.filesFailed;
                     continue;
                 }
                 break;
@@ -595,7 +625,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                         ContinuityGrade::Manual, entry.domain, item.sourcePath,
                         QCoreApplication::translate("Import", "Could not be read back: %1")
                             .arg(describeError(content.error()))});
-                    ++report.filesSkipped;
+                    ++report.filesFailed;
                     continue;
                 }
 
@@ -605,7 +635,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                         ContinuityGrade::Manual, entry.domain, targetPath,
                         QCoreApplication::translate("Import", "Could not be written: %1")
                             .arg(error)});
-                    ++report.filesSkipped;
+                    ++report.filesFailed;
                     continue;
                 }
                 applyMetadata(targetPath, entry, targetOs);
@@ -793,11 +823,22 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
         }
     }
 
-    report.succeeded = true;
+    // Not unconditional. A restore where every file failed used to report
+    // success and exit 0, which made the most common real failure -
+    // somewhere unwritable, a stick pulled half way - invisible to every
+    // caller.
+    report.succeeded = report.filesFailed == 0;
+    if (!report.succeeded) {
+        report.errorMessage =
+            QCoreApplication::translate("Import", "%n file(s) could not be restored.", nullptr,
+                                        static_cast<int>(report.filesFailed));
+    }
     report.elapsedMilliseconds = timer.elapsed();
+
     qCInfo(logRestore) << "restored" << report.filesRestored << "items,"
                        << formatBytes(report.bytesWritten) << "in" << report.elapsedMilliseconds
-                       << "ms";
+                       << "ms," << report.filesFailed << "failed," << report.filesSkipped
+                       << "skipped";
     return report;
 }
 

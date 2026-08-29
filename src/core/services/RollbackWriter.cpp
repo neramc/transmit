@@ -53,8 +53,9 @@ QStringList decodeCreatedPaths(format::ByteView data) {
 
 }  // namespace
 
-format::Result<QString> RollbackWriter::capture(const QStringList& targets,
-                                                const QString& directory) {
+format::Result<RollbackWriter::CaptureResult> RollbackWriter::capture(const QStringList& targets,
+                                                                      const QString& directory) {
+    CaptureResult result;
     QStringList existing;
     QStringList created;
 
@@ -69,7 +70,7 @@ format::Result<QString> RollbackWriter::capture(const QStringList& targets,
     }
 
     if (existing.isEmpty() && created.isEmpty()) {
-        return QString();
+        return result;
     }
 
     const QString rollbackDirectory = QDir(directory).filePath(QLatin1String(kDirectoryName));
@@ -117,6 +118,19 @@ format::Result<QString> RollbackWriter::capture(const QStringList& targets,
         }
         const QByteArray content = file.readAll();
 
+        // A short read here is the worst failure in the program. The
+        // truncated bytes would be written into the undo archive with a
+        // hash that matches them, and undoing would then overwrite an
+        // intact file with the fragment. Refuse to back it up at all;
+        // the caller downgrades those paths so the restore leaves them
+        // alone rather than replacing something it cannot put back.
+        const qint64 onDisk = QFileInfo(path).size();
+        if (file.error() != QFileDevice::NoError || content.size() != onDisk) {
+            qCWarning(logRestore) << "could not read all of" << path << "- not backing it up";
+            result.unbackedUp.push_back(path);
+            continue;
+        }
+
         format::ManifestEntry entry;
         entry.id = nextId++;
         entry.domain = format::DomainId::UserData;
@@ -160,7 +174,8 @@ format::Result<QString> RollbackWriter::capture(const QStringList& targets,
 
     qCInfo(logRestore) << "wrote an undo point covering" << manifest.entries.size()
                        << "existing files and" << created.size() << "that will be created";
-    return archivePath;
+    result.archivePath = archivePath;
+    return result;
 }
 
 namespace {
