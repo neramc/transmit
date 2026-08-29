@@ -22,7 +22,12 @@ struct KdfParams {
     std::uint32_t parallelism = 1;
 
     /// Fresh parameters with a random salt.
-    static KdfParams generate();
+    ///
+    /// Fails rather than returning a salt it could not fill. An all-zero salt
+    /// gives every archive written on the machine the same key for the same
+    /// passphrase, which turns the encryption into an obfuscation, and the
+    /// only place that is visible is here.
+    static Result<KdfParams> generate();
 };
 
 /// AES-256-GCM over whole blocks.

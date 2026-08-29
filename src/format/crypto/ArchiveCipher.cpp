@@ -48,18 +48,29 @@ Status randomBytes(MutableByteView out) {
     }
     return makeError(ErrorCode::Internal, "the system random number generator failed");
 #else
-    std::random_device device;
-    std::uniform_int_distribution<unsigned int> distribution(0, 255);
-    for (Byte& b : out) {
-        b = static_cast<Byte>(distribution(device));
-    }
-    return ok();
+    // std::random_device is allowed to be a deterministic sequence, and on at
+    // least one mainstream toolchain it is. That is fine for a test fixture and
+    // useless for a key, so a build without OpenSSL does not get to pretend it
+    // can encrypt - it refuses instead, in the one place that would otherwise
+    // hand out a predictable salt.
+    (void)out;
+    return makeError(ErrorCode::EncryptionUnavailable,
+                     "this build of Transmit has no source of cryptographic randomness");
 #endif
 }
 
-KdfParams KdfParams::generate() {
+Result<KdfParams> KdfParams::generate() {
     KdfParams params;
-    (void)randomBytes(params.salt);
+    TRANSMIT_CHECK(randomBytes(params.salt));
+
+    // Belt and braces. A generator that reports success and hands back zeroes
+    // has been shipped more than once - in virtual machines without an entropy
+    // source, and in a few hardware RNG drivers - and the cost of noticing here
+    // is one comparison against an outcome whose real probability is 2^-128.
+    if (std::all_of(params.salt.begin(), params.salt.end(), [](Byte b) { return b == Byte{0}; })) {
+        return makeError(ErrorCode::Internal,
+                         "the system random number generator returned nothing but zeroes");
+    }
     return params;
 }
 

@@ -38,6 +38,8 @@ private slots:
     void aRestoreCanBeUndone();
     void settingsOfAnUnknownProgramStillTravel();
     void overlappingRootsCaptureAFileOnlyOnce();
+    void foldersAreRestoredBeforeWhatGoesInsideThem();
+    void aFolderThatArrivesReadOnlyStillGetsItsContents();
     void cleanupTestCase();
 
 private:
@@ -629,6 +631,115 @@ void ContinuityRoundTripTest::overlappingRootsCaptureAFileOnlyOnce() {
         }
     }
     QCOMPARE(result.fileCount, files);
+}
+
+void ContinuityRoundTripTest::foldersAreRestoredBeforeWhatGoesInsideThem() {
+    core::ExportService exporter(*platform_);
+    core::CancelToken token;
+
+    core::ExportRequest request;
+    request.destinationPath = archivePath("order.txa");
+    request.selection = documentsSelection();
+    request.preset = format::CompressionPreset::Fast;
+
+    const core::ExportReport exported = exporter.run(request, token);
+    QVERIFY2(exported.succeeded, qPrintable(exported.errorMessage));
+
+    core::ImportService importer(*platform_);
+    core::ImportRequest restore;
+    restore.archivePath = request.destinationPath;
+    restore.destinationOverride = workspace_.filePath("restored-order");
+
+    const core::ImportReport imported = importer.run(restore, token);
+    QVERIFY2(imported.succeeded, qPrintable(imported.errorMessage));
+
+    // The sort used to be on the raw enum, which runs File, Directory,
+    // Symlink - so every file was written into a folder that did not exist
+    // yet and only mkpath saved it. Nothing observable broke, which is why it
+    // survived; this is the assertion that would have caught it.
+    QSet<QString> foldersSeen;
+    bool sawAFile = false;
+    for (const core::RestoredItem& item : imported.items) {
+        const QFileInfo info(item.targetPath);
+        if (QDir(item.targetPath).exists() && !info.isSymLink()) {
+            QVERIFY2(
+                !sawAFile,
+                qPrintable(QStringLiteral("folder %1 came after a file").arg(item.targetPath)));
+            foldersSeen.insert(QDir::cleanPath(item.targetPath));
+        } else {
+            sawAFile = true;
+            // And the folder it belongs in was one of them.
+            const QString parent = QDir::cleanPath(info.absolutePath());
+            QVERIFY2(foldersSeen.contains(parent) ||
+                         !parent.startsWith(restore.destinationOverride + u'/'),
+                     qPrintable(
+                         QStringLiteral("%1 was written before its folder").arg(item.targetPath)));
+        }
+    }
+    QVERIFY(!foldersSeen.isEmpty());
+}
+
+void ContinuityRoundTripTest::aFolderThatArrivesReadOnlyStillGetsItsContents() {
+#ifdef Q_OS_WIN
+    QSKIP("this is about POSIX modes, which Windows does not restore");
+#else
+    const QString locked = sourceHome() + QStringLiteral("/Documents/locked");
+    QDir().mkpath(locked);
+    QFile inside(locked + QStringLiteral("/kept.txt"));
+    QVERIFY(inside.open(QIODevice::WriteOnly));
+    inside.write("this has to come back\n");
+    inside.close();
+
+    // Readable and traversable, but not writable. The restore has to put the
+    // file in before it applies that.
+    QVERIFY(QFile::setPermissions(
+        locked, QFile::ReadOwner | QFile::ExeOwner | QFile::ReadGroup | QFile::ExeGroup));
+
+    struct Restore {
+        QString path;
+        ~Restore() { QFile::setPermissions(path, QFile::permissions(path) | QFile::WriteOwner); }
+    } const cleanup{locked};
+
+    core::ExportService exporter(*platform_);
+    core::CancelToken token;
+
+    core::ExportRequest request;
+    request.destinationPath = archivePath("readonly-folder.txa");
+    request.selection = documentsSelection();
+    request.preset = format::CompressionPreset::Fast;
+
+    const core::ExportReport exported = exporter.run(request, token);
+    QVERIFY2(exported.succeeded, qPrintable(exported.errorMessage));
+
+    core::ImportService importer(*platform_);
+    core::ImportRequest restore;
+    restore.archivePath = request.destinationPath;
+    restore.destinationOverride = workspace_.filePath("restored-readonly");
+
+    const core::ImportReport imported = importer.run(restore, token);
+    QVERIFY2(imported.succeeded, qPrintable(imported.errorMessage));
+    QCOMPARE(imported.filesFailed, 0u);
+
+    // Applying the mode as the folder was created left it unwritable with all
+    // of its contents still to come, so every file inside failed - as the
+    // account running the restore, at least; root is exempt from the check and
+    // would not have noticed.
+    const QString restoredFile =
+        restore.destinationOverride + QStringLiteral("/DOCUMENTS/locked/kept.txt");
+    QFile restored(restoredFile);
+    QVERIFY2(restored.open(QIODevice::ReadOnly), qPrintable(restoredFile));
+    QCOMPARE(restored.readAll(), QByteArray("this has to come back\n"));
+
+    // And the mode still arrived.
+    const QFile::Permissions mode =
+        QFile::permissions(restore.destinationOverride + QStringLiteral("/DOCUMENTS/locked"));
+    QVERIFY(!mode.testFlag(QFile::WriteOwner));
+
+    QFile::setPermissions(restore.destinationOverride + QStringLiteral("/DOCUMENTS/locked"),
+                          mode | QFile::WriteOwner);
+    QFile::remove(inside.fileName());
+    QDir().rmdir(locked);
+#endif
 }
 
 QTEST_MAIN(ContinuityRoundTripTest)

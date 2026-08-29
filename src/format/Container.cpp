@@ -20,6 +20,15 @@ constexpr std::size_t kBlockHashPrefix = 12;
 /// raw bytes are stored, which keeps already-compressed media from growing.
 constexpr double kMinimumCompressionGain = 0.98;
 
+/// The most a single block may claim to hold when it is read back. Blocks are
+/// normally the solid block size, but a file larger than that becomes a block
+/// of its own, so the ceiling has to clear any single file somebody might
+/// reasonably be carrying - a disk image, a video project - while still being
+/// a ceiling. Without one, eight bytes of a corrupt or hostile header ask for
+/// an allocation of any size at all, and the process dies before anything has
+/// been checked.
+constexpr std::uint64_t kMaxBlockRawSize = 64ULL * 1024 * 1024 * 1024;
+
 std::int64_t nowUnixSeconds() {
     return std::chrono::duration_cast<std::chrono::seconds>(
                std::chrono::system_clock::now().time_since_epoch())
@@ -187,7 +196,8 @@ Result<std::unique_ptr<ArchiveWriter>> ArchiveWriter::create(const std::filesyst
                              "this build of Transmit was compiled without OpenSSL, so it cannot "
                              "write an encrypted archive");
         }
-        writer->header_.kdf = KdfParams::generate();
+        TRANSMIT_TRY(kdf, KdfParams::generate());
+        writer->header_.kdf = kdf;
         TRANSMIT_TRY(cipher, ArchiveCipher::derive(options.passphrase, writer->header_.kdf));
         writer->cipher_ = std::make_unique<ArchiveCipher>(std::move(cipher));
         writer->header_.keyCheck = writer->cipher_->keyCheck();
@@ -416,6 +426,33 @@ Result<ByteBuffer> ArchiveReader::loadBlock(const BlockRecord& record) {
     if (fields.blockId != record.blockId) {
         return makeError(ErrorCode::CorruptArchive, "block ", std::to_string(record.blockId),
                          " is not where the directory says it is");
+    }
+
+    // Everything below happens before a single byte is allocated on the word of
+    // the header. The header's own CRC only proves it is the header that was
+    // written; it says nothing about whether the sizes in it are sane, and
+    // both of them are used as allocation sizes a few lines further down.
+    //
+    // The directory - the manifest for a data block, the footer for the
+    // manifest itself - independently recorded the same two numbers when the
+    // archive was written, so disagreement means one of the two is damaged and
+    // neither can be trusted.
+    if (fields.storedSize != record.storedSize || fields.rawSize != record.rawSize) {
+        return makeError(ErrorCode::CorruptArchive, "block ", std::to_string(record.blockId),
+                         " disagrees with the directory about its size");
+    }
+    // A block cannot hold more stored bytes than the archive actually contains.
+    // This one is exact rather than a guess: the parts are on disk and their
+    // combined length is known.
+    if (record.streamOffset + kBlockHeaderSize > source_->logicalSize() ||
+        fields.storedSize > source_->logicalSize() - record.streamOffset - kBlockHeaderSize) {
+        return makeError(ErrorCode::CorruptArchive, "block ", std::to_string(record.blockId),
+                         " claims more data than the archive holds");
+    }
+    if (fields.rawSize > kMaxBlockRawSize) {
+        return makeError(ErrorCode::CorruptArchive, "block ", std::to_string(record.blockId),
+                         " claims to unpack to ", std::to_string(fields.rawSize),
+                         " bytes, which is beyond anything Transmit writes");
     }
 
     ByteBuffer stored(static_cast<std::size_t>(fields.storedSize));

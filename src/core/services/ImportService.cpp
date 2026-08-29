@@ -73,8 +73,13 @@ bool writeFileContents(const QString& path, const format::ByteBuffer& content, Q
     return true;
 }
 
-/// Produces "name~1.ext" for the keep-both policy, skipping names already used.
-QString uniqueSibling(const QString& path) {
+/// Produces "name~1.ext" for the keep-both policy, skipping names already used,
+/// or nothing when ten thousand of them are taken.
+///
+/// It used to return the original path in that case, which under KeepBoth -
+/// the default policy - meant the one outcome the user explicitly asked to
+/// avoid: their existing file overwritten, reported as a success.
+std::optional<QString> uniqueSibling(const QString& path) {
     const QFileInfo info(path);
     const QString stem = info.completeBaseName();
     const QString suffix = info.suffix();
@@ -89,7 +94,28 @@ QString uniqueSibling(const QString& path) {
             return candidate;
         }
     }
-    return path;
+    return std::nullopt;
+}
+
+/// What has to exist before what.
+///
+/// Folders first, so nothing is written into a path that is not there yet and
+/// every file lands inside a folder whose ownership and mode are already
+/// decided. Symlinks last, so their targets exist by the time they are made.
+///
+/// This used to be the raw enum value, which is File, Directory, Symlink - the
+/// exact reverse of the first half, and the opposite of what the comment next
+/// to it claimed.
+int restoreOrder(format::EntryType type) noexcept {
+    switch (type) {
+        case format::EntryType::Directory:
+            return 0;
+        case format::EntryType::File:
+            return 1;
+        case format::EntryType::Symlink:
+            return 2;
+    }
+    return 3;
 }
 
 }  // namespace
@@ -393,7 +419,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
     }
     std::stable_sort(ordered.begin(), ordered.end(),
                      [](const format::ManifestEntry* a, const format::ManifestEntry* b) {
-                         return static_cast<int>(a->type) < static_cast<int>(b->type);
+                         return restoreOrder(a->type) < restoreOrder(b->type);
                      });
 
     quint64 totalBytes = 0;
@@ -404,6 +430,11 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
     // Paths the undo point does not cover, so the write loop must not
     // touch them.
     QSet<QString> unbackedUp;
+
+    // Folders whose ownership and mode still have to be applied. It cannot be
+    // done as they are created: a folder that arrives read-only would then
+    // refuse every file about to be written into it.
+    std::vector<std::pair<QString, const format::ManifestEntry*>> restoredDirectories;
 
     // Every folder a file landed in. Their entries are flushed once at the
     // end rather than once per file: a restore writes thousands of files into
@@ -531,13 +562,26 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                     ++report.filesSkipped;
                     report.items.push_back(item);
                     continue;
-                case ConflictPolicy::KeepBoth:
-                    targetPath = uniqueSibling(targetPath);
+                case ConflictPolicy::KeepBoth: {
+                    const std::optional<QString> alongside = uniqueSibling(targetPath);
+                    if (!alongside) {
+                        report.notes.push_back(ContinuityNote{
+                            ContinuityGrade::Manual, entry.domain, targetPath,
+                            QCoreApplication::translate(
+                                "Import",
+                                "There are already ten thousand files saved alongside this "
+                                "one, so it was left in the archive rather than overwriting "
+                                "anything.")});
+                        ++report.filesFailed;
+                        continue;
+                    }
+                    targetPath = *alongside;
                     item.targetPath = targetPath;
                     item.grade = ContinuityGrade::Adapted;
                     item.note = QCoreApplication::translate(
                         "Import", "Saved alongside the file that was already here.");
                     break;
+                }
                 case ConflictPolicy::NewerWins: {
                     const QFileInfo existing(targetPath);
                     const qint64 existingNs =
@@ -574,7 +618,11 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                     ++report.filesFailed;
                     continue;
                 }
-                applyMetadata(targetPath, entry, targetOs);
+                // The mode is deliberately not applied yet. A folder restored
+                // as r-x cannot be written into, and every file inside it is
+                // still to come; the second pass at the end of the run puts it
+                // right once the folder is finished with.
+                restoredDirectories.push_back({targetPath, &entry});
                 break;
             }
             case format::EntryType::Symlink: {
@@ -832,6 +880,18 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                     "No package manager here offers these, so install them yourself. Their "
                     "settings are already restored: %1")
                     .arg(installPlan.manual.join(QStringLiteral(", ")))});
+        }
+    }
+
+    // Now that nothing more will be written into them, the folders can have
+    // the mode they arrived with. Deepest first, so a folder is never made
+    // unreadable before the pass has been inside it.
+    if (!request.dryRun) {
+        std::stable_sort(
+            restoredDirectories.begin(), restoredDirectories.end(),
+            [](const auto& a, const auto& b) { return a.first.count(u'/') > b.first.count(u'/'); });
+        for (const auto& [directoryPath, entry] : restoredDirectories) {
+            applyMetadata(directoryPath, *entry, targetOs);
         }
     }
 

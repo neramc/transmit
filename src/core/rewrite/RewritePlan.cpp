@@ -63,7 +63,15 @@ int RewritePlan::apply(QStringList* errors) const {
 
         const QString backup = path + QLatin1String(kBackupSuffix);
         QFile::remove(backup);
-        if (QFile::exists(path) && !QFile::rename(path, backup)) {
+
+        // The original is copied aside, not moved. Moving it means that
+        // between the two renames there is no file at `path` at all, and the
+        // only copy of the user's settings is under a name they have never
+        // heard of - so if the second rename fails, and the recovery rename
+        // fails too, the file has silently vanished from where they expect it.
+        // A copy costs one pass over a settings file and removes the hole.
+        const bool originalExists = QFile::exists(path);
+        if (originalExists && !QFile::copy(path, backup)) {
             if (errors != nullptr) {
                 *errors << QCoreApplication::translate("Rewrite",
                                                        "Could not set aside the original of %1")
@@ -72,11 +80,30 @@ int RewritePlan::apply(QStringList* errors) const {
             QFile::remove(staged);
             continue;
         }
-        if (!QFile::rename(staged, path)) {
-            QFile::rename(backup, path);  // put it back rather than leaving a hole
+        if (originalExists && !QFile::remove(path)) {
             if (errors != nullptr) {
                 *errors << QCoreApplication::translate("Rewrite", "Could not update %1").arg(path);
             }
+            QFile::remove(backup);
+            QFile::remove(staged);
+            continue;
+        }
+
+        if (!QFile::rename(staged, path)) {
+            // Put the original back. The backup is still there either way, so
+            // this cannot be the step that loses it.
+            const bool recovered = !originalExists || QFile::copy(backup, path);
+            if (errors != nullptr) {
+                *errors << (recovered
+                                ? QCoreApplication::translate("Rewrite", "Could not update %1")
+                                      .arg(path)
+                                : QCoreApplication::translate(
+                                      "Rewrite",
+                                      "Could not update %1, and putting the original back "
+                                      "failed too - it is at %2")
+                                      .arg(path, backup));
+            }
+            QFile::remove(staged);
             continue;
         }
         ++changed;

@@ -40,7 +40,7 @@ constexpr quint64 kRemovableSyncIntervalBytes = 32ULL * 1024 * 1024;
 platform::StorageVolume volumeFor(const platform::PlatformService& platform, const QString& path) {
     const QString absolute = QFileInfo(path).absoluteFilePath();
     platform::StorageVolume best;
-    int bestLength = -1;
+    qsizetype bestLength = -1;
     for (const platform::StorageVolume& volume : platform.storageVolumes()) {
         const QString root = QDir::cleanPath(volume.rootPath);
         if (root.isEmpty() || !absolute.startsWith(root)) {
