@@ -33,6 +33,7 @@ class ImportController : public QObject {
     Q_PROPERTY(bool archiveEncrypted READ archiveEncrypted NOTIFY summaryChanged)
     Q_PROPERTY(bool archiveUnlocked READ archiveUnlocked NOTIFY summaryChanged)
     Q_PROPERTY(QString archiveError READ archiveError NOTIFY summaryChanged)
+    Q_PROPERTY(bool inspecting READ isInspecting NOTIFY inspectingChanged)
     Q_PROPERTY(QString sourceDescription READ sourceDescription NOTIFY summaryChanged)
     Q_PROPERTY(QString capturedAtText READ capturedAtText NOTIFY summaryChanged)
     Q_PROPERTY(QString contentsText READ contentsText NOTIFY summaryChanged)
@@ -61,6 +62,12 @@ public:
     [[nodiscard]] bool archiveEncrypted() const { return summary_.encrypted; }
     [[nodiscard]] bool archiveUnlocked() const { return summary_.unlocked; }
     [[nodiscard]] QString archiveError() const { return summary_.errorMessage; }
+
+    /// True while an archive is being opened. Deriving the key for an
+    /// encrypted archive is deliberately slow - scrypt at 2^17 is about a
+    /// second - so this cannot be done on the interface thread, and the
+    /// interface has to say that something is happening while it is not.
+    [[nodiscard]] bool isInspecting() const { return inspecting_; }
     [[nodiscard]] QString sourceDescription() const;
     [[nodiscard]] QString capturedAtText() const;
     [[nodiscard]] QString contentsText() const;
@@ -136,6 +143,7 @@ public slots:
 signals:
     void runningChanged();
     void summaryChanged();
+    void inspectingChanged();
     void progressChanged();
     void finishedChanged();
     void archiveCountsChanged();
@@ -157,6 +165,8 @@ private:
     core::CancelToken cancelToken_;
 
     QFutureWatcher<core::ImportReport> watcher_;
+    QFutureWatcher<core::ArchiveSummary> inspectWatcher_;
+    bool inspecting_ = false;
     core::ArchiveSummary summary_;
     core::ProgressUpdate progress_;
     core::ImportReport report_;

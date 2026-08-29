@@ -50,6 +50,12 @@ ImportController::ImportController(QObject* parent) : QObject(parent) {
 
     connect(&watcher_, &QFutureWatcher<core::ImportReport>::finished, this,
             &ImportController::handleFinished);
+    connect(&inspectWatcher_, &QFutureWatcher<core::ArchiveSummary>::finished, this, [this]() {
+        summary_ = inspectWatcher_.result();
+        inspecting_ = false;
+        emit inspectingChanged();
+        emit summaryChanged();
+    });
     connect(&undoWatcher_,
             &QFutureWatcher<format::Result<core::RollbackWriter::UndoResult>>::finished, this,
             &ImportController::handleUndoFinished);
@@ -59,6 +65,10 @@ ImportController::~ImportController() {
     cancelToken_.cancel();
     watcher_.waitForFinished();
     undoWatcher_.waitForFinished();
+
+    // The inspection holds a raw pointer to the service, which is about to go
+    // away with this object.
+    inspectWatcher_.waitForFinished();
 }
 
 bool ImportController::canUndo() const {
@@ -214,9 +224,23 @@ QString ImportController::summaryText() const {
 }
 
 void ImportController::inspect(const QString& archivePath, const QString& passphrase) {
+    // Off the interface thread. Opening an archive reads the header and the
+    // manifest, and for an encrypted one derives the key with scrypt at 2^17,
+    // which is about a second by design - a second during which the window
+    // would not repaint, would not respond to a click, and would be reported
+    // by the desktop as not responding.
+    if (inspecting_) {
+        return;
+    }
     archivePath_ = archivePath;
-    summary_ = service_->inspect(archivePath, passphrase);
-    emit summaryChanged();
+    inspecting_ = true;
+    emit inspectingChanged();
+
+    // The service is used from the worker, so nothing else may touch it until
+    // the result arrives; the guard above is what ensures that.
+    core::ImportService* const service = service_.get();
+    inspectWatcher_.setFuture(QtConcurrent::run(
+        [service, archivePath, passphrase] { return service->inspect(archivePath, passphrase); }));
 }
 
 void ImportController::scanForArchives(const QString& folder) {

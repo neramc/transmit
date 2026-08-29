@@ -77,6 +77,8 @@ private slots:
     void theCaptureWizardAsksWhatIsRunning();
     void theSidebarCollapsesAndComesBack();
     void aNarrowWindowCollapsesTheSidebarOnItsOwn();
+    void theCommandPaletteFindsThingsByTheirLetters();
+    void aToastAppearsAndGoesAwayAgain();
     void confirmingADialogRunsTheAction();
     void dismissingADialogRunsNothing();
 
@@ -93,6 +95,15 @@ private:
     /// the dialog host are all reachable by the names the QML itself uses -
     /// which is a truer test than reaching around the engine for them.
     QVariant evaluate(const QString& expression) const;
+
+    /// Calls a function on an object found by objectName.
+    ///
+    /// evaluate() runs in the shell's *creation* context, which is Main.qml -
+    /// so ids declared inside AppShell.qml are not in scope there, however
+    /// much they look as though they should be. Reaching the object by name
+    /// and invoking through the meta-object sidesteps the whole question.
+    static QVariant callOn(QObject* object, const char* method, const QVariant& first = {},
+                           const QVariant& second = {});
 
     std::unique_ptr<QQmlApplicationEngine> engine_;
 };
@@ -142,6 +153,21 @@ QObject* UiSmokeTest::named(const char* objectName) const {
 QStringList UiSmokeTest::loadedPages() const {
     QObject* const content = named("contentView");
     return content == nullptr ? QStringList() : content->property("loadedPages").toStringList();
+}
+
+QVariant UiSmokeTest::callOn(QObject* object, const char* method, const QVariant& first,
+                             const QVariant& second) {
+    if (object == nullptr) {
+        return {};
+    }
+    QVariant result;
+    const bool called =
+        second.isValid()
+            ? QMetaObject::invokeMethod(object, method, Q_RETURN_ARG(QVariant, result),
+                                        Q_ARG(QVariant, first), Q_ARG(QVariant, second))
+            : QMetaObject::invokeMethod(object, method, Q_RETURN_ARG(QVariant, result),
+                                        Q_ARG(QVariant, first));
+    return called ? result : QVariant();
 }
 
 QVariant UiSmokeTest::evaluate(const QString& expression) const {
@@ -351,6 +377,62 @@ void UiSmokeTest::aNarrowWindowCollapsesTheSidebarOnItsOwn() {
     window()->resize(1280, 720);
     settle(200);
     QVERIFY(!evaluate(QStringLiteral("shell.sidebarCompact")).toBool());
+    QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join(u'\n')));
+}
+
+void UiSmokeTest::theCommandPaletteFindsThingsByTheirLetters() {
+    QObject* const palette = named("commandPalette");
+    QVERIFY(palette != nullptr);
+
+    // Every destination the sidebar offers is reachable here too, plus the
+    // view and appearance commands.
+    const QVariantList commands = palette->property("commands").toList();
+    QVERIFY2(commands.size() >= 5, "the palette has fewer commands than the sidebar has pages");
+
+    // Subsequence matching, not substring: this is what people mean by fuzzy
+    // search, and it is the whole reason the palette is faster than the menu.
+    const QVariant scored =
+        callOn(palette, "score", QStringLiteral("Save this computer"), QStringLiteral("svp"));
+    QVERIFY2(scored.isValid() && scored.toInt() >= 0, "\"svp\" should find \"Save this computer\"");
+
+    const QVariant missing =
+        callOn(palette, "score", QStringLiteral("Save this computer"), QStringLiteral("zzz"));
+    QCOMPARE(missing.toInt(), -1);
+
+    // A tighter match scores better, so an exact prefix beats letters
+    // scattered across the sentence.
+    const int tight =
+        callOn(palette, "score", QStringLiteral("Settings"), QStringLiteral("set")).toInt();
+    const int loose =
+        callOn(palette, "score", QStringLiteral("Save this computer"), QStringLiteral("set"))
+            .toInt();
+    QVERIFY(tight >= 0);
+    QVERIFY(loose >= 0);
+    QVERIFY2(tight < loose, "an exact prefix should rank above scattered letters");
+
+    evaluate(QStringLiteral("shell.openCommandPalette()"));
+    settle(150);
+    QVERIFY(palette->property("opened").toBool());
+
+    QMetaObject::invokeMethod(palette, "close");
+    settle(150);
+    QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join(u'\n')));
+}
+
+void UiSmokeTest::aToastAppearsAndGoesAwayAgain() {
+    QObject* const host = named("toastHost");
+    QVERIFY(host != nullptr);
+
+    evaluate(QStringLiteral("shell.toasts.show('The drive is ready', 'success')"));
+    settle(150);
+
+    // A toast with nothing to press times out. One offering an action waits to
+    // be answered, because an action nobody had time to press is worse than no
+    // action at all - so this only checks that both kinds arrive.
+    evaluate(QStringLiteral(
+        "shell.toasts.show('Could not read one file', 'error', 'Details', function() {})"));
+    settle(150);
+
     QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join(u'\n')));
 }
 

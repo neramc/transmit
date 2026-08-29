@@ -35,6 +35,59 @@ Item {
     /// Exposed so the window can put a dialog in front of the whole shell.
     readonly property alias dialogs: dialogHost
 
+    /// Brief feedback, from anywhere. Pages reach it through the shell rather
+    /// than each keeping their own.
+    readonly property alias toasts: toastHost
+
+    function openCommandPalette() {
+        // Not `palette`: every Item in Qt Quick has a property by that name,
+        // and an id that shadows it resolves to the wrong thing from outside.
+        commandPalette.open();
+    }
+
+    /// Everything the application can do, for the palette. Navigation comes
+    /// from the same table the sidebar uses, so a destination cannot exist in
+    /// one and not the other.
+    readonly property var commands: {
+        const list = [];
+        for (const entry of shell.navigation) {
+            list.push({
+                id: "go:" + entry.page,
+                label: entry.label,
+                category: qsTr("Go to"),
+                action: () => AppController.currentPage = entry.page
+            });
+        }
+        list.push({
+            id: "theme:toggle",
+            label: Colors.dark ? qsTr("Switch to the light theme")
+                               : qsTr("Switch to the dark theme"),
+            category: qsTr("Appearance"),
+            action: () => AppController.themeMode = Colors.dark ? "light" : "dark"
+        });
+        list.push({
+            id: "sidebar:toggle",
+            label: shell.sidebarCompact ? qsTr("Expand the sidebar")
+                                        : qsTr("Collapse the sidebar"),
+            category: qsTr("View"),
+            shortcut: "Ctrl+B",
+            action: () => shell.toggleSidebar()
+        });
+        list.push({
+            id: "motion:toggle",
+            label: AppController.reduceMotion ? qsTr("Allow animations")
+                                              : qsTr("Reduce animations"),
+            category: qsTr("Appearance"),
+            action: () => AppController.reduceMotion = !AppController.reduceMotion
+        });
+        return list;
+    }
+
+    /// Command ids in the order they were last used. Section 16 asks for
+    /// recently used commands, and with a list this short it is the whole of
+    /// the ranking when nothing has been typed.
+    property var recentCommands: []
+
     readonly property var navigation: [
         { page: "home",     icon: "home",     label: qsTr("Start"),
           title: qsTr("Transmit"),
@@ -125,6 +178,20 @@ Item {
             }
         }
     }
+
+    AppCommandPalette {
+        id: commandPalette
+        objectName: "commandPalette"
+        commands: shell.commands
+        recent: shell.recentCommands
+        onCommandTriggered: (id) => {
+            const kept = shell.recentCommands.filter(each => each !== id);
+            kept.unshift(id);
+            shell.recentCommands = kept.slice(0, 5);
+        }
+    }
+
+    AppToastHost { id: toastHost; objectName: "toastHost" }
 
     DialogHost { id: dialogHost; objectName: "dialogHost" }
 

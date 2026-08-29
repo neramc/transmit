@@ -10,8 +10,10 @@ qt_add_qml_module(transmit_qml_components
         AppButton.qml
         AppCard.qml
         AppCheckRow.qml
+        AppCommandPalette.qml
         AppComboBox.qml
         AppEmptyState.qml
+        AppErrorState.qml
         AppIcon.qml
         AppIconButton.qml
         AppInlineMessage.qml
@@ -24,9 +26,11 @@ qt_add_qml_module(transmit_qml_components
         AppSelectableCard.qml
         AppSeparator.qml
         AppSidebar.qml
+        AppSkeleton.qml
         AppSpinner.qml
         AppStepper.qml
         AppTextField.qml
+        AppToastHost.qml
         AppToolTip.qml
     RESOURCE_PREFIX /qt/qml)
 

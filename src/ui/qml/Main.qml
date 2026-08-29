@@ -60,6 +60,13 @@ ApplicationWindow {
         sequences: [StandardKey.Preferences, "Ctrl+,"]
         onActivated: AppController.currentPage = "settings"
     }
+    // The palette. StandardKey has no entry for it, and every application
+    // that has one uses the same chord on every platform.
+    Shortcut {
+        sequences: ["Ctrl+K"]
+        onActivated: shell.openCommandPalette()
+    }
+
     // Ctrl+B on Windows and Linux, Cmd+B on macOS - the convention every
     // editor with a sidebar uses. There is no StandardKey for it.
     Shortcut {

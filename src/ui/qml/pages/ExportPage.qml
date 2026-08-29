@@ -388,7 +388,11 @@ Item {
 
                             AppButton {
                                 text: qsTr("Check again")
-                                enabled: !ExportController.checkingPrograms
+                                glyph: "refresh"
+                                // Section 13's sixth state. Without it the
+                                // button looks untouched while the check runs
+                                // and gets pressed again.
+                                loading: ExportController.checkingPrograms
                                 onClicked: {
                                     ExportController.forgetRunningPrograms()
                                     ExportController.checkForRunningPrograms(

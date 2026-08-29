@@ -102,15 +102,25 @@ Item {
                         anchors.centerIn: parent
                         width: parent.width * 0.7
                         visible: driveList.count === 0 && !drives.refreshing
+                        glyph: "drive"
                         title: qsTr("No drives found")
-                        body: qsTr("Plug in the drive you captured onto, or open the archive "
-                                 + "file directly.")
+                        body: qsTr("Plug in the drive you captured onto, and it will appear "
+                                 + "here. If the archive is somewhere else, open the file "
+                                 + "directly.")
+                        actionText: qsTr("Open an archive file…")
+                        onActionTriggered: fileDialog.open()
                     }
 
-                    AppSpinner {
-                        anchors.centerIn: parent
-                        running: driveList.count === 0 && drives.refreshing
-                        size: Sizing.iconSizeLarge
+                    // A skeleton rather than a spinner: enumerating drives can
+                    // take a moment on a machine with network mounts, and this
+                    // says how much is coming and where, so the list does not
+                    // jump when it lands.
+                    AppSkeleton {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        lines: 3
+                        visible: driveList.count === 0 && drives.refreshing
                     }
                 }
 
@@ -132,12 +142,22 @@ Item {
                         title: qsTr("What is inside this archive")
                     }
 
-                    AppInlineMessage {
+                    // Section 23: what happened in words, the machine's own
+                    // message behind a disclosure, and one press to copy it -
+                    // because the first thing anybody does with an error is
+                    // try to send it to somebody else.
+                    AppErrorState {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Spacing.s24
                         visible: !ImportController.archiveValid
                                  && ImportController.archiveError !== ""
-                        tone: "error"
                         title: qsTr("This file could not be opened")
-                        body: ImportController.archiveError
+                        body: qsTr("Transmit could not read it as an archive. It may be from a "
+                                 + "newer version, it may have been copied only in part, or it "
+                                 + "may not be a Transmit archive at all.")
+                        detail: ImportController.archiveError
+                        actionText: qsTr("Choose another file…")
+                        onRetried: fileDialog.open()
                     }
 
                     AppLabelledField {
@@ -158,9 +178,14 @@ Item {
 
                     AppButton {
                         text: qsTr("Unlock")
+                        glyph: "lock"
                         variant: "primary"
                         visible: ImportController.archiveEncrypted
                                  && !ImportController.archiveUnlocked
+                        // Deriving the key is deliberately slow - scrypt at
+                        // 2^17 takes about a second - so this is exactly the
+                        // case a loading state exists for.
+                        loading: ImportController.inspecting
                         enabled: page.passphrase.length > 0
                         onClicked: ImportController.inspect(page.archivePath, page.passphrase)
                     }
