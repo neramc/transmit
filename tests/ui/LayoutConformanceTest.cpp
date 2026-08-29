@@ -12,6 +12,7 @@
 // runner has, because it compares each item against its own measurements
 // rather than against a picture taken somewhere else.
 
+#include <QCoreApplication>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -85,6 +86,23 @@ QString describe(const QQuickItem* item) {
 
 bool isLaidOut(const QQuickItem* item) {
     return item != nullptr && item->isVisible() && item->width() > 0.5 && item->height() > 0.5;
+}
+
+/// Whether this item is part of the interface as written, rather than one of
+/// Qt's own.
+///
+/// Everything the application draws comes from a QML file and carries the
+/// context it was created in. What does not: a Flickable's contentItem, and -
+/// the reason this exists - a ListView delegate that has scrolled out and been
+/// put back in the view's reuse pool. A pooled delegate is still a child of
+/// the contentItem, still reports itself visible, and still carries the width
+/// it had when it was last shown, which reads exactly like an item too wide
+/// for the list it is in. It is not in the list at all.
+///
+/// Those items are still walked through, because the contentItem is how the
+/// real delegates are reached. They are just not judged.
+bool cameFromQml(const QQuickItem* item) {
+    return qmlContext(item) != nullptr;
 }
 
 /// True for a Row, Column, RowLayout, GridLayout and so on - anything whose
@@ -238,6 +256,13 @@ void LayoutConformanceTest::resizeTo(int width, int height) {
     // collapsing - finish before anything is measured.
     QTest::qWait(80);
     QTest::qWait(80);
+
+    // And then the delegates a resizing ListView has released. They are still
+    // in childItems() until their deferred deletion runs, still visible, and
+    // still carrying the width they had before the resize - which reads as an
+    // item wider than the list it is in. It is not: it is on its way out.
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    QTest::qWait(20);
 }
 
 template<typename Visit, typename Descend>
@@ -246,7 +271,9 @@ void LayoutConformanceTest::walk(QQuickItem* item, QQuickItem* parent, const Vis
     if (!isLaidOut(item)) {
         return;
     }
-    visit(item, parent);
+    if (cameFromQml(item)) {
+        visit(item, parent);
+    }
     if (!descend(item)) {
         return;
     }

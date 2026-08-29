@@ -104,26 +104,25 @@ bool isTransient(const Error& error) noexcept {
         return false;
     }
 
-#if defined(_WIN32)
-    switch (error.systemCode) {
-        case 21:    // ERROR_NOT_READY - the drive is still coming up
-        case 23:    // ERROR_CRC - a bad read off marginal media
-        case 32:    // ERROR_SHARING_VIOLATION
-        case 33:    // ERROR_LOCK_VIOLATION
-        case 121:   // ERROR_SEM_TIMEOUT
-        case 1117:  // ERROR_IO_DEVICE
-            return true;
-        default:
-            return false;
-    }
-#else
+    // errno on every platform, including Windows. FileStream is built on
+    // stdio, which sets errno rather than the Win32 last-error, so comparing
+    // against ERROR_CRC and its neighbours - as this did - was comparing a
+    // value from one numbering space against constants from another. EIO is 5
+    // on Windows; so is ERROR_ACCESS_DENIED. Every retry test failed there and
+    // was right to.
+    //
+    // Anything that ever stores a Win32 code here must translate it first.
     switch (error.systemCode) {
         case EIO:     // one bad read; often fine on the next pass
         case EINTR:   // a signal arrived mid-call
         case EAGAIN:  // would block
         case EBUSY:   // the device is doing something else
+#if defined(ETIMEDOUT)
         case ETIMEDOUT:
+#endif
+#if defined(ENOBUFS)
         case ENOBUFS:
+#endif
             return true;
 
         // Deliberately absent, because a second attempt cannot change any of
@@ -134,7 +133,6 @@ bool isTransient(const Error& error) noexcept {
         default:
             return false;
     }
-#endif
 }
 
 std::filesystem::path toFsPath(std::string_view utf8) {
