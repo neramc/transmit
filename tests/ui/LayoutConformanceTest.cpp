@@ -56,19 +56,33 @@ struct View {
     const char* page;
     const char* wizard;  ///< objectName of the page's root, or nullptr
     int step;
+
+    /// A boolean property on the page to turn on before measuring, for a panel
+    /// that is folded away when the step opens. Without this the contents of
+    /// every disclosure go unmeasured, which is the same hole the wizard steps
+    /// themselves used to be in: not looked at, and therefore fine.
+    const char* reveal = nullptr;
 };
 
 constexpr View kViews[] = {
-    {"home", nullptr, 0},        {"export", "exportPage", 0}, {"export", "exportPage", 1},
-    {"export", "exportPage", 2}, {"export", "exportPage", 3}, {"export", "exportPage", 4},
-    {"import", "importPage", 0}, {"import", "importPage", 1}, {"import", "importPage", 2},
-    {"import", "importPage", 3}, {"report", nullptr, 0},      {"settings", nullptr, 0},
+    {"home", nullptr, 0},        {"export", "exportPage", 0},
+    {"export", "exportPage", 1}, {"export", "exportPage", 2},
+    {"export", "exportPage", 3}, {"export", "exportPage", 3, "showAdvanced"},
+    {"export", "exportPage", 4}, {"import", "importPage", 0},
+    {"import", "importPage", 1}, {"import", "importPage", 2},
+    {"import", "importPage", 3}, {"report", nullptr, 0},
+    {"settings", nullptr, 0},
 };
 
 QString nameOf(const View& view) {
-    return view.wizard == nullptr
-               ? QString::fromLatin1(view.page)
-               : QStringLiteral("%1 step %2").arg(QLatin1String(view.page)).arg(view.step + 1);
+    if (view.wizard == nullptr) {
+        return QString::fromLatin1(view.page);
+    }
+    QString name = QStringLiteral("%1 step %2").arg(QLatin1String(view.page)).arg(view.step + 1);
+    if (view.reveal != nullptr) {
+        name += QStringLiteral(" with %1").arg(QLatin1String(view.reveal));
+    }
+    return name;
 }
 
 /// Sub-pixel positions are ordinary in Qt Quick - a centred item in a
@@ -324,6 +338,9 @@ void LayoutConformanceTest::showView(const View& view) {
     QQuickItem* const wizard = findItem(contentRoot(), QString::fromLatin1(view.wizard));
     QVERIFY2(wizard != nullptr, view.wizard);
     QVERIFY2(wizard->setProperty("step", view.step), "the page has no step property");
+    if (view.reveal != nullptr) {
+        QVERIFY2(wizard->setProperty(view.reveal, true), view.reveal);
+    }
     settle();
 
     // The step that has just been hidden may have released ListView delegates,

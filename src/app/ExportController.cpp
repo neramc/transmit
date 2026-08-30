@@ -340,6 +340,61 @@ QString ExportController::secretsStoreName() {
     return core::SecretsDomain(*platform_).describeStore();
 }
 
+void ExportController::setPackaging(double solidBlockSize, int workerCount,
+                                    double syncIntervalBytes, bool verifyAfterWriting,
+                                    bool keepJournal) {
+    // The same guard the scope setter uses, and for the same reason: a number
+    // that arrived through QML can be a NaN, and a NaN cast to an unsigned
+    // integer is whatever the machine felt like.
+    const auto bytes = [](double value) -> quint64 {
+        return std::isfinite(value) && value >= 1.0 ? static_cast<quint64>(value) : 0;
+    };
+
+    packaging_.solidBlockSize = bytes(solidBlockSize);
+    packaging_.workerCount = workerCount > 0 ? workerCount : 0;
+    packaging_.syncIntervalBytes = bytes(syncIntervalBytes);
+    packaging_.verifyAfterWriting = verifyAfterWriting;
+    packaging_.keepJournal = keepJournal;
+    emit packagingChanged();
+}
+
+void ExportController::clearPackaging() {
+    const core::PackagingOptions defaults;
+    packaging_.solidBlockSize = 0;
+    packaging_.workerCount = 0;
+    packaging_.syncIntervalBytes = 0;
+    packaging_.verifyAfterWriting = defaults.verifyAfterWriting;
+    packaging_.keepJournal = defaults.keepJournal;
+    emit packagingChanged();
+}
+
+QString ExportController::packagingSummary() const {
+    QStringList parts;
+    if (packaging_.solidBlockSize > 0) {
+        parts << tr("%1 blocks").arg(core::formatBytes(packaging_.solidBlockSize));
+    }
+    if (packaging_.workerCount == 1) {
+        parts << tr("one worker");
+    } else if (packaging_.workerCount > 1) {
+        parts << tr("%1 workers").arg(packaging_.workerCount);
+    }
+    if (packaging_.syncIntervalBytes > 0) {
+        parts << tr("pushed to the drive every %1")
+                     .arg(core::formatBytes(packaging_.syncIntervalBytes));
+    }
+    if (!packaging_.verifyAfterWriting) {
+        parts << tr("no read-back");
+    }
+    if (!packaging_.keepJournal) {
+        parts << tr("no record kept");
+    }
+
+    if (parts.isEmpty()) {
+        return tr("As Transmit would choose for this drive");
+    }
+    return parts.join(tr(", "));
+}
+
 void ExportController::lookForInterruptedCapture(const QString& destinationFolder) {
     const QString wasFound = interruptedArchive_;
     interruptedArchive_.clear();
@@ -417,6 +472,17 @@ void ExportController::start(const QString& profileId, const QString& destinatio
     request.selection = selectionFor(profileId, domains, includeSecrets);
 
     request.passphrase = passphrase;
+
+    // The advanced settings first, so the ones this call is explicitly about -
+    // the preset, and whether the drive needs splitting - are set over them
+    // rather than under them.
+    request.packaging.solidBlockSize =
+        packaging_.solidBlockSize > 0 ? packaging_.solidBlockSize : format::kDefaultSolidBlockSize;
+    request.packaging.workerCount = packaging_.workerCount;
+    request.packaging.syncIntervalBytes = packaging_.syncIntervalBytes;
+    request.packaging.verifyAfterWriting = packaging_.verifyAfterWriting;
+    request.packaging.keepJournal = packaging_.keepJournal;
+
     request.packaging.partSize = splitForFat32 ? format::kFat32SafePartSize : 0;
 
     if (const auto parsed = format::presetFromName(core::toUtf8(preset))) {

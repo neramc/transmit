@@ -28,6 +28,45 @@ Item {
     property string destinationLabel: ""
     property string preset: "maximum"
     property bool encrypt: false
+
+    /// The advanced packaging controls, and whether they are on show. Index 0
+    /// of each list is "as Transmit would choose", which is where they start
+    /// and where "Back to the defaults" puts them.
+    property bool showAdvanced: false
+    property int blockSizeChoice: 0
+    property int workerChoice: 0
+    property int syncChoice: 0
+    property bool verifyAfterWriting: true
+    property bool keepJournal: true
+
+    readonly property var blockSizes: [
+        { bytes: 0,                 label: qsTr("As Transmit chooses (64 MB)") },
+        { bytes: 16 * 1024 * 1024,  label: qsTr("16 MB - least memory, largest archive") },
+        { bytes: 64 * 1024 * 1024,  label: qsTr("64 MB") },
+        { bytes: 256 * 1024 * 1024, label: qsTr("256 MB - smallest archive, most memory") }
+    ]
+    readonly property var workerCounts: [
+        { count: 0, label: qsTr("As Transmit chooses") },
+        { count: 1, label: qsTr("One - leaves the machine usable") },
+        { count: 2, label: qsTr("Two") },
+        { count: 4, label: qsTr("Four") },
+        { count: 8, label: qsTr("Eight - fastest, uses the most memory") }
+    ]
+    readonly property var syncIntervals: [
+        { bytes: 0,                label: qsTr("As Transmit chooses for the drive") },
+        { bytes: 8 * 1024 * 1024,  label: qsTr("Every 8 MB - safest on a stick, slowest") },
+        { bytes: 32 * 1024 * 1024, label: qsTr("Every 32 MB") },
+        { bytes: 128 * 1024 * 1024, label: qsTr("Every 128 MB - fastest, loses the most") }
+    ]
+
+    /// Hands the packaging choices to the controller as they are made, so the
+    /// summary the user reads is the one the capture will use.
+    function applyPackaging() {
+        ExportController.setPackaging(page.blockSizes[page.blockSizeChoice].bytes,
+                                      page.workerCounts[page.workerChoice].count,
+                                      page.syncIntervals[page.syncChoice].bytes,
+                                      page.verifyAfterWriting, page.keepJournal)
+    }
     property string passphrase: ""
     property string passphraseConfirm: ""
     property string label: ""
@@ -815,6 +854,122 @@ Item {
                             currentIndex: 2
                             onActivated: page.preset = currentValue
                             Accessible.name: qsTr("Compression level")
+                        }
+                    }
+
+                    // Everything below is a default that suits the drive it
+                    // is going to, so it is folded away rather than absent:
+                    // somebody who needs to change the block size knows what a
+                    // block size is, and everybody else should not have to
+                    // scroll past four questions they cannot answer.
+                    AppCheckRow {
+                        objectName: "advancedToggle"
+                        label: qsTr("Show how it is written to the drive")
+                        description: ExportController.packagingSummary
+                        checked: page.showAdvanced
+                        onCheckedChanged: page.showAdvanced = checked
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        visible: page.showAdvanced
+                        spacing: Spacing.lg
+
+                        AppLabelledField {
+                            Layout.fillWidth: true
+                            label: qsTr("How much is compressed together")
+                            helperText: qsTr("Larger blocks make a smaller archive, because the "
+                                           + "compressor can match across more files. Every "
+                                           + "worker holds one in memory while it works, and "
+                                           + "restoring a single file has to unpack a whole one.")
+
+                            AppComboBox {
+                                model: page.blockSizes
+                                textRole: "label"
+                                currentIndex: page.blockSizeChoice
+                                onActivated: {
+                                    page.blockSizeChoice = currentIndex
+                                    page.applyPackaging()
+                                }
+                                Accessible.name: qsTr("Block size")
+                            }
+                        }
+
+                        AppLabelledField {
+                            Layout.fillWidth: true
+                            label: qsTr("How many blocks are compressed at once")
+                            helperText: qsTr("More workers finish sooner and leave less of the "
+                                           + "machine for anything else. Transmit picks a number "
+                                           + "from the cores and the memory this machine has.")
+
+                            AppComboBox {
+                                model: page.workerCounts
+                                textRole: "label"
+                                currentIndex: page.workerChoice
+                                onActivated: {
+                                    page.workerChoice = currentIndex
+                                    page.applyPackaging()
+                                }
+                                Accessible.name: qsTr("Compression workers")
+                            }
+                        }
+
+                        AppLabelledField {
+                            Layout.fillWidth: true
+                            label: qsTr("How often it is pushed to the drive")
+                            helperText: qsTr("The system will happily accept gigabytes it has not "
+                                           + "written yet. Pushing more often means a full drive "
+                                           + "says so sooner and an unplugged one loses less; it "
+                                           + "also makes the capture slower.")
+
+                            AppComboBox {
+                                model: page.syncIntervals
+                                textRole: "label"
+                                currentIndex: page.syncChoice
+                                onActivated: {
+                                    page.syncChoice = currentIndex
+                                    page.applyPackaging()
+                                }
+                                Accessible.name: qsTr("How often to push to the drive")
+                            }
+                        }
+
+                        AppCheckRow {
+                            label: qsTr("Read the archive back and check it")
+                            description: qsTr("Reads every file off the drive again and checks it "
+                                            + "against what was captured, before you unplug it. "
+                                            + "A capture that does not read back correctly fails.")
+                            checked: page.verifyAfterWriting
+                            onCheckedChanged: {
+                                page.verifyAfterWriting = checked
+                                page.applyPackaging()
+                            }
+                        }
+
+                        AppCheckRow {
+                            label: qsTr("Keep a record, so an interrupted capture can be finished")
+                            description: qsTr("A few hundred bytes a file. Without it, a capture "
+                                            + "the drive interrupts has to be done again from the "
+                                            + "beginning rather than carried on.")
+                            checked: page.keepJournal
+                            onCheckedChanged: {
+                                page.keepJournal = checked
+                                page.applyPackaging()
+                            }
+                        }
+
+                        AppButton {
+                            text: qsTr("Back to the defaults")
+                            visible: ExportController.packagingSummary
+                                     !== qsTr("As Transmit would choose for this drive")
+                            onClicked: {
+                                page.blockSizeChoice = 0
+                                page.workerChoice = 0
+                                page.syncChoice = 0
+                                page.verifyAfterWriting = true
+                                page.keepJournal = true
+                                ExportController.clearPackaging()
+                            }
                         }
                     }
 

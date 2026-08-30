@@ -54,6 +54,9 @@ class ExportController : public QObject {
     Q_PROPERTY(QString carryOnText READ carryOnText NOTIFY carryOnChanged)
     Q_PROPERTY(bool carryingOn READ carryingOn NOTIFY carryOnChanged)
 
+    /// How the archive will be put together, in one line.
+    Q_PROPERTY(QString packagingSummary READ packagingSummary NOTIFY packagingChanged)
+
     Q_PROPERTY(QString scopeSummary READ scopeSummary NOTIFY scopeChanged)
     Q_PROPERTY(QString applicationSummary READ applicationSummary NOTIFY scopeChanged)
 
@@ -104,6 +107,8 @@ public:
     /// The same for the per-application choice.
     [[nodiscard]] QString applicationSummary() const;
 
+    [[nodiscard]] QString packagingSummary() const;
+
     [[nodiscard]] bool canCarryOn() const { return !interruptedArchive_.isEmpty(); }
     [[nodiscard]] QString carryOnText() const { return carryOnText_; }
     [[nodiscard]] bool carryingOn() const { return carryingOn_; }
@@ -140,6 +145,23 @@ public slots:
     /// Read here rather than held by the model so that the capture and the
     /// "what should I close first" check are asking the same question - the
     /// model belongs to a page that may already have been left behind.
+    /// The settings behind the "how it is packed" controls.
+    ///
+    /// Every one of them has a default that suits the drive it is going to,
+    /// and every one of them is worth being able to change: a block size that
+    /// suits a hard disk wastes memory on a small machine, a sync interval
+    /// that suits a stick slows an internal disk down for nothing, and the
+    /// number of workers is the difference between a laptop that stays usable
+    /// during a capture and one that does not.
+    ///
+    /// Zero means "as Transmit would choose", which is what they start at.
+    /// Sizes are in bytes and arrive as doubles because that is what QML has.
+    void setPackaging(double solidBlockSize, int workerCount, double syncIntervalBytes,
+                      bool verifyAfterWriting, bool keepJournal);
+
+    /// Back to what Transmit would choose on its own.
+    void clearPackaging();
+
     /// Looks in `destinationFolder` for a capture a previous run left
     /// unfinished. Cheap enough to call whenever the folder changes: it reads
     /// the record beside each archive, not the archives themselves.
@@ -197,6 +219,7 @@ signals:
     void reportReady();
     void scopeChanged();
     void carryOnChanged();
+    void packagingChanged();
 
 private:
     void handleProgress(const core::ProgressUpdate& update);
@@ -224,6 +247,12 @@ private:
     core::AppSelectionMode appMode_ = core::AppSelectionMode::All;
     int appsChosen_ = 0;
     int appsOffered_ = 0;
+
+    /// The advanced packaging settings. Zero is "let Transmit decide", which
+    /// is not the same as any particular value and has to stay distinguishable
+    /// from one: a sync interval of zero means "only at the end", and the
+    /// default on a removable drive is 32 MiB.
+    core::PackagingOptions packaging_;
 
     /// The unfinished capture found where the archive would go, and whether
     /// the user chose to carry on with it rather than start again.
