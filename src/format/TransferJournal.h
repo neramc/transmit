@@ -85,16 +85,41 @@ struct JournalFingerprint {
 };
 
 /// One block that reached the drive.
+///
+/// Everything the manifest's own block directory needs, because that is what
+/// this becomes: a resumed capture finishes with a directory made of the
+/// blocks a previous run wrote and the ones this one added, and a reader
+/// cannot tell which was which.
 struct JournalBlock {
     std::uint32_t blockId = 0;
+
+    /// Where the block's header starts in the logical stream.
+    std::uint64_t streamOffset = 0;
 
     /// The logical length of the archive once this block was written. A
     /// resume truncates the parts to the last of these, which is the only
     /// offset known to be a record boundary rather than the middle of one.
+    /// Kept alongside the offset rather than computed from it so the journal
+    /// need not know how large a block header is.
     std::uint64_t logicalEnd = 0;
 
     std::uint64_t rawSize = 0;
+    std::uint64_t storedSize = 0;
+    CodecId codec = CodecId::Zstd;
+    bool encrypted = false;
     Digest256 rawHash{};
+
+    /// The same block as the manifest records it.
+    [[nodiscard]] BlockRecord asBlockRecord() const {
+        BlockRecord record;
+        record.blockId = blockId;
+        record.streamOffset = streamOffset;
+        record.rawSize = rawSize;
+        record.storedSize = storedSize;
+        record.codec = codec;
+        record.encrypted = encrypted;
+        return record;
+    }
 };
 
 /// What a journal held when it was read back.
@@ -120,6 +145,15 @@ struct JournalContents {
     [[nodiscard]] std::uint64_t resumableLength() const noexcept {
         return blocks.empty() ? 0 : blocks.back().logicalEnd;
     }
+
+    /// Drops everything the archive on the drive cannot actually back up.
+    ///
+    /// The journal is written and synced ahead of the data it describes, so it
+    /// can outlive it: the record of a block reaches the drive and the block
+    /// itself does not. Given how long the archive really is, this throws away
+    /// the blocks that end past it, and then the entries that pointed into
+    /// them - which is the whole reason it is one operation and not two.
+    void keepOnlyWhatFitsIn(std::uint64_t archiveLength);
 };
 
 /// Writes the journal. One instance per capture; the file is opened once and
@@ -185,6 +219,14 @@ private:
 };
 
 /// Reads a journal back, discarding any torn tail.
+///
+/// Entries are only returned when the block they point into was recorded too.
+/// Order in the file is not enough to guarantee that: a capture compresses
+/// blocks on several threads, so a block's id is handed out - and the entries
+/// going into it resolve - while the block itself is still queued. An entry
+/// whose block never reached the journal describes bytes that may not be on
+/// the drive at all, and following it would put a location in the manifest
+/// pointing at nothing.
 ///
 /// Missing file is reported as `NotFound` - the caller decides whether that
 /// means "nothing to resume" or "the journal you named is not there", and the

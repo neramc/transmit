@@ -75,6 +75,29 @@ public:
                                                       const ArchiveUuid& uuid,
                                                       std::uint64_t syncIntervalBytes = 0);
 
+    /// Reopens an interrupted set and carries on writing at `logicalLength`.
+    ///
+    /// Everything past that offset is cut off: the part holding it is
+    /// truncated to exactly it and every later part is deleted. That is not
+    /// tidiness. A run that stopped part way left an unknown number of bytes
+    /// after the last point anybody can vouch for - a half-written block, or a
+    /// whole one the journal never got to record - and appending after them
+    /// would put a hole in the middle of the archive that every later offset
+    /// is measured against.
+    ///
+    /// `logicalLength` must be a length the set actually holds. Asking to
+    /// resume past the end is refused rather than padded: the caller knows
+    /// what the drive kept and this does not.
+    ///
+    /// `uuid` is checked against every part. A part from a different run
+    /// carrying the same name is the one way this could silently produce an
+    /// archive made of two captures.
+    static Result<std::unique_ptr<VolumeSink>> resume(const std::filesystem::path& basePath,
+                                                      std::uint64_t partSize,
+                                                      const ArchiveUuid& uuid,
+                                                      std::uint64_t syncIntervalBytes,
+                                                      std::uint64_t logicalLength);
+
     Status write(ByteView data);
 
     /// Logical offset of the next byte, ignoring part headers. Block offsets

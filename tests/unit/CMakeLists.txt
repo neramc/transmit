@@ -13,6 +13,7 @@ add_executable(transmit_format_tests
     FileIoTest.cpp
     ManifestTest.cpp
     VerificationTest.cpp
+    ResumeTest.cpp
     TransferJournalTest.cpp)
 
 target_link_libraries(transmit_format_tests

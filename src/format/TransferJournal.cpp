@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <set>
 
 #include "format/Serialization.h"
 #include "format/hash/Blake2b.h"
@@ -43,6 +44,10 @@ constexpr std::uint32_t kBlockId = 8;
 constexpr std::uint32_t kLogicalEnd = 9;
 constexpr std::uint32_t kRawSize = 10;
 constexpr std::uint32_t kRawHash = 11;
+constexpr std::uint32_t kStreamOffset = 13;
+constexpr std::uint32_t kStoredSize = 14;
+constexpr std::uint32_t kCodec = 15;
+constexpr std::uint32_t kEncrypted = 16;
 
 // EntryPlaced
 constexpr std::uint32_t kEntry = 12;
@@ -75,6 +80,43 @@ Status checkFileHeader(ByteView data) {
 }
 
 }  // namespace
+
+namespace {
+
+/// Removes entries whose block is not in the list, and reports how many went.
+///
+/// An entry with no content - a directory, a symbolic link, an empty file -
+/// points at no block and is always kept: there is nothing on the drive for it
+/// to be missing.
+std::size_t dropEntriesWithoutABlock(std::vector<ManifestEntry>& entries,
+                                     const std::vector<JournalBlock>& blocks) {
+    std::set<std::uint32_t> present;
+    for (const JournalBlock& block : blocks) {
+        present.insert(block.blockId);
+    }
+
+    const std::size_t before = entries.size();
+    entries.erase(std::remove_if(entries.begin(), entries.end(),
+                                 [&present](const ManifestEntry& entry) {
+                                     if (entry.location.length == 0) {
+                                         return false;
+                                     }
+                                     return present.count(entry.location.blockId) == 0;
+                                 }),
+                  entries.end());
+    return before - entries.size();
+}
+
+}  // namespace
+
+void JournalContents::keepOnlyWhatFitsIn(std::uint64_t archiveLength) {
+    blocks.erase(std::remove_if(blocks.begin(), blocks.end(),
+                                [archiveLength](const JournalBlock& block) {
+                                    return block.logicalEnd > archiveLength;
+                                }),
+                 blocks.end());
+    dropEntriesWithoutABlock(entries, blocks);
+}
 
 std::filesystem::path TransferJournal::pathFor(const std::filesystem::path& archive) {
     std::filesystem::path path = archive;
@@ -176,8 +218,12 @@ Status TransferJournal::recordBlock(const JournalBlock& block) {
     writer.putUInt(record_field::kKind,
                    static_cast<std::uint64_t>(JournalRecordKind::BlockWritten));
     writer.putUInt(record_field::kBlockId, block.blockId);
+    writer.putUInt(record_field::kStreamOffset, block.streamOffset);
     writer.putUInt(record_field::kLogicalEnd, block.logicalEnd);
     writer.putUInt(record_field::kRawSize, block.rawSize);
+    writer.putUInt(record_field::kStoredSize, block.storedSize);
+    writer.putUInt(record_field::kCodec, static_cast<std::uint64_t>(block.codec));
+    writer.putBool(record_field::kEncrypted, block.encrypted);
     writer.putBytes(record_field::kRawHash, ByteView(block.rawHash));
     return append(JournalRecordKind::BlockWritten, payload);
 }
@@ -371,6 +417,42 @@ Result<JournalContents> readTransferJournal(const std::filesystem::path& archive
                     block.rawSize = *value;
                     break;
                 }
+                case record_field::kStreamOffset: {
+                    auto value = reader.getVarint();
+                    if (!value) {
+                        malformed = true;
+                        break;
+                    }
+                    block.streamOffset = *value;
+                    break;
+                }
+                case record_field::kStoredSize: {
+                    auto value = reader.getVarint();
+                    if (!value) {
+                        malformed = true;
+                        break;
+                    }
+                    block.storedSize = *value;
+                    break;
+                }
+                case record_field::kCodec: {
+                    auto value = reader.getVarint();
+                    if (!value) {
+                        malformed = true;
+                        break;
+                    }
+                    block.codec = static_cast<CodecId>(*value);
+                    break;
+                }
+                case record_field::kEncrypted: {
+                    auto value = reader.getBool();
+                    if (!value) {
+                        malformed = true;
+                        break;
+                    }
+                    block.encrypted = *value;
+                    break;
+                }
                 case record_field::kRawHash: {
                     auto value = reader.getBytes();
                     if (!value || value->size() != block.rawHash.size()) {
@@ -447,6 +529,7 @@ Result<JournalContents> readTransferJournal(const std::filesystem::path& archive
         return Error{ErrorCode::CorruptArchive, "The journal never says which capture it is for."};
     }
 
+    dropEntriesWithoutABlock(contents.entries, contents.blocks);
     return contents;
 }
 

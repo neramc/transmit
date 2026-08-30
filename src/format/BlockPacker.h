@@ -54,6 +54,31 @@ public:
 
     [[nodiscard]] bool isDeduplicated(PlacementId id) const;
 
+    /// Placements whose location became final since this was last called, and
+    /// clears the list.
+    ///
+    /// A capture that keeps a journal has to record an entry at the moment its
+    /// location is known and its block is on the drive - which is the same
+    /// moment, since a placement only resolves once the block holding it has
+    /// been handed to the sink. Working that out from the outside is not
+    /// possible: placements do not resolve in the order they were added. An
+    /// empty file and one whose content the archive already holds both resolve
+    /// the instant they arrive, while the small files buffered ahead of them
+    /// are still waiting for their block to fill.
+    ///
+    /// Call it after add() has returned, so the caller has already recorded
+    /// what the new handle belongs to.
+    std::vector<PlacementId> takeResolved();
+
+    /// Registers content the archive already holds, so a resumed capture
+    /// points at a copy a previous run wrote instead of storing a second one.
+    ///
+    /// Given the entries an interrupted run recorded in its journal, this
+    /// rebuilds the deduplication table it had in memory when it stopped.
+    /// Without it a resume would still be correct and would quietly write
+    /// every duplicate again.
+    void remember(const Digest256& hash, const BlockLocation& location);
+
     [[nodiscard]] std::uint64_t deduplicatedBytes() const noexcept { return deduplicatedBytes_; }
     [[nodiscard]] std::uint64_t pendingBytes() const noexcept { return pending_.size(); }
     [[nodiscard]] std::size_t blockCount() const noexcept { return blockCount_; }
@@ -81,6 +106,7 @@ private:
     std::vector<std::pair<PlacementId, PlacementId>> pendingAliases_;
 
     std::map<Digest256, BlockLocation> byHash_;
+    std::vector<PlacementId> resolved_;
     std::uint64_t deduplicatedBytes_ = 0;
     std::size_t blockCount_ = 0;
 };

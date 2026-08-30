@@ -155,6 +155,140 @@ Result<std::unique_ptr<VolumeSink>> VolumeSink::create(const std::filesystem::pa
     return sink;
 }
 
+Result<std::unique_ptr<VolumeSink>> VolumeSink::resume(const std::filesystem::path& basePath,
+                                                       std::uint64_t partSize,
+                                                       const ArchiveUuid& uuid,
+                                                       std::uint64_t syncIntervalBytes,
+                                                       std::uint64_t logicalLength) {
+    if (partSize > 0 && partSize <= VolumeHeader::kSize) {
+        return makeError(ErrorCode::InvalidArgument, "the split size is too small");
+    }
+
+    // The same naming rule create() uses, walked in order and stopping at the
+    // first gap: a set with part 3 missing is not a set with parts 1, 2 and 4.
+    std::vector<std::filesystem::path> candidates;
+    if (partSize == 0) {
+        std::error_code ec;
+        if (std::filesystem::exists(basePath, ec)) {
+            candidates.push_back(basePath);
+        }
+    } else {
+        for (std::uint16_t index = 1; index <= kMaxPartIndex; ++index) {
+            std::filesystem::path candidate = partPathFor(basePath, index);
+            std::error_code ec;
+            if (!std::filesystem::exists(candidate, ec)) {
+                break;
+            }
+            candidates.push_back(std::move(candidate));
+        }
+    }
+    if (candidates.empty()) {
+        return makeError(ErrorCode::NotFound, "there is nothing at '", fromFsPath(basePath),
+                         "' to carry on from");
+    }
+
+    // What each part holds, taken from the file rather than from the header:
+    // an interrupted run never patched the header, so its payloadLength is
+    // still zero, and the length on disk is the only honest answer.
+    std::vector<std::uint64_t> payloads;
+    payloads.reserve(candidates.size());
+    std::uint64_t total = 0;
+
+    for (std::size_t i = 0; i < candidates.size(); ++i) {
+        TRANSMIT_TRY(stream, FileStream::open(candidates[i], FileStream::Mode::Read));
+
+        std::array<Byte, VolumeHeader::kSize> raw{};
+        TRANSMIT_CHECK(stream.seek(0));
+        TRANSMIT_CHECK(stream.read(raw));
+        TRANSMIT_TRY(header, VolumeHeader::decode(raw));
+
+        if (header.archiveUuid != uuid) {
+            return makeError(ErrorCode::VolumeOutOfOrder, "'", fromFsPath(candidates[i]),
+                             "' was written by a different capture");
+        }
+        if (header.partIndex != static_cast<std::uint16_t>(i + 1)) {
+            return makeError(ErrorCode::VolumeOutOfOrder, "'", fromFsPath(candidates[i]),
+                             "' is part ", std::to_string(header.partIndex), " but part ",
+                             std::to_string(i + 1), " was expected");
+        }
+        if (header.isFinalised()) {
+            return makeError(ErrorCode::InvalidArgument, "'", fromFsPath(candidates[i]),
+                             "' belongs to an archive that was already finished");
+        }
+
+        TRANSMIT_TRY(fileSize, stream.size());
+        const std::uint64_t payload =
+            fileSize > VolumeHeader::kSize ? fileSize - VolumeHeader::kSize : 0;
+        payloads.push_back(payload);
+        total += payload;
+    }
+
+    if (logicalLength > total) {
+        return makeError(ErrorCode::InvalidArgument, "asked to carry on at ",
+                         std::to_string(logicalLength), " bytes, but the parts beside '",
+                         fromFsPath(basePath), "' hold only ", std::to_string(total));
+    }
+
+    // Which part the resume point falls in, and how much of it is kept. A
+    // point exactly on a boundary stays in the earlier part: the next write
+    // opens the following one on its own.
+    std::size_t keptParts = 0;
+    std::uint64_t consumed = 0;
+    std::uint64_t keptInLast = 0;
+    for (std::size_t i = 0; i < payloads.size(); ++i) {
+        ++keptParts;
+        if (consumed + payloads[i] >= logicalLength) {
+            keptInLast = logicalLength - consumed;
+            break;
+        }
+        consumed += payloads[i];
+    }
+
+    auto sink = std::unique_ptr<VolumeSink>(new VolumeSink());
+    sink->basePath_ = basePath;
+    sink->partSize_ = partSize;
+    sink->syncIntervalBytes_ = syncIntervalBytes;
+    sink->uuid_ = uuid;
+
+    // The parts past the resume point go first, so a failure part way through
+    // leaves less behind rather than more.
+    for (std::size_t i = candidates.size(); i > keptParts; --i) {
+        std::error_code ec;
+        std::filesystem::remove(candidates[i - 1], ec);
+        if (ec) {
+            Error error{ErrorCode::IoError, "could not remove '" + fromFsPath(candidates[i - 1]) +
+                                                "', which is past the point being resumed from"};
+            error.systemCode = ec.value();
+            return error;
+        }
+    }
+
+    const std::filesystem::path& last = candidates[keptParts - 1];
+    if (keptInLast != payloads[keptParts - 1]) {
+        std::error_code ec;
+        std::filesystem::resize_file(last, VolumeHeader::kSize + keptInLast, ec);
+        if (ec) {
+            Error error{ErrorCode::IoError,
+                        "could not cut '" + fromFsPath(last) + "' back to the resume point"};
+            error.systemCode = ec.value();
+            return error;
+        }
+    }
+
+    for (std::size_t i = 0; i < keptParts; ++i) {
+        sink->parts_.push_back(candidates[i]);
+        sink->partPayloads_.push_back(i + 1 == keptParts ? keptInLast : payloads[i]);
+    }
+    sink->partIndex_ = static_cast<std::uint16_t>(keptParts);
+    sink->currentPayload_ = keptInLast;
+    sink->logicalOffset_ = logicalLength;
+
+    TRANSMIT_TRY(stream, FileStream::open(last, FileStream::Mode::ReadWrite));
+    sink->current_ = std::move(stream);
+    TRANSMIT_CHECK(sink->current_.seek(VolumeHeader::kSize + keptInLast));
+    return sink;
+}
+
 Status VolumeSink::openNextPart() {
     if (partIndex_ >= kMaxPartIndex) {
         return makeError(ErrorCode::InvalidArgument,

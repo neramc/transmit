@@ -112,6 +112,37 @@ public:
     static Result<std::unique_ptr<ArchiveWriter>> create(const std::filesystem::path& basePath,
                                                          const ArchiveOptions& options);
 
+    /// Where an interrupted capture got to, in the terms the writer needs.
+    ///
+    /// This comes from the transfer journal beside the archive, never from the
+    /// archive itself: an unfinished archive has no manifest and no footer, so
+    /// the only way to read its blocks back would be to walk a tail that was
+    /// being written when the run stopped.
+    struct ResumePoint {
+        /// Length of the logical stream to carry on from. Everything past it
+        /// is cut off.
+        std::uint64_t logicalLength = 0;
+
+        /// The blocks already on the drive, in the order they were written.
+        /// They go into the manifest unchanged when the capture finishes.
+        std::vector<BlockRecord> blocks;
+    };
+
+    /// Carries on writing an archive a previous run left unfinished.
+    ///
+    /// The header is read back off the drive rather than made afresh, and that
+    /// is the whole reason resuming is possible at all: it carries the
+    /// archive's uuid, and - for an encrypted archive - the salt the existing
+    /// blocks were encrypted under. Generating a new one would leave every
+    /// block already written unreadable while looking perfectly well formed.
+    ///
+    /// The passphrase is checked against the header before anything is
+    /// written, so resuming with the wrong one fails in milliseconds instead
+    /// of producing an archive whose two halves need different keys.
+    static Result<std::unique_ptr<ArchiveWriter>> resume(const std::filesystem::path& basePath,
+                                                         const ArchiveOptions& options,
+                                                         const ResumePoint& point);
+
     /// Reserves the next block id. Safe to call before the block's bytes are
     /// ready, so the pipeline can keep ids in scan order.
     [[nodiscard]] std::uint32_t nextBlockId() noexcept { return nextBlockId_++; }
@@ -130,6 +161,13 @@ public:
     /// Writes the manifest and footer and closes every volume. The manifest is
     /// updated in place with the block directory and the storage totals.
     Status finish(Manifest& manifest);
+
+    /// The blocks written so far, in the order they were written.
+    [[nodiscard]] const std::vector<BlockRecord>& blocks() const noexcept { return blocks_; }
+
+    /// How long the logical stream is. This is the offset a later run would
+    /// carry on from, and the only one a journal should ever record.
+    [[nodiscard]] std::uint64_t logicalLength() const noexcept;
 
     [[nodiscard]] const ArchiveUuid& uuid() const noexcept { return header_.uuid; }
     [[nodiscard]] bool isEncrypted() const noexcept { return header_.isEncrypted(); }

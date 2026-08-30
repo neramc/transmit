@@ -216,6 +216,87 @@ Result<std::unique_ptr<ArchiveWriter>> ArchiveWriter::create(const std::filesyst
     return writer;
 }
 
+Result<std::unique_ptr<ArchiveWriter>> ArchiveWriter::resume(const std::filesystem::path& basePath,
+                                                             const ArchiveOptions& options,
+                                                             const ResumePoint& point) {
+    if (point.logicalLength < ArchiveHeader::kSize) {
+        return makeError(ErrorCode::InvalidArgument,
+                         "there is not even a whole archive header to carry on from");
+    }
+
+    auto writer = std::unique_ptr<ArchiveWriter>(new ArchiveWriter());
+    writer->options_ = options;
+    writer->profile_ = CompressionProfile::fromPreset(options.preset);
+
+    if (!isCodecAvailable(writer->profile_.codec)) {
+        return makeError(ErrorCode::UnsupportedCodec, "the '",
+                         std::string(presetName(options.preset)), "' preset needs the ",
+                         std::string(codecName(writer->profile_.codec)),
+                         " codec, which this build does not include");
+    }
+
+    // The header off the drive, in its own scope so every part is closed again
+    // before the sink reopens the last one to write to.
+    {
+        const std::filesystem::path anyPart =
+            options.partSize == 0 ? basePath : partPathFor(basePath, 1);
+        TRANSMIT_TRY(source, VolumeSource::open(anyPart));
+
+        std::array<Byte, ArchiveHeader::kSize> raw{};
+        TRANSMIT_CHECK(source->readAt(0, raw));
+        TRANSMIT_TRY(header, ArchiveHeader::decode(raw));
+        writer->header_ = header;
+    }
+
+    if (writer->header_.isEncrypted() != !options.passphrase.empty()) {
+        return makeError(ErrorCode::InvalidArgument,
+                         writer->header_.isEncrypted()
+                             ? "that archive is encrypted and no passphrase was given"
+                             : "that archive is not encrypted and a passphrase was given");
+    }
+
+    if (writer->header_.isEncrypted()) {
+        if (!ArchiveCipher::isAvailable()) {
+            return makeError(ErrorCode::EncryptionUnavailable,
+                             "this build of Transmit was compiled without OpenSSL, so it cannot "
+                             "carry on writing an encrypted archive");
+        }
+        TRANSMIT_TRY(cipher, ArchiveCipher::derive(options.passphrase, writer->header_.kdf));
+        if (cipher.keyCheck() != writer->header_.keyCheck) {
+            return makeError(ErrorCode::WrongPassphrase,
+                             "that is not the passphrase the archive was started with");
+        }
+        writer->cipher_ = std::make_unique<ArchiveCipher>(std::move(cipher));
+    }
+
+    TRANSMIT_TRY(sink, VolumeSink::resume(basePath, options.partSize, writer->header_.uuid,
+                                          options.syncIntervalBytes, point.logicalLength));
+    writer->sink_ = std::move(sink);
+
+    writer->blocks_ = point.blocks;
+
+    // Ids carry on past the highest one already used rather than from the
+    // count: a block the journal lost the record of still occupies its id in
+    // the file, and handing that id out twice would give the manifest two
+    // different blocks with one name.
+    std::uint32_t highest = 0;
+    for (const BlockRecord& record : writer->blocks_) {
+        highest = std::max(highest, record.blockId);
+    }
+    writer->nextBlockId_ = highest + 1;
+
+    // Everything after the archive header is blocks, so the stream length says
+    // exactly what has been stored. Derived rather than passed in, because a
+    // figure that can disagree with the file eventually does.
+    writer->storedBytes_ = point.logicalLength - ArchiveHeader::kSize;
+
+    return writer;
+}
+
+std::uint64_t ArchiveWriter::logicalLength() const noexcept {
+    return sink_ ? sink_->logicalOffset() : 0;
+}
+
 Result<PreparedBlock> ArchiveWriter::prepare(std::uint32_t blockId, ByteView raw,
                                              const AbortCheck& abort) const {
     PreparedBlock block;

@@ -327,6 +327,118 @@ TEST_F(TransferJournalTest, RecordsPastTheResumePointCannotComeBackBehindTheNewO
     EXPECT_EQ(after->validBytes, journalSize());
 }
 
+// A capture compresses on several threads, so a block's id is handed out - and
+// the entries going into it settle on their locations - while the block itself
+// is still queued behind others. An entry can therefore reach the journal
+// before its block does, and if the run stops in between, that entry describes
+// bytes that are not on the drive. Following it would put a location in the
+// manifest pointing at nothing, which is far worse than losing the file.
+TEST_F(TransferJournalTest, AnEntryWhoseBlockNeverReachedTheJournalIsNotReturned) {
+    {
+        auto journal = TransferJournal::begin(archivePath(), fingerprint());
+        ASSERT_TRUE(journal);
+        ASSERT_TRUE((*journal)->recordBlock(block(1, 1000)));
+        ASSERT_TRUE((*journal)->recordEntry(entry(1, "landed.txt", 1)));
+        // Block 2 was queued and its entry settled, but the run stopped before
+        // the block was written.
+        ASSERT_TRUE((*journal)->recordEntry(entry(2, "still-queued.txt", 2)));
+        ASSERT_TRUE((*journal)->close());
+    }
+
+    const auto contents = readTransferJournal(archivePath());
+    ASSERT_TRUE(contents) << contents.error().toString();
+    EXPECT_FALSE(contents->tailDiscarded) << "the journal itself is intact";
+    ASSERT_EQ(contents->entries.size(), 1U);
+    EXPECT_EQ(contents->entries[0].path.relative, "landed.txt");
+}
+
+// A directory, a symbolic link and an empty file point at no block at all.
+// There is nothing on the drive for them to be missing, so the rule above must
+// not take them with it.
+TEST_F(TransferJournalTest, AnEntryWithNothingInItNeedsNoBlock) {
+    {
+        auto journal = TransferJournal::begin(archivePath(), fingerprint());
+        ASSERT_TRUE(journal);
+
+        ManifestEntry folder = entry(1, "Projects", 0);
+        folder.type = EntryType::Directory;
+        folder.size = 0;
+        folder.location = BlockLocation{0, 0, 0};
+        ASSERT_TRUE((*journal)->recordEntry(folder));
+
+        ManifestEntry empty = entry(2, "empty.txt", 0);
+        empty.size = 0;
+        empty.location = BlockLocation{0, 0, 0};
+        ASSERT_TRUE((*journal)->recordEntry(empty));
+        ASSERT_TRUE((*journal)->close());
+    }
+
+    const auto contents = readTransferJournal(archivePath());
+    ASSERT_TRUE(contents) << contents.error().toString();
+    EXPECT_TRUE(contents->blocks.empty());
+    EXPECT_EQ(contents->entries.size(), 2U) << "an entry with no content was dropped";
+}
+
+// The journal is synced in front of the data it describes, so it can outlive
+// it: the record of a block reaches the drive and the block does not. What is
+// really there decides, not what the journal remembers.
+TEST_F(TransferJournalTest, WhatTheDriveDidNotKeepIsDropped) {
+    {
+        auto journal = TransferJournal::begin(archivePath(), fingerprint());
+        ASSERT_TRUE(journal);
+        ASSERT_TRUE((*journal)->recordBlock(block(1, 1000)));
+        ASSERT_TRUE((*journal)->recordEntry(entry(1, "safe.txt", 1)));
+        ASSERT_TRUE((*journal)->recordBlock(block(2, 2000)));
+        ASSERT_TRUE((*journal)->recordEntry(entry(2, "lost.txt", 2)));
+        ASSERT_TRUE((*journal)->close());
+    }
+
+    auto contents = readTransferJournal(archivePath());
+    ASSERT_TRUE(contents);
+    ASSERT_EQ(contents->blocks.size(), 2U);
+    ASSERT_EQ(contents->entries.size(), 2U);
+
+    // The archive really stops at 1500 bytes: block 2 is only half there.
+    contents->keepOnlyWhatFitsIn(1500);
+
+    ASSERT_EQ(contents->blocks.size(), 1U);
+    EXPECT_EQ(contents->blocks[0].blockId, 1U);
+    EXPECT_EQ(contents->resumableLength(), 1000U);
+    ASSERT_EQ(contents->entries.size(), 1U);
+    EXPECT_EQ(contents->entries[0].path.relative, "safe.txt");
+}
+
+TEST_F(TransferJournalTest, ABlockComesBackAsTheManifestRecordsIt) {
+    JournalBlock written;
+    written.blockId = 4;
+    written.streamOffset = 4096;
+    written.logicalEnd = 9000;
+    written.rawSize = 70000;
+    written.storedSize = 4856;
+    written.codec = CodecId::Zstd;
+    written.encrypted = true;
+    written.rawHash.fill(Byte{0x11});
+
+    {
+        auto journal = TransferJournal::begin(archivePath(), fingerprint());
+        ASSERT_TRUE(journal);
+        ASSERT_TRUE((*journal)->recordBlock(written));
+        ASSERT_TRUE((*journal)->close());
+    }
+
+    const auto contents = readTransferJournal(archivePath());
+    ASSERT_TRUE(contents) << contents.error().toString();
+    ASSERT_EQ(contents->blocks.size(), 1U);
+
+    const BlockRecord record = contents->blocks[0].asBlockRecord();
+    EXPECT_EQ(record.blockId, 4U);
+    EXPECT_EQ(record.streamOffset, 4096U);
+    EXPECT_EQ(record.rawSize, 70000U);
+    EXPECT_EQ(record.storedSize, 4856U);
+    EXPECT_EQ(record.codec, CodecId::Zstd);
+    EXPECT_TRUE(record.encrypted);
+}
+
 TEST_F(TransferJournalTest, AJournalWithNoSessionStartIsRefusedRatherThanResumedFromZero) {
     auto journal = TransferJournal::begin(archivePath(), fingerprint());
     ASSERT_TRUE(journal);

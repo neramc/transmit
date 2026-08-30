@@ -16,12 +16,14 @@ Result<BlockPacker::PlacementId> BlockPacker::add(const Digest256& hash, ByteVie
 
     if (content.empty()) {
         placements_.push_back(Placement{BlockLocation{0, 0, 0}, true, false});
+        resolved_.push_back(id);
         return id;
     }
 
     if (const auto it = byHash_.find(hash); it != byHash_.end()) {
         deduplicatedBytes_ += content.size();
         placements_.push_back(Placement{it->second, true, true});
+        resolved_.push_back(id);
         return id;
     }
 
@@ -43,6 +45,7 @@ Result<BlockPacker::PlacementId> BlockPacker::add(const Digest256& hash, ByteVie
         const BlockLocation location{blockId, 0, content.size()};
         byHash_.emplace(hash, location);
         placements_.push_back(Placement{location, true, false});
+        resolved_.push_back(id);
         return id;
     }
 
@@ -72,11 +75,15 @@ Status BlockPacker::flush() {
         placement.location.blockId = blockId;
         placement.resolved = true;
         byHash_.emplace(hash, placement.location);
+        resolved_.push_back(id);
     }
 
+    // After the originals, so a duplicate is never reported before the
+    // placement it copies its location from.
     for (const auto& [duplicate, original] : pendingAliases_) {
         placements_[duplicate].location = placements_[original].location;
         placements_[duplicate].resolved = true;
+        resolved_.push_back(duplicate);
     }
 
     pending_.clear();
@@ -100,6 +107,22 @@ Result<BlockLocation> BlockPacker::location(PlacementId id) const {
 
 bool BlockPacker::isDeduplicated(PlacementId id) const {
     return id < placements_.size() && placements_[id].deduplicated;
+}
+
+std::vector<BlockPacker::PlacementId> BlockPacker::takeResolved() {
+    std::vector<PlacementId> taken;
+    taken.swap(resolved_);
+    return taken;
+}
+
+void BlockPacker::remember(const Digest256& hash, const BlockLocation& location) {
+    // Only content that is actually stored somewhere. An entry with no bytes
+    // has a location of all zeroes, and registering that would make every
+    // later empty file point at block zero as though it held something.
+    if (location.length == 0) {
+        return;
+    }
+    byHash_.emplace(hash, location);
 }
 
 }  // namespace transmit::format
