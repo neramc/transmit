@@ -34,6 +34,7 @@ class ContinuityRoundTripTest : public QObject {
 private slots:
     void initTestCase();
     void capturesAndRestoresUserFiles();
+    void restoringTwiceDoesNotDuplicateWhatIsAlreadyThere();
     void deduplicatesRepeatedContent();
     void splitsAcrossVolumesAndReadsThemBack();
     void encryptsWhenGivenAPassphrase();
@@ -444,6 +445,66 @@ void ContinuityRoundTripTest::capturesAndRestoresUserFiles() {
     QCOMPARE(restored.readAll(), original.readAll());
 
     QVERIFY(QDir(workspace_.filePath("restored") + "/DOCUMENTS/empty").exists());
+}
+
+// A restore that was interrupted leaves a machine with some of the files on it,
+// and the obvious next move is to run it again. Under the default policy for a
+// home directory - keep both - that used to produce a second copy of every file
+// the first run had managed, named "notes~1.txt", and somebody who wanted their
+// documents back got them twice.
+void ContinuityRoundTripTest::restoringTwiceDoesNotDuplicateWhatIsAlreadyThere() {
+    core::ExportService exporter(*platform_);
+    core::CancelToken token;
+
+    core::ExportRequest request;
+    request.destinationPath = archivePath("twice.txa");
+    request.selection = documentsSelection();
+    request.packaging.preset = format::CompressionPreset::Fast;
+
+    const core::ExportReport exported = exporter.run(request, token);
+    QVERIFY2(exported.succeeded, qPrintable(exported.errorMessage));
+
+    const QString into = workspace_.filePath("restored-twice");
+
+    core::ImportService importer(*platform_);
+    core::ImportRequest restore;
+    restore.archivePath = request.destinationPath;
+    restore.destinationOverride = into;
+    restore.conflictPolicy = core::ConflictPolicy::KeepBoth;
+
+    const core::ImportReport first = importer.run(restore, token);
+    QVERIFY2(first.succeeded, qPrintable(first.errorMessage));
+
+    QStringList afterFirst;
+    for (QDirIterator walk(into, QDir::Files, QDirIterator::Subdirectories); walk.hasNext();) {
+        afterFirst << walk.next();
+    }
+    afterFirst.sort();
+    QVERIFY(!afterFirst.isEmpty());
+
+    // The same restore again, onto what it just wrote.
+    const core::ImportReport second = importer.run(restore, token);
+    QVERIFY2(second.succeeded, qPrintable(second.errorMessage));
+
+    QStringList afterSecond;
+    for (QDirIterator walk(into, QDir::Files, QDirIterator::Subdirectories); walk.hasNext();) {
+        afterSecond << walk.next();
+    }
+    afterSecond.sort();
+
+    // The name uniqueSibling() actually gives a kept-both copy. Spelled the
+    // same way here as there, because an assertion against a name the code
+    // never produces passes whatever happens.
+    for (const QString& path : afterSecond) {
+        QVERIFY2(!QFileInfo(path).completeBaseName().endsWith(QStringLiteral("~1")),
+                 qPrintable(QStringLiteral("a second copy was made: %1").arg(path)));
+    }
+    QCOMPARE(afterSecond, afterFirst);
+
+    // It is still reported as restored, because it is: the report describes
+    // what is on the machine, not how much work went into it.
+    QCOMPARE(second.filesRestored, first.filesRestored);
+    QCOMPARE(second.filesSkipped, 0u);
 }
 
 void ContinuityRoundTripTest::deduplicatesRepeatedContent() {

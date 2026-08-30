@@ -19,12 +19,14 @@
 #include "core/rewrite/PathRewriter.h"
 #include "core/rewrite/PathTranslator.h"
 #include "core/secrets/SecretsDomain.h"
+#include "core/services/ConsistentCopy.h"
 #include "core/services/RollbackWriter.h"
 #include "core/settings/SettingsDomain.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
 #include "format/FileIo.h"
 #include "format/NameSanitizer.h"
+#include "format/hash/Blake2b.h"
 
 #ifndef Q_OS_WIN
 #include <sys/stat.h>
@@ -81,6 +83,40 @@ bool writeFileContents(const QString& path, const format::ByteBuffer& content, Q
 /// It used to return the original path in that case, which under KeepBoth -
 /// the default policy - meant the one outcome the user explicitly asked to
 /// avoid: their existing file overwritten, reported as a success.
+/// Whether the file already at `path` is exactly the file the archive holds.
+///
+/// A restore that was interrupted leaves a machine with some of the files on
+/// it, and the obvious thing to do next is run it again. Under the default
+/// policy for a home directory - keep both - that produces a second copy of
+/// every file the first run managed, named "notes (1).txt", and the person who
+/// wanted their documents back gets them twice. It is not a conflict when the
+/// file already there is the one being written.
+///
+/// Cheap where it needs to be: a different file almost always has a different
+/// size, so the hash is only computed when the size already matches, and the
+/// no-conflict path - nothing there at all - never gets here.
+bool alreadyExactlyThisFile(const QString& path, const format::ManifestEntry& entry) {
+    if (entry.type != format::EntryType::File) {
+        return false;
+    }
+    const QFileInfo existing(path);
+    if (!existing.isFile() || existing.isSymLink() ||
+        static_cast<quint64>(existing.size()) != entry.size) {
+        return false;
+    }
+    if (entry.size == 0) {
+        // Two empty files are the same file. The hash agrees, but reading
+        // nothing to find that out is a waste of a system call.
+        return true;
+    }
+
+    const auto content = consistent_copy::readFile(path, entry.size);
+    if (!content) {
+        return false;
+    }
+    return format::Blake2b::hash256(toByteView(*content)) == entry.contentHash;
+}
+
 std::optional<QString> uniqueSibling(const QString& path) {
     const QFileInfo info(path);
     const QString stem = info.completeBaseName();
@@ -600,6 +636,22 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                 "Import", "Left alone: it could not be saved for undo first.");
             ++report.filesSkipped;
             report.items.push_back(item);
+            continue;
+        }
+
+        // Before the policy, because none of the policies that writes is the
+        // right answer to "this is already the file we were about to write".
+        //
+        // Skip is left to answer for itself. It would not write either, so the
+        // outcome is the same, and "left alone: a file is already here" is the
+        // more informative of the two reports for somebody who asked for
+        // existing files not to be touched.
+        if (exists && request.conflictPolicy != ConflictPolicy::Skip &&
+            alreadyExactlyThisFile(targetPath, entry)) {
+            item.note = QCoreApplication::translate(
+                "Import", "Already here, byte for byte: nothing needed doing.");
+            report.items.push_back(item);
+            ++report.filesRestored;
             continue;
         }
 
