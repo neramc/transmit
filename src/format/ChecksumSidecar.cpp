@@ -143,6 +143,17 @@ Result<std::vector<SidecarPart>> readChecksumSidecar(const std::filesystem::path
                               (end == std::string::npos ? text.size() : end) - start);
         start = (end == std::string::npos ? text.size() : end) + 1;
 
+        // A sidecar that has been through a Windows editor, or was written on
+        // one, ends its lines with CRLF. Leaving the carriage return on would
+        // put it on the end of the file name, and the part it names would then
+        // match nothing - which is the worst way for this to fail, because the
+        // archive is fine and the check says otherwise. This file travels on a
+        // USB stick between operating systems; CRLF is the expected case, not
+        // the odd one.
+        if (!line.empty() && line.back() == '\r') {
+            line.remove_suffix(1);
+        }
+
         if (line.empty() || line.front() == '#') {
             continue;
         }

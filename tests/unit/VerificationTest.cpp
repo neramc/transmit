@@ -188,7 +188,9 @@ TEST_F(VerificationTest, TheSidecarLeavesTheNamesOutWhenAsked) {
 TEST_F(VerificationTest, ReadingSkipsCommentsAndAnythingElseUnexpected) {
     const auto path = directory_ / "hand-written.md5";
     {
-        std::ofstream file(path);
+        // Binary, so the line endings under test are the ones written here
+        // rather than whatever the platform's text mode decides.
+        std::ofstream file(path, std::ios::binary);
         file << "# a comment\n";
         file << "\n";
         file << "this line is not a checksum at all\n";
@@ -203,6 +205,45 @@ TEST_F(VerificationTest, ReadingSkipsCommentsAndAnythingElseUnexpected) {
     EXPECT_EQ(parts->at(0).fileName, "first.txa");
     EXPECT_EQ(parts->at(1).fileName, "second.txa");
     EXPECT_EQ(toHex(parts->at(0).md5), "00112233445566778899aabbccddeeff");
+}
+
+// This file crosses operating systems for a living - it is written beside the
+// archive on a USB stick precisely so the archive can be checked on the machine
+// it is going to. So a sidecar with CRLF endings is the ordinary case, not an
+// exotic one, and a carriage return left on the end of a name makes the part it
+// names match nothing. That failure is the bad kind: the archive is perfectly
+// sound and the check says otherwise.
+TEST_F(VerificationTest, ReadingHandlesWindowsLineEndings) {
+    const auto path = directory_ / "from-windows.md5";
+    {
+        std::ofstream file(path, std::ios::binary);
+        file << "# written on a machine that ends its lines with CRLF\r\n";
+        file << "00112233445566778899aabbccddeeff  first.txa\r\n";
+        file << "ffeeddccbbaa99887766554433221100 *second.txa\r\n";
+    }
+
+    const auto parts = readChecksumSidecar(path);
+    ASSERT_TRUE(parts) << (parts ? "" : parts.error().toString());
+    ASSERT_EQ(parts->size(), 2U);
+    EXPECT_EQ(parts->at(0).fileName, "first.txa");
+    EXPECT_EQ(parts->at(1).fileName, "second.txa");
+    EXPECT_EQ(toHex(parts->at(0).md5), "00112233445566778899aabbccddeeff");
+}
+
+// A file with no newline after its last line is what a text editor that does
+// not add one leaves behind, and the last part is the one most likely to
+// matter.
+TEST_F(VerificationTest, ReadingHandlesAFinalLineWithNoEndingAtAll) {
+    const auto path = directory_ / "unterminated.md5";
+    {
+        std::ofstream file(path, std::ios::binary);
+        file << "00112233445566778899aabbccddeeff  only.txa";
+    }
+
+    const auto parts = readChecksumSidecar(path);
+    ASSERT_TRUE(parts) << (parts ? "" : parts.error().toString());
+    ASSERT_EQ(parts->size(), 1U);
+    EXPECT_EQ(parts->at(0).fileName, "only.txa");
 }
 
 // ---------------------------------------------------- the entry-level checks
