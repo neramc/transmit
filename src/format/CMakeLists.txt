@@ -16,6 +16,7 @@ add_library(transmit_format STATIC
     BlockPacker.cpp
     Container.cpp
     ChecksumSidecar.cpp
+    TransferJournal.cpp
     codec/Codec.cpp
     codec/StoreCodec.cpp
     codec/DeflateCodec.cpp

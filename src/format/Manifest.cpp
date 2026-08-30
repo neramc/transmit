@@ -642,4 +642,15 @@ Result<Manifest> Manifest::deserialize(ByteView data) {
     return manifest;
 }
 
+ByteBuffer encodeManifestEntry(const ManifestEntry& entry) {
+    ByteBuffer buffer;
+    ByteWriter writer(buffer);
+    writeEntry(writer, entry);
+    return buffer;
+}
+
+Result<ManifestEntry> decodeManifestEntry(ByteView data) {
+    return readEntry(data);
+}
+
 }  // namespace transmit::format

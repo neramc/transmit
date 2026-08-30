@@ -178,4 +178,14 @@ struct Manifest {
     static Result<Manifest> deserialize(ByteView data);
 };
 
+/// One entry on its own, in exactly the encoding the manifest uses for it.
+///
+/// The transfer journal records entries as a capture places them, long before
+/// there is a manifest to put them in. Sharing this codec rather than writing
+/// a second one is what makes a resumed capture produce the same archive as an
+/// uninterrupted one: an entry that came back out of a journal is the same
+/// bytes as an entry that never left memory.
+[[nodiscard]] ByteBuffer encodeManifestEntry(const ManifestEntry& entry);
+Result<ManifestEntry> decodeManifestEntry(ByteView data);
+
 }  // namespace transmit::format
