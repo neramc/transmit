@@ -15,10 +15,21 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Every job has a deadline.
+#
+# Without one a job that hangs holds a runner for six hours and reports
+# nothing, which is how a green tree and a stuck tree look identical from
+# outside. This is not hypothetical: installing the Windows dependencies,
+# normally ten minutes, has sat at eighty-five with nothing to show and no
+# prospect of stopping on its own.
+#
+# The budgets are roughly three times what each job takes on a machine that is
+# behaving, so a slow runner still finishes and a stuck one is cut off.
 jobs:
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -218,6 +229,7 @@ jobs:
   quality:
     name: Formatting and static analysis
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -298,6 +310,7 @@ jobs:
   sanitizers:
     name: Sanitisers (${{ matrix.kind }})
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -348,6 +361,7 @@ jobs:
   catalog:
     name: Application catalog
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -380,6 +394,7 @@ jobs:
   fault-injection:
     name: Fault injection
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -424,6 +439,7 @@ jobs:
   fuzz:
     name: Fuzzing
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -547,6 +563,7 @@ jobs:
   benchmark:
     name: Speed
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
