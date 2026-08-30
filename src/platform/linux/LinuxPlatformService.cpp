@@ -31,6 +31,80 @@ using core::toUtf8;
 /// Runs a command and returns stdout, or an empty string when the tool is
 /// missing or fails. Package managers are queried this way because none of
 /// them offers a stable library interface.
+/// The device behind a mount point, from the kernel's own table.
+///
+/// udisksctl works on devices, not on where they happen to be mounted, and
+/// guessing the device from the path is not something to do with an unmount
+/// on the other end of it.
+QString deviceForMountPoint(const QString& rootPath) {
+    QFile mounts(QStringLiteral("/proc/self/mounts"));
+    if (!mounts.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return {};
+    }
+
+    // Later entries win: a path can be mounted over, and what is there now is
+    // the last one that said so.
+    QString device;
+    while (!mounts.atEnd()) {
+        const QString line = QString::fromUtf8(mounts.readLine()).trimmed();
+        const QStringList fields = line.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+        if (fields.size() < 2) {
+            continue;
+        }
+        // The kernel escapes spaces and a few others as octal.
+        QString point = fields[1];
+        point.replace(QLatin1String("\\040"), QLatin1String(" "));
+        point.replace(QLatin1String("\\011"), QLatin1String("\t"));
+        point.replace(QLatin1String("\\134"), QLatin1String("\\"));
+        if (point == rootPath && fields[0].startsWith(QLatin1Char('/'))) {
+            device = fields[0];
+        }
+    }
+    return device;
+}
+
+/// Runs a command and hands back what went wrong, rather than swallowing it.
+/// `runCommand` above returns an empty string for both "nothing to say" and
+/// "it failed", which is exactly the distinction an eject has to report.
+struct CommandResult {
+    bool ran = false;  ///< the program exists and finished
+    bool succeeded = false;
+    QString message;  ///< stderr, or why it could not be run
+};
+
+CommandResult runForResult(const QString& program, const QStringList& arguments,
+                           int timeoutMs = 20000) {
+    CommandResult result;
+    if (QStandardPaths::findExecutable(program).isEmpty()) {
+        return result;
+    }
+
+    QProcess process;
+    process.setProgram(program);
+    process.setArguments(arguments);
+    process.setProcessChannelMode(QProcess::SeparateChannels);
+    process.start();
+
+    if (!process.waitForFinished(timeoutMs)) {
+        process.kill();
+        process.waitForFinished(2000);
+        result.ran = true;
+        result.message =
+            QCoreApplication::translate("Platform", "%1 did not finish in time.").arg(program);
+        return result;
+    }
+
+    result.ran = true;
+    result.succeeded = process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0;
+    if (!result.succeeded) {
+        result.message = QString::fromUtf8(process.readAllStandardError()).trimmed();
+        if (result.message.isEmpty()) {
+            result.message = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+        }
+    }
+    return result;
+}
+
 QString runCommand(const QString& program, const QStringList& arguments, int timeoutMs = 20000) {
     if (QStandardPaths::findExecutable(program).isEmpty()) {
         return {};
@@ -673,6 +747,46 @@ std::unique_ptr<SettingsProvider> LinuxPlatformService::settingsProvider() const
 
 std::unique_ptr<SecretStore> LinuxPlatformService::secretStore() const {
     return std::make_unique<LinuxSecretStore>();
+}
+
+QString LinuxPlatformService::unmountVolume(const QString& rootPath) const {
+    // udisksctl first, because it is what a file manager uses: it goes through
+    // the system service, so it works without root and the desktop is told the
+    // drive has gone rather than being left showing an icon for something that
+    // is not there.
+    if (const QString device = deviceForMountPoint(rootPath); !device.isEmpty()) {
+        const CommandResult unmounted = runForResult(
+            QStringLiteral("udisksctl"), {QStringLiteral("unmount"), QStringLiteral("-b"), device});
+        if (unmounted.ran && unmounted.succeeded) {
+            // Powering the port down is what makes the light go out and the
+            // drive safe to pull. It often needs rights the unmount did not,
+            // so it is asked for and not insisted on: the data is already
+            // safe once the unmount returned.
+            (void)runForResult(QStringLiteral("udisksctl"),
+                               {QStringLiteral("power-off"), QStringLiteral("-b"), device});
+            return {};
+        }
+        if (unmounted.ran) {
+            return QCoreApplication::translate("Platform", "Could not eject %1: %2")
+                .arg(QDir::toNativeSeparators(rootPath), unmounted.message);
+        }
+    }
+
+    // No udisks, or nothing in /proc/self/mounts for this path. A plain
+    // unmount still works where the user has the right to it.
+    const CommandResult plain = runForResult(QStringLiteral("umount"), {rootPath});
+    if (plain.ran && plain.succeeded) {
+        return {};
+    }
+    if (plain.ran) {
+        return QCoreApplication::translate("Platform", "Could not eject %1: %2")
+            .arg(QDir::toNativeSeparators(rootPath), plain.message);
+    }
+    return QCoreApplication::translate(
+               "Platform",
+               "Transmit could not find a way to eject %1 on this system. Eject it from the file "
+               "manager, then unplug it.")
+        .arg(QDir::toNativeSeparators(rootPath));
 }
 
 }  // namespace transmit::platform

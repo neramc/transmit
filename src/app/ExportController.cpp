@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 
 #include "core/secrets/SecretsDomain.h"
 #include "core/services/ProfileService.h"
@@ -395,6 +396,61 @@ QString ExportController::packagingSummary() const {
     return parts.join(tr(", "));
 }
 
+namespace {
+
+/// The volume a folder sits on, by the longest root that is a prefix of it.
+///
+/// Longest wins because volumes nest: a stick mounted inside a home directory
+/// matches both, and the answer wanted is the stick.
+std::optional<platform::StorageVolume> volumeHolding(const platform::PlatformService& platform,
+                                                     const QString& folder) {
+    std::optional<platform::StorageVolume> best;
+    for (const platform::StorageVolume& volume : platform.storageVolumes()) {
+        if (volume.rootPath.isEmpty() || !folder.startsWith(volume.rootPath)) {
+            continue;
+        }
+        if (!best || volume.rootPath.size() > best->rootPath.size()) {
+            best = volume;
+        }
+    }
+    return best;
+}
+
+}  // namespace
+
+bool ExportController::canEject() const {
+    if (!finished_ || !report_.succeeded || ejected_ || destinationFolder_.isEmpty()) {
+        return false;
+    }
+    const auto volume = volumeHolding(*platform_, destinationFolder_);
+    return volume && volume->removable;
+}
+
+void ExportController::ejectDestination() {
+    ejectMessage_.clear();
+
+    const auto volume = volumeHolding(*platform_, destinationFolder_);
+    if (!volume) {
+        ejectMessage_ = tr("Transmit cannot tell which drive %1 is on, so it will not try to "
+                           "eject it.")
+                            .arg(QDir::toNativeSeparators(destinationFolder_));
+        emit ejectChanged();
+        return;
+    }
+
+    const QString refused = platform_->eject(volume->rootPath);
+    if (refused.isEmpty()) {
+        ejected_ = true;
+        ejectMessage_ =
+            tr("%1 has been ejected. It is safe to unplug now.")
+                .arg(volume->displayName.isEmpty() ? QDir::toNativeSeparators(volume->rootPath)
+                                                   : volume->displayName);
+    } else {
+        ejectMessage_ = refused;
+    }
+    emit ejectChanged();
+}
+
 void ExportController::lookForInterruptedCapture(const QString& destinationFolder) {
     const QString wasFound = interruptedArchive_;
     interruptedArchive_.clear();
@@ -465,6 +521,9 @@ void ExportController::start(const QString& profileId, const QString& destinatio
     progress_ = {};
     report_ = {};
     finished_ = false;
+    ejected_ = false;
+    ejectMessage_.clear();
+    destinationFolder_ = destinationFolder.isEmpty() ? QDir::homePath() : destinationFolder;
     startedAtMs_ = QDateTime::currentMSecsSinceEpoch();
 
     core::ExportRequest request;

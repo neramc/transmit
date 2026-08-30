@@ -26,6 +26,9 @@ public:
     /// True when the process can read the protected user data locations. The
     /// UI uses this to show the Full Disk Access prompt before a capture.
     [[nodiscard]] static bool hasFullDiskAccess();
+
+protected:
+    [[nodiscard]] QString unmountVolume(const QString& rootPath) const override;
 };
 
 }  // namespace transmit::platform

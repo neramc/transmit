@@ -1090,6 +1090,28 @@ Item {
                     body: ExportController.verificationText
                 }
 
+                // The last step of carrying an archive to a stick is taking
+                // the stick away, and doing that while the system still has
+                // writes outstanding for it is how a capture that reported
+                // success arrives empty.
+                AppInlineMessage {
+                    objectName: "ejectOffer"
+                    visible: ExportController.canEject || ExportController.ejectMessage !== ""
+                    tone: ExportController.ejected ? "success"
+                          : ExportController.ejectMessage !== "" ? "warning" : "info"
+                    title: ExportController.ejected
+                           ? qsTr("Safe to unplug")
+                           : ExportController.ejectMessage !== ""
+                             ? qsTr("The drive is still mounted")
+                             : qsTr("Take the drive away safely")
+                    body: ExportController.ejectMessage !== ""
+                          ? ExportController.ejectMessage
+                          : qsTr("The archive is written and checked. Ejecting tells the system "
+                               + "to finish with the drive before you pull it out.")
+                    actionText: ExportController.canEject ? qsTr("Eject the drive") : ""
+                    onActionTriggered: ExportController.ejectDestination()
+                }
+
                 AppInlineMessage {
                     visible: ExportController.finished && ExportController.succeeded
                              && ExportController.incomplete

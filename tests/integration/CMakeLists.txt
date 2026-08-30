@@ -3,7 +3,7 @@
 # layer alone.
 
 foreach(suite ContinuityRoundTrip PathRewrite SecretStore Catalog SelectionCodec
-              VerifyService StageTimer ResumeCapture)
+              VerifyService StageTimer ResumeCapture Eject)
     add_executable(transmit_${suite}_test ${suite}Test.cpp)
     target_link_libraries(transmit_${suite}_test
         PRIVATE Transmit::Core Transmit::Warnings Qt6::Test SQLite::SQLite3)

@@ -1,5 +1,6 @@
 #include "platform/windows/WindowsPlatformService.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
 #include <QHostInfo>
@@ -273,6 +274,51 @@ std::unique_ptr<SettingsProvider> WindowsPlatformService::settingsProvider() con
 
 std::unique_ptr<SecretStore> WindowsPlatformService::secretStore() const {
     return std::make_unique<WindowsSecretStore>();
+}
+
+QString WindowsPlatformService::unmountVolume(const QString& rootPath) const {
+    // The shell's own Eject, which is what right-clicking the drive in
+    // Explorer does. `mountvol /P` would also dismount it, but it needs
+    // administrator rights and leaves the drive letter gone in a way the
+    // desktop does not expect - and asking somebody to run Transmit as an
+    // administrator to unplug a USB stick is not a reasonable trade.
+    const QString letter = QDir::toNativeSeparators(rootPath).left(2);
+    if (letter.size() != 2 || letter[1] != QLatin1Char(':')) {
+        return QCoreApplication::translate("Platform",
+                                           "%1 is not a drive letter, so Transmit cannot eject it.")
+            .arg(QDir::toNativeSeparators(rootPath));
+    }
+
+    const QString script = QStringLiteral(
+                               "$ErrorActionPreference = 'Stop'; "
+                               "(New-Object -comObject Shell.Application).Namespace(17)"
+                               ".ParseName('%1').InvokeVerb('Eject')")
+                               .arg(letter);
+
+    QProcess process;
+    process.setProgram(QStringLiteral("powershell"));
+    process.setArguments({QStringLiteral("-NoProfile"), QStringLiteral("-NonInteractive"),
+                          QStringLiteral("-Command"), script});
+    process.setProcessChannelMode(QProcess::SeparateChannels);
+    process.start();
+
+    if (!process.waitForFinished(20000)) {
+        process.kill();
+        process.waitForFinished(2000);
+        return QCoreApplication::translate("Platform",
+                                           "Ejecting %1 did not finish. Something is still using "
+                                           "it; close it and try again.")
+            .arg(letter);
+    }
+    if (process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0) {
+        return {};
+    }
+
+    QString reason = QString::fromUtf8(process.readAllStandardError()).trimmed();
+    if (reason.isEmpty()) {
+        reason = QCoreApplication::translate("Platform", "Windows would not let go of it.");
+    }
+    return QCoreApplication::translate("Platform", "Could not eject %1: %2").arg(letter, reason);
 }
 
 }  // namespace transmit::platform

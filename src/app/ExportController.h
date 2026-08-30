@@ -54,6 +54,11 @@ class ExportController : public QObject {
     Q_PROPERTY(QString carryOnText READ carryOnText NOTIFY carryOnChanged)
     Q_PROPERTY(bool carryingOn READ carryingOn NOTIFY carryOnChanged)
 
+    /// The archive is finished and it went to a drive that can be taken away.
+    Q_PROPERTY(bool canEject READ canEject NOTIFY ejectChanged)
+    Q_PROPERTY(bool ejected READ ejected NOTIFY ejectChanged)
+    Q_PROPERTY(QString ejectMessage READ ejectMessage NOTIFY ejectChanged)
+
     /// How the archive will be put together, in one line.
     Q_PROPERTY(QString packagingSummary READ packagingSummary NOTIFY packagingChanged)
 
@@ -109,6 +114,10 @@ public:
 
     [[nodiscard]] QString packagingSummary() const;
 
+    [[nodiscard]] bool canEject() const;
+    [[nodiscard]] bool ejected() const { return ejected_; }
+    [[nodiscard]] QString ejectMessage() const { return ejectMessage_; }
+
     [[nodiscard]] bool canCarryOn() const { return !interruptedArchive_.isEmpty(); }
     [[nodiscard]] QString carryOnText() const { return carryOnText_; }
     [[nodiscard]] bool carryingOn() const { return carryingOn_; }
@@ -145,6 +154,13 @@ public slots:
     /// Read here rather than held by the model so that the capture and the
     /// "what should I close first" check are asking the same question - the
     /// model belongs to a page that may already have been left behind.
+    /// Unmounts the drive the archive went to, so it can be pulled out.
+    ///
+    /// The last step of carrying an archive to a stick is taking the stick
+    /// away, and doing that while the system still has writes outstanding is
+    /// how a capture that reported success arrives empty.
+    void ejectDestination();
+
     /// The settings behind the "how it is packed" controls.
     ///
     /// Every one of them has a default that suits the drive it is going to,
@@ -220,6 +236,7 @@ signals:
     void scopeChanged();
     void carryOnChanged();
     void packagingChanged();
+    void ejectChanged();
 
 private:
     void handleProgress(const core::ProgressUpdate& update);
@@ -247,6 +264,13 @@ private:
     core::AppSelectionMode appMode_ = core::AppSelectionMode::All;
     int appsChosen_ = 0;
     int appsOffered_ = 0;
+
+    /// Where the archive went, and how taking the drive away went. Kept from
+    /// the start of the capture: by the time the offer is made, the wizard has
+    /// moved on and no longer has it to hand.
+    QString destinationFolder_;
+    bool ejected_ = false;
+    QString ejectMessage_;
 
     /// The advanced packaging settings. Zero is "let Transmit decide", which
     /// is not the same as any particular value and has to stay distinguishable

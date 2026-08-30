@@ -3,6 +3,7 @@
 #include "platform/macos/MacOsSecretStore.h"
 #include "platform/macos/MacOsSettingsProvider.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -297,6 +298,36 @@ std::unique_ptr<SettingsProvider> MacOsPlatformService::settingsProvider() const
 
 std::unique_ptr<SecretStore> MacOsPlatformService::secretStore() const {
     return std::make_unique<MacOsSecretStore>();
+}
+
+QString MacOsPlatformService::unmountVolume(const QString& rootPath) const {
+    // diskutil is the supported way, takes the mount point directly, and does
+    // the same thing dragging the drive to the bin does: unmount, then tell
+    // the hardware it can spin down.
+    QProcess process;
+    process.setProgram(QStringLiteral("/usr/sbin/diskutil"));
+    process.setArguments({QStringLiteral("eject"), rootPath});
+    process.setProcessChannelMode(QProcess::SeparateChannels);
+    process.start();
+
+    if (!process.waitForFinished(20000)) {
+        process.kill();
+        process.waitForFinished(2000);
+        return QCoreApplication::translate("Platform",
+                                           "Ejecting %1 did not finish. Something is still using "
+                                           "it; close it and try again.")
+            .arg(QDir::toNativeSeparators(rootPath));
+    }
+    if (process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0) {
+        return {};
+    }
+
+    QString reason = QString::fromUtf8(process.readAllStandardError()).trimmed();
+    if (reason.isEmpty()) {
+        reason = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+    }
+    return QCoreApplication::translate("Platform", "Could not eject %1: %2")
+        .arg(QDir::toNativeSeparators(rootPath), reason);
 }
 
 }  // namespace transmit::platform

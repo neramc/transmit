@@ -154,6 +154,24 @@ public:
     /// Reads and writes this system's credential store. Only ever used when
     /// the user has explicitly opted in and the archive is encrypted.
     [[nodiscard]] virtual std::unique_ptr<SecretStore> secretStore() const = 0;
+
+    /// Unmounts the removable volume at `rootPath` so it can be pulled out.
+    ///
+    /// Returns nothing on success, or a sentence saying why not. The last step
+    /// of carrying an archive to a stick is taking the stick away, and doing
+    /// that while the system still has writes outstanding for it is how a
+    /// capture that reported success arrives empty.
+    ///
+    /// The refusals live here rather than in each implementation, because
+    /// getting them wrong means unmounting something that is not the drive the
+    /// archive went to: only a volume this platform actually listed, and only
+    /// one it called removable, is ever passed on.
+    [[nodiscard]] QString eject(const QString& rootPath) const;
+
+protected:
+    /// The unmount itself. The default says this system has no way to do it,
+    /// so a platform that cannot is not obliged to pretend.
+    [[nodiscard]] virtual QString unmountVolume(const QString& rootPath) const;
 };
 
 }  // namespace transmit::platform

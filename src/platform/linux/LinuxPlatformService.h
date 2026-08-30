@@ -21,6 +21,9 @@ public:
     [[nodiscard]] PackageSource nativePackageSource() const override;
     [[nodiscard]] std::unique_ptr<SettingsProvider> settingsProvider() const override;
     [[nodiscard]] std::unique_ptr<SecretStore> secretStore() const override;
+
+protected:
+    [[nodiscard]] QString unmountVolume(const QString& rootPath) const override;
 };
 
 /// Reads /etc/os-release into a key/value map. Exposed for testing and for the

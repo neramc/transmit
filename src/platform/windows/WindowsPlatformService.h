@@ -19,6 +19,9 @@ public:
     [[nodiscard]] PackageSource nativePackageSource() const override;
     [[nodiscard]] std::unique_ptr<SettingsProvider> settingsProvider() const override;
     [[nodiscard]] std::unique_ptr<SecretStore> secretStore() const override;
+
+protected:
+    [[nodiscard]] QString unmountVolume(const QString& rootPath) const override;
 };
 
 }  // namespace transmit::platform
