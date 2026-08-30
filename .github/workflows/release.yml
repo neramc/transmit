@@ -77,6 +77,12 @@ jobs:
 
           # Every job that has to have passed, by the name it reports. Missing
           # counts as failure: a job that did not run cannot have passed.
+          #
+          # Speed and Coverage are deliberately not here. Both are about how
+          # good the code is rather than whether it works, and neither answers
+          # "is this safe to give somebody". Requiring them would mean a
+          # measurement blocking a release that is correct in every way, which
+          # is how a gate stops being taken seriously.
           required=(
             "Linux" "Windows" "macOS"
             "Formatting and static analysis"
