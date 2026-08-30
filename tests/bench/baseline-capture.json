@@ -1,16 +1,29 @@
 {
     "results": [
         {
+            "bytesIn": 41943040,
+            "bytesOut": 0,
+            "files": 0,
+            "medianMs": 9.780723,
+            "mibPerSecond": 4089.6772150688657,
+            "name": "machine/fixed-work",
+            "runsMs": [
+                9.93914,
+                9.752565,
+                9.780723
+            ]
+        },
+        {
             "bytesIn": 257948566,
-            "bytesOut": 104995797,
+            "bytesOut": 104997225,
             "files": 2000,
-            "medianMs": 3893,
-            "mibPerSecond": 63.19006482096647,
+            "medianMs": 4586,
+            "mibPerSecond": 53.64128267510302,
             "name": "capture/balanced",
             "runsMs": [
-                3974,
-                3840,
-                3893
+                4620,
+                4559,
+                4586
             ]
         }
     ]

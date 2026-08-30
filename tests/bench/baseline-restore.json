@@ -1,16 +1,29 @@
 {
     "results": [
         {
+            "bytesIn": 41943040,
+            "bytesOut": 0,
+            "files": 0,
+            "medianMs": 9.712169,
+            "mibPerSecond": 4118.544477551822,
+            "name": "machine/fixed-work",
+            "runsMs": [
+                9.731125,
+                9.700782,
+                9.712169
+            ]
+        },
+        {
             "bytesIn": 257948566,
             "bytesOut": 0,
             "files": 2033,
-            "medianMs": 2913,
-            "mibPerSecond": 84.44865168143579,
+            "medianMs": 1428,
+            "mibPerSecond": 172.26815290477765,
             "name": "restore",
             "runsMs": [
-                2843,
-                2913,
-                3019
+                1516,
+                1428,
+                1427
             ]
         }
     ]

@@ -534,11 +534,16 @@ jobs:
   # other people's builds. A gate that fires on noise is a gate everybody
   # learns to ignore, which is worse than not having one.
   #
-  # The committed baselines are the numbers this job produced, not numbers from
-  # a developer machine: a baseline from faster hardware makes the gate fire on
-  # nothing being wrong, and one from slower hardware makes it too loose to
-  # catch anything. When a change is a deliberate trade, re-run this, take the
-  # numbers out of the artifact it uploads, and commit them with the change.
+  # The comparison is against the machine rather than the clock. Every run
+  # measures a fixed amount of work that owes nothing to this project, and
+  # every other measurement is divided by it - so a slow runner cancels out and
+  # what is left is the code. Before that, a baseline from faster hardware made
+  # the gate fire on nothing being wrong, which it did: identical code came in
+  # 15.2% "slower" purely because that day's runner hashed at 548 MiB/s instead
+  # of 631.
+  #
+  # When a change is a deliberate trade, re-run this, take the numbers out of
+  # the artifact it uploads, and commit them with the change.
   benchmark:
     name: Speed
     runs-on: ubuntu-latest

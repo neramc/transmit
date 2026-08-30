@@ -1,12 +1,22 @@
 #!/usr/bin/env python3
 """Compares a benchmark run against a committed baseline.
 
-Exits non-zero when something got slower by more than the allowed
-margin. The margin is generous on purpose: a shared build machine has a
-noise floor around ten percent, and a gate that fires on noise is a gate
-everyone learns to ignore.
+Exits non-zero when something got slower by more than the allowed margin.
 
-    compare.py baseline.json current.json [--tolerance 20]
+The margin is measured against the machine, not against the clock. Baselines
+are committed from one run and compared against another, and the build
+machines are not all the same speed - the pool this runs on has been seen to
+vary by a quarter for identical code. A gate on raw milliseconds fires on that
+every time it draws a slow machine, and a gate that cries wolf is one everybody
+learns to re-run until it passes.
+
+So each run also measures a fixed amount of work that owes nothing to this
+project ("machine/fixed-work"). Dividing by it cancels how fast the computer
+is and leaves how fast the code is, which is the only thing a baseline can
+honestly be about. When a run has no such measurement, the comparison falls
+back to raw times with a much looser margin, and says so.
+
+    compare.py baseline.json current.json [--tolerance 15]
 """
 
 import argparse
@@ -27,15 +37,41 @@ def main():
                         help="percent slower before this fails")
     parser.add_argument("--size-tolerance", type=float, default=5.0,
                         help="percent larger the archive may get")
+    parser.add_argument("--uncalibrated-tolerance", type=float, default=45.0,
+                        help="percent slower before this fails when the run "
+                             "carries no machine measurement to divide by")
     args = parser.parse_args()
 
     baseline = load(args.baseline)
     current = load(args.current)
 
+    # How much slower this machine is than the one the baseline came from.
+    # Everything is divided by it, so what is compared is the code.
+    reference = "machine/fixed-work"
+    speed = None
+    if reference in baseline and reference in current:
+        was = baseline[reference]["medianMs"]
+        now = current[reference]["medianMs"]
+        if was > 0 and now > 0:
+            speed = now / was
+
+    if speed is None:
+        tolerance = args.uncalibrated_tolerance
+        print(f"no machine measurement in both runs - comparing raw times with a "
+              f"{tolerance:.0f}% margin")
+    else:
+        tolerance = args.tolerance
+        print(f"this machine is {speed:.2f}x the baseline's, and every measurement "
+              f"below is divided by that")
+
     failures = []
     print(f"{'measurement':<28} {'baseline':>10} {'now':>10} {'change':>9}")
 
     for name, now in sorted(current.items()):
+        # The reference is how the others are judged; judging it against
+        # itself would always read as no change and say nothing.
+        if name == reference:
+            continue
         was = baseline.get(name)
         if was is None:
             print(f"{name:<28} {'-':>10} {now['medianMs']:>10.1f} {'new':>9}")
@@ -59,12 +95,14 @@ def main():
                 f"{name} measured no files at all - the corpus is missing or empty")
             continue
 
-        change = (now["medianMs"] - was["medianMs"]) / was["medianMs"] * 100.0
-        print(f"{name:<28} {was['medianMs']:>10.1f} {now['medianMs']:>10.1f} "
+        # What this measurement would have taken on the baseline's machine.
+        expected = was["medianMs"] * (speed if speed is not None else 1.0)
+        change = (now["medianMs"] - expected) / expected * 100.0
+        print(f"{name:<28} {expected:>10.1f} {now['medianMs']:>10.1f} "
               f"{change:>+8.1f}%")
-        if change > args.tolerance:
-            failures.append(f"{name} is {change:.1f}% slower "
-                            f"({was['medianMs']:.1f} -> {now['medianMs']:.1f} ms)")
+        if change > tolerance:
+            failures.append(f"{name} is {change:.1f}% slower than this machine "
+                            f"should manage ({expected:.1f} -> {now['medianMs']:.1f} ms)")
 
         # An archive that grew means a compression setting was weakened,
         # which a wall clock alone would report as an improvement.

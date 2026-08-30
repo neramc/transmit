@@ -166,6 +166,56 @@ QJsonObject toJson(const RunResult& result) {
     return object;
 }
 
+/// How fast the machine running this is, in terms that owe nothing to this
+/// project.
+///
+/// The benchmarks are compared against numbers committed from an earlier run,
+/// and shared build machines are not all the same speed - the pool this runs
+/// on varies by about a quarter. Measured against a fixed baseline that is a
+/// permanent false alarm, and a gate that cries wolf is one everybody learns
+/// to re-run until it passes.
+///
+/// So every run also measures this: a fixed amount of arithmetic over a fixed
+/// buffer, using nothing but the standard library. No change to Transmit can
+/// move it, which is exactly what makes it useful - divide a measurement by it
+/// and what is left is the code rather than the computer.
+RunResult measureTheMachine(int repeat) {
+    // A megabyte, read forty times. Deliberately the same shape of work as the
+    // things being calibrated - memory and simple arithmetic - so that a
+    // machine which is slow in the way that matters here is seen to be slow.
+    constexpr std::size_t kSize = 1 << 20;
+    constexpr int kPasses = 40;
+    std::vector<std::uint64_t> buffer(kSize / sizeof(std::uint64_t));
+    for (std::size_t i = 0; i < buffer.size(); ++i) {
+        buffer[i] = static_cast<std::uint64_t>(i) * 0x9E3779B97F4A7C15ULL;
+    }
+
+    RunResult result;
+    result.name = QStringLiteral("machine/fixed-work");
+    result.bytesIn = kSize * kPasses;
+
+    volatile std::uint64_t sink = 0;
+    for (int run = 0; run < repeat; ++run) {
+        QElapsedTimer timer;
+        timer.start();
+
+        std::uint64_t mixed = 0x243F6A8885A308D3ULL;
+        for (int pass = 0; pass < kPasses; ++pass) {
+            for (const std::uint64_t value : buffer) {
+                mixed ^= value;
+                mixed *= 0xFF51AFD7ED558CCDULL;
+                mixed ^= mixed >> 33;
+            }
+        }
+        const auto nanoseconds = timer.nsecsElapsed();
+
+        sink += mixed;
+        result.milliseconds.push_back(static_cast<double>(nanoseconds) / 1e6);
+    }
+    (void)sink;
+    return result;
+}
+
 void report(const std::vector<RunResult>& results, const QString& jsonPath) {
     for (const RunResult& result : results) {
         out() << QStringLiteral("%1  %2 ms  %3")
@@ -246,7 +296,7 @@ int runCapture(const QString& corpus, const QString& archive, const QString& pre
         result.files = report.fileCount;
     }
 
-    report({result}, jsonPath);
+    report({measureTheMachine(repeat), result}, jsonPath);
     return 0;
 }
 
@@ -277,7 +327,7 @@ int runRestore(const QString& archive, const QString& into, int repeat, const QS
         result.files = report.filesRestored;
     }
 
-    report({result}, jsonPath);
+    report({measureTheMachine(repeat), result}, jsonPath);
     return 0;
 }
 
@@ -287,6 +337,10 @@ int runRestore(const QString& archive, const QString& into, int repeat, const QS
 int runMicro(int repeat, const QString& jsonPath) {
     std::vector<RunResult> results;
     volatile unsigned sink = 0;
+
+    // First, so that a comparison has something to divide by even if a later
+    // measurement fails.
+    results.push_back(measureTheMachine(repeat));
 
     for (const std::size_t size : {std::size_t{4096}, std::size_t{1 << 20}, std::size_t{1 << 26}}) {
         format::ByteBuffer data(size);
