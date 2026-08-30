@@ -596,6 +596,7 @@ Item {
                             page.destinationFolder = rootPath
                             page.destinationRequiresSplit = requiresSplitting
                             page.destinationLabel = displayName
+                            ExportController.lookForInterruptedCapture(rootPath)
                         }
                     }
 
@@ -635,6 +636,28 @@ Item {
                         font.pixelSize: Typography.small
                         elide: Text.ElideMiddle
                     }
+                }
+
+                // A capture the drive interrupted is worth finishing rather
+                // than repeating, and the only moment to say so is while the
+                // user is choosing where it goes.
+                AppInlineMessage {
+                    objectName: "carryOnOffer"
+                    visible: ExportController.canCarryOn
+                    tone: ExportController.carryingOn ? "success" : "warning"
+                    title: ExportController.carryingOn
+                           ? qsTr("Carrying on with the unfinished capture")
+                           : qsTr("There is an unfinished capture on this drive")
+                    body: ExportController.carryingOn
+                          ? qsTr("Start will add what is missing to it, rather than writing a "
+                               + "new archive. If anything has changed since, the capture will "
+                               + "say so instead of mixing the two.")
+                          : ExportController.carryOnText
+                    actionText: ExportController.carryingOn ? "" : qsTr("Carry on with it")
+                    secondaryActionText: ExportController.carryingOn ? qsTr("Start a new one")
+                                                                     : qsTr("Ignore it")
+                    onActionTriggered: ExportController.carryOn()
+                    onSecondaryActionTriggered: ExportController.startFresh()
                 }
 
                 AppInlineMessage {
@@ -1036,6 +1059,7 @@ Item {
             page.destinationFolder = AppController.fromFileUrl(selectedFolder.toString())
             page.destinationRequiresSplit = false
             page.destinationLabel = page.destinationFolder
+            ExportController.lookForInterruptedCapture(page.destinationFolder)
         }
     }
 }

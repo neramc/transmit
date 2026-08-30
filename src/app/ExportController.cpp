@@ -2,6 +2,7 @@
 
 #include <QDateTime>
 #include <QDir>
+#include <QFileInfo>
 #include <QtConcurrent/QtConcurrentRun>
 
 #include <algorithm>
@@ -11,6 +12,7 @@
 #include "core/services/ProfileService.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
+#include "format/TransferJournal.h"
 
 namespace transmit::app {
 namespace {
@@ -338,6 +340,64 @@ QString ExportController::secretsStoreName() {
     return core::SecretsDomain(*platform_).describeStore();
 }
 
+void ExportController::lookForInterruptedCapture(const QString& destinationFolder) {
+    const QString wasFound = interruptedArchive_;
+    interruptedArchive_.clear();
+    carryOnText_.clear();
+    carryingOn_ = false;
+
+    const QString folder = destinationFolder.isEmpty() ? QDir::homePath() : destinationFolder;
+    const QString suffix = core::fromUtf8(std::string(format::TransferJournal::kSuffix));
+
+    // Newest first, so a folder with several false starts in it offers the one
+    // somebody is most likely to have meant.
+    QDir directory(folder);
+    directory.setNameFilters({QStringLiteral("*") + suffix});
+    directory.setFilter(QDir::Files);
+    directory.setSorting(QDir::Time);
+
+    for (const QFileInfo& found : directory.entryInfoList()) {
+        QString archive = found.absoluteFilePath();
+        archive.chop(suffix.size());
+
+        // The record, not the archive: an unfinished archive cannot be opened,
+        // which is the whole reason the record exists.
+        const auto contents = format::readTransferJournal(format::toFsPath(core::toUtf8(archive)));
+        if (!contents || contents->complete || contents->blocks.empty()) {
+            continue;
+        }
+
+        interruptedArchive_ = archive;
+        carryOnText_ = tr("%1 was left unfinished on %2. %3 of it is already on the drive.")
+                           .arg(QFileInfo(archive).fileName(),
+                                found.lastModified().toString(QStringLiteral("d MMMM, HH:mm")),
+                                core::formatBytes(contents->resumableLength()));
+        break;
+    }
+
+    if (interruptedArchive_ != wasFound || !interruptedArchive_.isEmpty()) {
+        emit carryOnChanged();
+    }
+}
+
+void ExportController::carryOn() {
+    if (interruptedArchive_.isEmpty() || carryingOn_) {
+        return;
+    }
+    carryingOn_ = true;
+    emit carryOnChanged();
+}
+
+void ExportController::startFresh() {
+    if (interruptedArchive_.isEmpty() && !carryingOn_) {
+        return;
+    }
+    interruptedArchive_.clear();
+    carryOnText_.clear();
+    carryingOn_ = false;
+    emit carryOnChanged();
+}
+
 void ExportController::start(const QString& profileId, const QString& destinationFolder,
                              const QString& preset, const QString& passphrase, bool splitForFat32,
                              const QString& label, const QStringList& domains,
@@ -363,8 +423,15 @@ void ExportController::start(const QString& profileId, const QString& destinatio
         request.packaging.preset = *parsed;
     }
 
-    const QString folder = destinationFolder.isEmpty() ? QDir::homePath() : destinationFolder;
-    request.destinationPath = QDir(folder).filePath(suggestFileName(platform_->environment()));
+    if (carryingOn_ && !interruptedArchive_.isEmpty()) {
+        // Into the archive that was left unfinished, not a new one named after
+        // today: carrying on means the same file.
+        request.destinationPath = interruptedArchive_;
+        request.resume = true;
+    } else {
+        const QString folder = destinationFolder.isEmpty() ? QDir::homePath() : destinationFolder;
+        request.destinationPath = QDir(folder).filePath(suggestFileName(platform_->environment()));
+    }
 
     running_ = true;
     emit runningChanged();

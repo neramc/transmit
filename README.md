@@ -161,6 +161,30 @@ splits for automatically.
   cache dropped first where the system allows it, so what is checked is what
   the drive kept rather than what is still in memory. A capture that does not
   read back correctly fails; `--no-verify-after` turns it off.
+- **Carrying on.** A capture onto a stick can take twenty minutes, and until the
+  last moment the archive cannot be opened: the manifest and the footer are
+  written at the end. So a record of what has actually reached the drive is
+  kept beside it as it goes. If the drive fills up, fails a write, or is pulled
+  out, what was written stays where it is and the same command with `--resume`
+  finishes it instead of starting the twenty minutes again:
+
+  ```
+  transmit-cli export --out /media/usb/laptop.txa --profile full
+  # error: No space left on device
+  # What was written is still on the drive. Run the same command again
+  # with --resume to carry on from where it stopped.
+
+  transmit-cli export --out /media/usb/laptop.txa --profile full --resume
+  # Carried on from an interrupted capture: 42 files (820 MiB) were
+  # already on the drive
+  ```
+
+  It is refused rather than guessed at. The record carries a fingerprint of the
+  machine, the packaging settings and every scanned file's path, size and
+  modification time, and all of it has to match: half of Tuesday and half of
+  Thursday is not a capture of either. A capture you cancel yourself still
+  leaves nothing behind - you asked for it to stop, not to pause - and
+  `--no-journal` opts out of keeping the record at all.
 - **Checking it elsewhere.** A `.md5` file is written beside the archive in
   `md5sum`'s own format, so a drive can be checked with a tool that has never
   heard of Transmit:
@@ -263,6 +287,9 @@ transmit-cli export --out ARCHIVE [--profile full|documents|developer]
                     # how it is packed
                     [--block-size 64M] [--workers 4] [--sync-every 32M]
                     [--no-verify-after] [--no-md5] [--no-md5-sidecar]
+
+                    # a capture the drive interrupted
+                    [--resume] [--no-journal]
 
                     # and all of the above, written down
                     [--selection-file FILE] [--save-selection FILE]

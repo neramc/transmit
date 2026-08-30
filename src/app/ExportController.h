@@ -48,6 +48,12 @@ class ExportController : public QObject {
     Q_PROPERTY(QString incompleteText READ incompleteText NOTIFY finishedChanged)
     Q_PROPERTY(bool verified READ verified NOTIFY finishedChanged)
     Q_PROPERTY(QString verificationText READ verificationText NOTIFY finishedChanged)
+    /// An unfinished capture was found where the archive would go, and can be
+    /// carried on with instead of started again.
+    Q_PROPERTY(bool canCarryOn READ canCarryOn NOTIFY carryOnChanged)
+    Q_PROPERTY(QString carryOnText READ carryOnText NOTIFY carryOnChanged)
+    Q_PROPERTY(bool carryingOn READ carryingOn NOTIFY carryOnChanged)
+
     Q_PROPERTY(QString scopeSummary READ scopeSummary NOTIFY scopeChanged)
     Q_PROPERTY(QString applicationSummary READ applicationSummary NOTIFY scopeChanged)
 
@@ -98,6 +104,10 @@ public:
     /// The same for the per-application choice.
     [[nodiscard]] QString applicationSummary() const;
 
+    [[nodiscard]] bool canCarryOn() const { return !interruptedArchive_.isEmpty(); }
+    [[nodiscard]] QString carryOnText() const { return carryOnText_; }
+    [[nodiscard]] bool carryingOn() const { return carryingOn_; }
+
 public slots:
     /// Starts a capture. `destinationFolder` is where the archive is written;
     /// the file name is derived from the machine name and the date.
@@ -130,6 +140,19 @@ public slots:
     /// Read here rather than held by the model so that the capture and the
     /// "what should I close first" check are asking the same question - the
     /// model belongs to a page that may already have been left behind.
+    /// Looks in `destinationFolder` for a capture a previous run left
+    /// unfinished. Cheap enough to call whenever the folder changes: it reads
+    /// the record beside each archive, not the archives themselves.
+    void lookForInterruptedCapture(const QString& destinationFolder);
+
+    /// Carry on with what was found rather than starting again. The next
+    /// start() writes into that archive; the settings still have to match, and
+    /// the capture says so plainly if they do not.
+    void carryOn();
+
+    /// Start again, leaving the unfinished capture to be overwritten.
+    void startFresh();
+
     void chooseApplications(AppCatalogModel* model);
 
     /// Back to carrying every application's data, which is the default and
@@ -173,6 +196,7 @@ signals:
     void finishedChanged();
     void reportReady();
     void scopeChanged();
+    void carryOnChanged();
 
 private:
     void handleProgress(const core::ProgressUpdate& update);
@@ -200,6 +224,12 @@ private:
     core::AppSelectionMode appMode_ = core::AppSelectionMode::All;
     int appsChosen_ = 0;
     int appsOffered_ = 0;
+
+    /// The unfinished capture found where the archive would go, and whether
+    /// the user chose to carry on with it rather than start again.
+    QString interruptedArchive_;
+    QString carryOnText_;
+    bool carryingOn_ = false;
     core::ProgressUpdate progress_;
     core::ExportReport report_;
     qint64 startedAtMs_ = 0;

@@ -12,6 +12,15 @@ Rectangle {
     property string title: ""
     property string body: ""
 
+    /// Something to do about it, rather than only something to read. A message
+    /// that says the drive holds an unfinished capture and leaves the user to
+    /// work out where to go next has done half its job.
+    property string actionText: ""
+    property string secondaryActionText: ""
+
+    signal actionTriggered
+    signal secondaryActionTriggered
+
     Layout.fillWidth: true
     implicitHeight: layout.implicitHeight + Spacing.lg * 2
     radius: Radius.md
@@ -67,6 +76,26 @@ Rectangle {
             font.pixelSize: Typography.small
             wrapMode: Text.WordWrap
             lineHeight: 1.3
+        }
+
+        RowLayout {
+            visible: message.actionText !== "" || message.secondaryActionText !== ""
+            Layout.topMargin: visible ? Spacing.xs : 0
+            spacing: Spacing.sm
+
+            AppButton {
+                text: message.actionText
+                visible: message.actionText !== ""
+                variant: "primary"
+                onClicked: message.actionTriggered()
+            }
+
+            AppButton {
+                text: message.secondaryActionText
+                visible: message.secondaryActionText !== ""
+                variant: "ghost"
+                onClicked: message.secondaryActionTriggered()
+            }
         }
     }
 }
