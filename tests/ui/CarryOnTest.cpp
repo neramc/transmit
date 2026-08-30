@@ -34,6 +34,7 @@ private slots:
     void aJournalWithNoBlocksYetIsNotOffered();
     void theNewestUnfinishedCaptureIsTheOneOffered();
     void theOfferCanBeTakenUpAndPutDownAgain();
+    void finishingACaptureSaysSoToTheEjectOffer();
 
 private:
     /// Writes an archive and the record beside it, as an interrupted run
@@ -233,6 +234,35 @@ void CarryOnTest::theOfferCanBeTakenUpAndPutDownAgain() {
     QVERIFY2(!controller.carryingOn(), "still carrying on after being told to start again");
     QVERIFY2(!controller.canCarryOn(), "the offer came back after being turned down");
     QCOMPARE(changed.count(), 2);
+}
+
+// Whether the drive can be taken away depends on the capture having finished,
+// and a Qt property carries exactly one notify signal. Bind the offer to
+// ejectChanged and forget to emit it when the capture ends, and the button is
+// correct in every way except that it never appears - which no test of the
+// property's value would notice, because the value is right.
+void CarryOnTest::finishingACaptureSaysSoToTheEjectOffer() {
+    ExportController controller;
+    QSignalSpy ejectable(&controller, &ExportController::ejectChanged);
+    QSignalSpy finished(&controller, &ExportController::finishedChanged);
+
+    // A capture of an empty home into the workspace. What it finds does not
+    // matter; that it finishes, and says so to everything that depends on
+    // having finished, does.
+    const QString home = QDir(folder()).filePath(QStringLiteral("empty-home"));
+    QVERIFY(QDir().mkpath(home));
+    const QString previousHome = qEnvironmentVariable("HOME");
+    qputenv("HOME", home.toUtf8());
+
+    controller.start(QStringLiteral("documents"), folder(), QStringLiteral("fast"), QString(),
+                     false, QStringLiteral("test"), {QStringLiteral("userdata")}, false);
+
+    QVERIFY2(finished.wait(60000), "the capture never finished");
+    if (!previousHome.isEmpty()) {
+        qputenv("HOME", previousHome.toUtf8());
+    }
+
+    QVERIFY2(!ejectable.isEmpty(), "nothing told the eject offer that the capture had finished");
 }
 
 QTEST_MAIN(CarryOnTest)

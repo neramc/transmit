@@ -585,6 +585,13 @@ void ExportController::handleFinished() {
 
     emit runningChanged();
     emit finishedChanged();
+
+    // Whether the drive can be taken away depends on the capture having
+    // finished and succeeded, and both of those settle here. A Qt property
+    // carries one notify signal, so anything else that changes its value has
+    // to say so: without this the offer to eject is bound to a signal that
+    // never fires at the moment it becomes true, and the button never appears.
+    emit ejectChanged();
     emit reportReady();
 }
 
