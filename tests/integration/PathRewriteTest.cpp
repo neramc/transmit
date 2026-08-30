@@ -41,6 +41,7 @@ private slots:
     void jsonRewriteTouchesOnlyTheNamedKeys();
     void plistRewriteRepointsTheKeysItWasGiven();
     void jsonRewriteReachesInsideArraysAndObjects();
+    void aRewriteThatCannotBeAppliedLeavesTheOriginalAlone();
     void textRewriteKeepsUtf16Encoding();
     void sqliteRewriteUpdatesOnlyTheNamedColumn();
 
@@ -208,6 +209,55 @@ void PathRewriteTest::iniRewritePreservesCommentsAndOrdering() {
 // what the rewriters' contract promises. Nothing checked it, and the same
 // promise turned out to be false for property lists - so it is worth asking of
 // each format rather than assuming the sentence covers them all.
+// The one outcome that must never happen: a settings file that was going to be
+// repointed ends up neither repointed nor as it was. The original is copied
+// aside rather than moved for exactly this reason, so there is no moment when
+// the only copy of somebody's settings is under a name they have never heard
+// of - and if the copy cannot be made, nothing is touched at all.
+void PathRewriteTest::aRewriteThatCannotBeAppliedLeavesTheOriginalAlone() {
+    const QByteArray original = R"({"download": {"default_directory": "C:\\Users\\Bob\\Downloads"}}
+)";
+    write(QStringLiteral("Preferences"), original);
+
+    core::AppRecipe recipe;
+    recipe.id = QStringLiteral("test.chrome");
+    recipe.rewrites.push_back(
+        core::RecipeRewriteRule{QStringLiteral("Preferences"),
+                                QStringLiteral("json"),
+                                {QStringLiteral("download.default_directory")},
+                                {},
+                                1,
+                                {},
+                                {}});
+
+    core::RewritePlan plan;
+    core::PathRewriter(windowsToLinux()).planFor(recipe, workspace_->path(), plan);
+    QCOMPARE(plan.edits().size(), 1);
+
+    // A directory where the copy wants to put the original. QFile will not
+    // remove a directory and will not copy over one, so setting the original
+    // aside fails - which is the branch that decides whether a file somebody
+    // owns survives a rewrite that cannot be finished. A directory rather than
+    // a permission because this has to fail the same way whoever runs it, and
+    // root is not stopped by permissions.
+    const QString target = QDir(workspace_->path()).filePath(QStringLiteral("Preferences"));
+    QVERIFY(QDir().mkpath(target + QStringLiteral(".transmit-backup")));
+
+    QStringList errors;
+    QCOMPARE(plan.apply(&errors), 0);
+
+    QVERIFY2(!errors.isEmpty(), "a rewrite that could not be applied said nothing about it");
+    QVERIFY2(errors.first().contains(QStringLiteral("Preferences")), qPrintable(errors.first()));
+
+    // What the user has is exactly what they had.
+    QCOMPARE(read(QStringLiteral("Preferences")), original);
+
+    // And nothing is left lying about next to it claiming to be a newer
+    // version, which the next run would otherwise apply without checking.
+    QVERIFY2(!QFile::exists(target + QStringLiteral(".transmit-staged")),
+             "a staged rewrite outlived the attempt to apply it");
+}
+
 void PathRewriteTest::jsonRewriteReachesInsideArraysAndObjects() {
     const QByteArray original = R"({
   "recent": ["C:\\Users\\Bob\\Documents\\a.txt", 7, "C:\\Users\\Bob\\Documents\\b.txt"],
