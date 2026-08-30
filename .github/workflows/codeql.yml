@@ -1,0 +1,74 @@
+name: codeql
+
+# GitHub's own static analysis, which looks for a different class of fault than
+# anything else here.
+#
+# clang-tidy reads one translation unit and asks whether the code in front of
+# it is well formed. This follows values across function and file boundaries
+# and asks where they came from and where they end up - a length read out of an
+# archive reaching an allocation, a path from a manifest reaching a file
+# open. Those are the faults that matter most in a program whose whole job is
+# to read a file somebody else wrote and put its contents on your disk.
+#
+# Not on pull requests: a C++ database means a full build, and twenty minutes
+# on every push would buy an answer that has changed on perhaps one push in
+# fifty. Main and a weekly sweep catch the same things a few hours later.
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Monday, early. Late enough after the nightly that the two are not
+    # competing for runners.
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyse:
+    name: Analyse
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          modules: 'qtimageformats'
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libzstd-dev liblzma-dev libssl-dev \
+                                  libsqlite3-dev libsecret-1-dev \
+                                  libgl1-mesa-dev libxkbcommon-x11-0
+
+      - name: Set up CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: cpp
+          # security-and-quality over the default: the extra queries are the
+          # ones about resources that are not released and values that are not
+          # checked, which is most of what goes wrong in this codebase.
+          queries: security-and-quality
+
+      # Built the way the project is really built, so what is analysed is what
+      # ships rather than a reduced configuration that happens to compile.
+      - name: Build
+        run: |
+          cmake --preset default
+          cmake --build --preset default
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:cpp

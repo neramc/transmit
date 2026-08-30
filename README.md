@@ -400,6 +400,41 @@ application reports both numbers and quits once it has painted.
 
 ---
 
+## What checks it
+
+A tool that can turn somebody's computer into a brick has to be able to say
+what evidence there is that it will not. This is that evidence.
+
+On every push:
+
+| | |
+| --- | --- |
+| Linux, Windows, macOS | The whole suite on all three. Windows and macOS cannot be built anywhere else this project is developed, and every fault this matrix has found has been a real one |
+| Formatting and static analysis | clang-format, clang-tidy over every source file, QML module registration, design tokens, palette contrast |
+| Sanitisers | Address, undefined behaviour and thread, the last for the compression pool and the controllers |
+| Fault injection | A drive that fills, stops, writes short, reads wrong, or is pulled out mid-write. The gate is that every one of two thousand injected bit flips is detected |
+| Fuzzing | Manifests, containers, serialisation and path tokens, plus every input that has ever crashed one of them |
+| Application catalog | Schema, invariants, and that reading the old format still produces the same thing field for field |
+| Coverage | By area, with a floor under the whole and a higher one under the lines a change adds |
+| Speed | Micro and macro benchmarks against committed baselines, so a change that quietly halves the throughput fails rather than ships |
+
+Nightly, because they are too slow to sit in front of a push: the whole suite
+twenty times over, the property suites with twenty times the cases and a new
+seed, fifteen minutes a fuzz target instead of one, and Windows and macOS run
+twice to catch a test that depends on what the run before it left behind.
+
+Weekly and on main: CodeQL, which follows values across files - a length read
+out of an archive reaching an allocation - rather than reading one file at a
+time.
+
+Nothing is published from a commit whose checks did not pass. The release
+workflow asks what each required job concluded on exactly those bytes and
+refuses otherwise, naming the jobs rather than trusting the run's overall
+result: a run can be green with a job cancelled, and "nothing failed" is not
+the same claim as "the sanitisers passed".
+
+---
+
 ## Not built yet
 
 Honest list of what the design covers but the code does not:
