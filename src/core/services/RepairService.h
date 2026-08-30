@@ -9,7 +9,6 @@
 #include "core/continuity/ContinuityTypes.h"
 #include "core/services/ScanService.h"
 #include "core/services/VerifyService.h"
-#include "platform/PlatformService.h"
 
 namespace transmit::core {
 
@@ -72,13 +71,12 @@ class RepairService {
 public:
     using ProgressCallback = std::function<void(const ProgressUpdate&)>;
 
-    explicit RepairService(const platform::PlatformService& platform);
-
+    /// Takes no platform service on purpose. Where a file belongs is read
+    /// from the archive's own recorded token bases, not from this machine -
+    /// that is what lets a capture be repaired from a different account, or
+    /// from a home directory that has since been renamed.
     [[nodiscard]] RepairReport run(const RepairRequest& request, CancelToken& cancelToken,
                                    const ProgressCallback& progress = {}) const;
-
-private:
-    const platform::PlatformService& platform_;
 };
 
 }  // namespace transmit::core

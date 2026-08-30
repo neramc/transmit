@@ -50,8 +50,6 @@ QString repairObstacleName(RepairObstacle obstacle) {
     return {};
 }
 
-RepairService::RepairService(const platform::PlatformService& platform) : platform_(platform) {}
-
 RepairReport RepairService::run(const RepairRequest& request, CancelToken& cancelToken,
                                 const ProgressCallback& progress) const {
     RepairReport report;

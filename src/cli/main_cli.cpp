@@ -1066,7 +1066,7 @@ int runRepair(const QString& archivePath, const QString& passphrase, const QStri
     }
 
     const auto platform = platform::PlatformService::create();
-    const core::RepairService repairer(*platform);
+    const core::RepairService repairer;
     const core::RepairReport report =
         repairer.run(request, cancelToken, [](const core::ProgressUpdate& update) {
             if (update.filesTotal == 0) {

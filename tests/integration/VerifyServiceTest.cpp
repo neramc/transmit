@@ -438,7 +438,7 @@ void VerifyServiceTest::aDamagedFileIsRecoveredFromTheMachineItCameFrom() {
     core::RepairRequest request;
     request.archivePath = archive;
 
-    const core::RepairService repairer(*platform_);
+    const core::RepairService repairer;
     const core::RepairReport report = repairer.run(request, token, {});
 
     QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
@@ -546,7 +546,7 @@ void VerifyServiceTest::aFileThatHasChangedSinceTheCaptureIsNotUsedToRepairIt() 
     core::RepairRequest request;
     request.archivePath = archive;
 
-    const core::RepairService repairer(*platform_);
+    const core::RepairService repairer;
     const core::RepairReport report = repairer.run(request, token, {});
 
     QVERIFY2(!report.succeeded, "a changed file was accepted as a repair for the old one");
@@ -576,7 +576,7 @@ void VerifyServiceTest::repairingTwiceFindsNothingLeftToDo() {
     core::RepairRequest request;
     request.archivePath = archive;
 
-    const core::RepairService repairer(*platform_);
+    const core::RepairService repairer;
     const core::RepairReport first = repairer.run(request, token, {});
     QVERIFY2(first.succeeded, qPrintable(first.errorMessage));
     QVERIFY(first.filesRepaired > 0);
@@ -595,7 +595,7 @@ void VerifyServiceTest::repairingASoundArchiveDoesNothingAndSaysSo() {
     core::RepairRequest request;
     request.archivePath = archive;
 
-    const core::RepairService repairer(*platform_);
+    const core::RepairService repairer;
     const core::RepairReport report = repairer.run(request, token, {});
 
     QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
