@@ -6,6 +6,7 @@
 #include <QJsonObject>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QXmlStreamReader>
 
 #include <sqlite3.h>
 
@@ -37,6 +38,7 @@ private slots:
 
     void iniRewritePreservesCommentsAndOrdering();
     void jsonRewriteTouchesOnlyTheNamedKeys();
+    void plistRewriteRepointsTheKeysItWasGiven();
     void textRewriteKeepsUtf16Encoding();
     void sqliteRewriteUpdatesOnlyTheNamedColumn();
 
@@ -193,6 +195,89 @@ void PathRewriteTest::iniRewritePreservesCommentsAndOrdering() {
     QVERIFY2(result.contains("# a trailing comment"), "comments must survive");
     QVERIFY2(result.contains("StartWithLastProfile=1"), "other keys must be untouched");
     QVERIFY2(result.indexOf("[General]") < result.indexOf("[Profile0]"), "order must survive");
+}
+
+// Property lists are how macOS keeps preferences, so this is the rewriter that
+// runs on every restore onto a Mac. Nothing had ever exercised it, and it did
+// nothing: the key name was never captured, so no value ever matched, so every
+// preference restored onto a Mac kept the paths of the machine it came from
+// while the restore reported success.
+void PathRewriteTest::plistRewriteRepointsTheKeysItWasGiven() {
+    const QByteArray original =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" "
+        "\"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
+        "<plist version=\"1.0\">\n"
+        "<dict>\n"
+        "\t<key>DownloadFolder</key>\n"
+        "\t<string>C:\\Users\\Bob\\Downloads</string>\n"
+        // A key whose text arrives in more than one piece. A plist is XML and
+        // may come from any writer, and a reader hands a CDATA section back
+        // as its own run of characters - here "Recent ", "& Old", " Files" -
+        // so a rewriter that remembers only the last piece looks for
+        // " Files", finds nothing, and leaves the paths under this key alone.
+        "\t<key>Recent <![CDATA[& Old]]> Files</key>\n"
+        "\t<array>\n"
+        "\t\t<string>C:\\Users\\Bob\\Documents\\a.txt</string>\n"
+        "\t\t<string>C:\\Users\\Bob\\Documents\\b.txt</string>\n"
+        "\t</array>\n"
+        "\t<key>LeaveThisAlone</key>\n"
+        "\t<string>C:\\Users\\Bob\\Documents\\keep-me</string>\n"
+        "\t<key>WindowCount</key>\n"
+        "\t<integer>3</integer>\n"
+        "\t<key>Enabled</key>\n"
+        "\t<true/>\n"
+        "</dict>\n"
+        "</plist>\n";
+    write(QStringLiteral("com.example.app.plist"), original);
+
+    core::AppRecipe recipe;
+    recipe.id = QStringLiteral("test.plist");
+    recipe.rewrites.push_back(core::RecipeRewriteRule{
+        QStringLiteral("com.example.app.plist"),
+        QStringLiteral("plist"),
+        {QStringLiteral("DownloadFolder"), QStringLiteral("Recent & Old Files")},
+        {},
+        1,
+        {},
+        {}});
+
+    core::RewritePlan plan;
+    core::PathRewriter(windowsToLinux()).planFor(recipe, workspace_->path(), plan);
+
+    // Three: the download folder and both entries of the array. A key naming
+    // an array has every string inside it considered, the same as for JSON.
+    QCOMPARE(plan.edits().size(), 3);
+    QCOMPARE(plan.apply(), 1);
+
+    const QByteArray result = read(QStringLiteral("com.example.app.plist"));
+    QVERIFY2(result.contains("<string>/home/bob/Downloads</string>"), result.constData());
+    QVERIFY2(result.contains("<string>/home/bob/Documents/a.txt</string>"), result.constData());
+    QVERIFY2(result.contains("<string>/home/bob/Documents/b.txt</string>"), result.constData());
+
+    // A path under a key the rule did not name stays exactly as it was, and a
+    // value that is not a string is not touched either.
+    QVERIFY2(result.contains("keep-me"), result.constData());
+    QVERIFY2(!result.contains("<string>/home/bob/Documents/keep-me</string>"), result.constData());
+    QVERIFY2(result.contains("<integer>3</integer>"), result.constData());
+    QVERIFY2(result.contains("<key>LeaveThisAlone</key>"), result.constData());
+
+    // The keys have to survive intact, or the preferences are rewritten into
+    // something the application cannot read.
+    for (const char* key : {"DownloadFolder", "Recent &amp; Old Files", "WindowCount", "Enabled"}) {
+        QVERIFY2(result.contains(QByteArray("<key>") + key + "</key>"), key);
+    }
+
+    // And what is written back has to be a property list, not merely a file
+    // with the right words in it. An unreadable preferences file is worse for
+    // the user than one that points somewhere stale.
+    QXmlStreamReader check(result);
+    while (!check.atEnd()) {
+        check.readNext();
+    }
+    QVERIFY2(!check.hasError(), qPrintable(check.errorString()));
+    QVERIFY2(result.contains("<!DOCTYPE plist"), "the doctype must survive");
+    QVERIFY2(result.contains("<true/>"), "an empty element must survive");
 }
 
 void PathRewriteTest::jsonRewriteTouchesOnlyTheNamedKeys() {

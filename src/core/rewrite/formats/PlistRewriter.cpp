@@ -41,7 +41,15 @@ QByteArray rewriteXmlPlist(const QByteArray& xml, const QStringList& keys,
     writer.setAutoFormatting(true);
     writer.setAutoFormattingIndent(1);
 
+    // The key most recently seen, and whether the reader is inside one now.
+    //
+    // The second is a flag rather than "pendingKey is not null", which is what
+    // this used to be: QString::clear() makes a string null, so the key text
+    // was never captured, so no <string> ever matched, so this rewriter
+    // silently did nothing at all. Everything restored onto a Mac kept the
+    // paths of the machine it came from.
     QString pendingKey;
+    bool insideKey = false;
     bool wantNextString = false;
 
     while (!reader.atEnd()) {
@@ -61,6 +69,7 @@ QByteArray rewriteXmlPlist(const QByteArray& xml, const QStringList& keys,
                 writer.writeStartElement(reader.name().toString());
                 writer.writeAttributes(reader.attributes());
                 if (reader.name() == QLatin1String("key")) {
+                    insideKey = true;
                     pendingKey.clear();
                 } else if (reader.name() == QLatin1String("string")) {
                     wantNextString =
@@ -69,7 +78,10 @@ QByteArray rewriteXmlPlist(const QByteArray& xml, const QStringList& keys,
                 break;
             case QXmlStreamReader::EndElement:
                 writer.writeEndElement();
-                if (reader.name() == QLatin1String("string")) {
+                if (reader.name() == QLatin1String("key")) {
+                    insideKey = false;
+                    pendingKey = pendingKey.trimmed();
+                } else if (reader.name() == QLatin1String("string")) {
                     wantNextString = false;
                 }
                 break;
@@ -82,10 +94,13 @@ QByteArray rewriteXmlPlist(const QByteArray& xml, const QStringList& keys,
                         edits.append(RewriteEdit{path, pendingKey, text, rewritten, appId});
                         text = rewritten;
                     }
-                } else if (!pendingKey.isNull() && reader.isCharacters() &&
-                           !reader.isWhitespace()) {
-                    // Remember the key text so the following value can be matched.
-                    pendingKey = text;
+                } else if (insideKey) {
+                    // Remember the key text so the following value can be
+                    // matched. Appended rather than assigned: a reader is
+                    // entitled to hand back one element's text in several
+                    // pieces, and a key split across two of them would
+                    // otherwise be remembered as only its last piece.
+                    pendingKey += text;
                 }
                 writer.writeCharacters(text);
                 break;
