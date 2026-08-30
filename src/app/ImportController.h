@@ -51,6 +51,9 @@ class ImportController : public QObject {
     Q_PROPERTY(bool undoing READ isUndoing NOTIFY undoChanged)
     Q_PROPERTY(QString undoSummary READ undoSummary NOTIFY undoChanged)
     Q_PROPERTY(QString undoDescription READ undoDescription NOTIFY undoChanged)
+    Q_PROPERTY(bool canCarryOn READ canCarryOn NOTIFY carryOnChanged)
+    Q_PROPERTY(QString carryOnText READ carryOnText NOTIFY carryOnChanged)
+    Q_PROPERTY(bool carryingOn READ isCarryingOn NOTIFY carryOnChanged)
 
 public:
     explicit ImportController(QObject* parent = nullptr);
@@ -96,6 +99,17 @@ public:
     /// What undoing would do, in the user's terms.
     [[nodiscard]] QString undoDescription() const;
 
+    /// A restore of this archive into this place stopped part way and can be
+    /// finished rather than started again.
+    [[nodiscard]] bool canCarryOn() const { return interrupted_.found; }
+
+    /// The offer, in the user's terms, naming how much would not be redone.
+    [[nodiscard]] QString carryOnText() const { return carryOnText_; }
+
+    /// The offer has been taken up, so the next start finishes rather than
+    /// begins.
+    [[nodiscard]] bool isCarryingOn() const { return carryingOn_; }
+
     [[nodiscard]] const core::ImportReport& report() const { return report_; }
 
 public slots:
@@ -128,6 +142,17 @@ public slots:
     /// rewritten file are deleted. Nothing that was restored is touched.
     void keepLastRestore();
 
+    /// Looks for a restore of this archive into this place that stopped part
+    /// way. Called when the destination is chosen, because that is what
+    /// decides whether there is one: the same archive into a different folder
+    /// is a different restore.
+    void lookForInterruptedRestore(const QString& destinationOverride);
+
+    /// Takes the offer up, and puts it back down again. Two slots rather than
+    /// a setter so the interface reads as the choice it is.
+    void carryOn();
+    void startFresh();
+
     /// Runs the restore. With `dryRun` nothing is written and the report says
     /// what would have happened.
     void start(const QString& passphrase, const QString& conflictPolicy, bool dryRun,
@@ -148,6 +173,7 @@ signals:
     void finishedChanged();
     void archiveCountsChanged();
     void undoChanged();
+    void carryOnChanged();
     void reportReady();
 
 private:
@@ -179,6 +205,10 @@ private:
     QString undoSummary_;
     bool undoing_ = false;
     bool undoUsed_ = false;
+
+    core::InterruptedRestore interrupted_;
+    QString carryOnText_;
+    bool carryingOn_ = false;
 
     QHash<QString, QStringList> archivesByFolder_;
     QSet<QString> scansInFlight_;

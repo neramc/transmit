@@ -32,6 +32,19 @@ Item {
     readonly property var stepTitles: [qsTr("Choose an archive"), qsTr("What is inside"),
                                        qsTr("How to restore"), qsTr("Progress")]
 
+    /// Where this restore would put things. Empty means the real folders.
+    readonly property string effectiveDestination:
+        page.restoreToFolder ? page.destinationOverride : ""
+
+    // Whether there is an unfinished restore to offer depends on both halves:
+    // the same archive into a different folder is a different restore, and a
+    // different archive into the same folder is too. Joined with a character
+    // no path holds so that moving a separator between the two cannot make
+    // two different pairs look like one.
+    readonly property string carryOnKey:
+        ImportController.archivePath + "\u0000" + page.effectiveDestination
+    onCarryOnKeyChanged: ImportController.lookForInterruptedRestore(page.effectiveDestination)
+
     ColumnLayout {
         anchors.fill: parent
         spacing: Spacing.xl
@@ -307,6 +320,30 @@ Item {
                             elide: Text.ElideMiddle
                         }
                     }
+
+                    // Nobody who has just watched a restore stop half way is
+                    // going to go looking for a flag, so the offer finds them.
+                    AppInlineMessage {
+                        objectName: "restoreCarryOnOffer"
+                        Layout.fillWidth: true
+                        visible: ImportController.canCarryOn
+                        tone: ImportController.carryingOn ? "success" : "warning"
+                        title: ImportController.carryingOn
+                               ? qsTr("Carrying on with the unfinished restore")
+                               : qsTr("A restore here stopped part way")
+                        body: ImportController.carryingOn
+                              ? qsTr("Only what is still missing will be put in place. Files "
+                                   + "the interrupted run already saved keep the names it gave "
+                                   + "them, rather than being saved a second time under new "
+                                   + "ones.")
+                              : ImportController.carryOnText
+                        actionText: ImportController.carryingOn ? "" : qsTr("Finish it")
+                        secondaryActionText: ImportController.carryingOn
+                                             ? qsTr("Start it again")
+                                             : qsTr("Ignore it")
+                        onActionTriggered: ImportController.carryOn()
+                        onSecondaryActionTriggered: ImportController.startFresh()
+                    }
                 }
             }
 
@@ -495,7 +532,7 @@ Item {
                     page.step = 3
                     ImportController.start(page.passphrase, page.conflictPolicy, true,
                                            page.verifyFirst,
-                                           page.restoreToFolder ? page.destinationOverride : "")
+                                           page.effectiveDestination)
                 }
             }
 
@@ -526,7 +563,7 @@ Item {
                     page.step = 3
                     ImportController.start(page.passphrase, page.conflictPolicy, false,
                                            page.verifyFirst,
-                                           page.restoreToFolder ? page.destinationOverride : "")
+                                           page.effectiveDestination)
                 })
             }
 

@@ -278,6 +278,44 @@ format::PathTokenMap ImportService::targetTokens(const ImportRequest& request) c
     return platform_.knownFolders();
 }
 
+QString ImportService::stateDirectoryFor(const QString& destinationOverride) const {
+    return QDir(destinationOverride.isEmpty() ? platform_.environment().homeDirectory
+                                              : destinationOverride)
+        .filePath(QString::fromLatin1(RollbackWriter::kDirectoryName));
+}
+
+InterruptedRestore ImportService::findInterruptedRestore(const QString& archivePath,
+                                                         const QString& destinationOverride) const {
+    InterruptedRestore found;
+
+    // Only the header is wanted, and only for the identifier the record is
+    // named after. An archive that will not open has no record to find.
+    auto reader = format::ArchiveReader::open(format::toFsPath(toUtf8(archivePath)));
+    if (!reader) {
+        return found;
+    }
+
+    const std::filesystem::path path = format::RestoreJournal::pathFor(
+        format::toFsPath(toUtf8(stateDirectoryFor(destinationOverride))), (*reader)->uuid());
+
+    auto journal = format::readRestoreJournal(path);
+    if (!journal || journal->complete) {
+        return found;
+    }
+
+    // A record describing nothing is not worth an offer: carrying on would
+    // save no work and would only be a more complicated way of starting.
+    const quint64 done = journal->writtenCount();
+    if (done == 0) {
+        return found;
+    }
+
+    found.found = true;
+    found.itemsAlreadyInPlace = done;
+    found.rollbackArchivePath = fromUtf8(journal->fingerprint.rollbackArchivePath);
+    return found;
+}
+
 void ImportService::previewRewrites(format::ArchiveReader& reader, const format::Manifest& manifest,
                                     const ImportRequest& request,
                                     const format::PathTokenMap& targetFolders, OsFamily targetOs,
@@ -625,10 +663,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
     // Beside the undo point, in the destination's own folder, named for the
     // archive. Two archives restored into one place must not read each
     // other's records, and the same archive has to find the one it left.
-    const QString stateDirectory =
-        QDir(request.destinationOverride.isEmpty() ? platform_.environment().homeDirectory
-                                                   : request.destinationOverride)
-            .filePath(QString::fromLatin1(RollbackWriter::kDirectoryName));
+    const QString stateDirectory = stateDirectoryFor(request.destinationOverride);
 
     const std::filesystem::path journalPath =
         format::RestoreJournal::pathFor(format::toFsPath(toUtf8(stateDirectory)), reader->uuid());

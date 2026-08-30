@@ -275,6 +275,49 @@ void ImportController::recordScan(const QString& folder, const QStringList& arch
     emit archiveCountsChanged();
 }
 
+void ImportController::lookForInterruptedRestore(const QString& destinationOverride) {
+    const bool wasOffered = interrupted_.found;
+
+    interrupted_ = {};
+    carryOnText_.clear();
+    carryingOn_ = false;
+
+    if (!archivePath_.isEmpty()) {
+        interrupted_ = service_->findInterruptedRestore(archivePath_, destinationOverride);
+    }
+
+    if (interrupted_.found) {
+        carryOnText_ =
+            tr("A restore of this archive here stopped part way, with %n item(s) already in "
+               "place. It can be finished rather than started again.",
+               nullptr, static_cast<int>(interrupted_.itemsAlreadyInPlace));
+    }
+
+    // Said only when it changes. A binding that fires on every folder the user
+    // clicks through would redraw the offer for folders that never had one.
+    if (wasOffered != interrupted_.found) {
+        emit carryOnChanged();
+    }
+}
+
+void ImportController::carryOn() {
+    if (!interrupted_.found || carryingOn_) {
+        return;
+    }
+    carryingOn_ = true;
+    emit carryOnChanged();
+}
+
+void ImportController::startFresh() {
+    if (!interrupted_.found && !carryingOn_) {
+        return;
+    }
+    interrupted_ = {};
+    carryOnText_.clear();
+    carryingOn_ = false;
+    emit carryOnChanged();
+}
+
 void ImportController::start(const QString& passphrase, const QString& conflictPolicy, bool dryRun,
                              bool verifyFirst, const QString& destinationOverride) {
     if (running_ || archivePath_.isEmpty()) {
@@ -294,6 +337,7 @@ void ImportController::start(const QString& passphrase, const QString& conflictP
     request.dryRun = dryRun;
     request.verifyFirst = verifyFirst;
     request.destinationOverride = destinationOverride;
+    request.resume = carryingOn_;
 
     running_ = true;
     undoUsed_ = false;
@@ -320,9 +364,22 @@ void ImportController::handleFinished() {
     running_ = false;
     finished_ = true;
 
+    // Whatever the run did, the offer that was standing before it is spent:
+    // a run that finished consumed the record, and a run that stopped part
+    // way wrote a new one describing itself rather than its predecessor. The
+    // report's own canBeCarriedOn is what the finished page reads; a fresh
+    // offer comes from looking again.
+    const bool wasOffered = interrupted_.found || carryingOn_;
+    interrupted_ = {};
+    carryOnText_.clear();
+    carryingOn_ = false;
+
     emit runningChanged();
     emit finishedChanged();
     emit undoChanged();
+    if (wasOffered) {
+        emit carryOnChanged();
+    }
     emit reportReady();
 }
 
@@ -346,6 +403,11 @@ void ImportController::reset() {
     progress_ = {};
     report_ = {};
     finished_ = false;
+
+    // The offer goes with it. It was about one archive into one folder, and
+    // after a reset the interface is asking about neither yet.
+    startFresh();
+
     emit progressChanged();
     emit finishedChanged();
 }

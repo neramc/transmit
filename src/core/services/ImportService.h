@@ -37,6 +37,24 @@ struct ArchiveSummary {
     QMap<int, quint64> bytesPerDomain;
 };
 
+/// A restore of this archive into this place that stopped part way.
+///
+/// What the window needs to offer to finish one, without having to work out
+/// for itself where the record is kept - the service that wrote it is the
+/// only thing that should have to know that.
+struct InterruptedRestore {
+    bool found = false;
+
+    /// How many items the interrupted run had already put in place. This is
+    /// what makes the offer worth showing: "carry on" over four files is not
+    /// worth a decision, over four thousand it is.
+    quint64 itemsAlreadyInPlace = 0;
+
+    /// The undo point that run made, if it made one. An interrupted restore
+    /// is exactly the one somebody may want reversed instead of finished.
+    QString rollbackArchivePath;
+};
+
 /// Restores an archive onto this machine, translating everything the target OS
 /// needs translated.
 class ImportService {
@@ -54,10 +72,25 @@ public:
     [[nodiscard]] ImportReport run(const ImportRequest& request, CancelToken& cancelToken,
                                    const ProgressCallback& progress = {});
 
+    /// Looks for a restore of this archive into this place that stopped part
+    /// way, so the window can offer to finish it.
+    ///
+    /// Exposed rather than left for the caller to find, because where the
+    /// record lives is derived from the destination, the home directory and
+    /// the archive's own identifier, and a second answer to that would be a
+    /// window offering to carry on with a record the restore will not read.
+    /// Nothing here reports a problem: an unreadable or absent record simply
+    /// means there is nothing to offer.
+    [[nodiscard]] InterruptedRestore findInterruptedRestore(
+        const QString& archivePath, const QString& destinationOverride) const;
+
 private:
     /// The known-folder table to restore into: this machine's, or a synthetic
     /// one when the caller is emulating another OS or restoring to a folder.
     [[nodiscard]] format::PathTokenMap targetTokens(const ImportRequest& request) const;
+
+    /// Where the undo point and the record of the run are kept.
+    [[nodiscard]] QString stateDirectoryFor(const QString& destinationOverride) const;
 
     /// Works out which settings a real restore would repoint, without touching
     /// anything the user owns.
