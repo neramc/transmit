@@ -65,6 +65,22 @@ private:
     /// it says has to be believed either way.
     void leaveAFinishedCapture(const QString& name);
 
+    /// Points the controller at an archive and waits for it to be read.
+    ///
+    /// Deliberately not the QTRY family of macros. Those convert a chrono
+    /// duration to int inside their own expansion, which newer gcc reports
+    /// under -Wconversion, and this project builds with -Werror - so it
+    /// compiled here on gcc 13 and failed every Linux job on the runners.
+    /// Waiting on the signal is what the window does anyway, and what the
+    /// rest of this file already does.
+    [[nodiscard]] static bool inspectAndWait(ImportController& controller, const QString& archive) {
+        QSignalSpy inspected(&controller, &ImportController::inspectingChanged);
+        controller.inspect(archive);
+        // inspect() reports that it has started before returning, so the next
+        // one to arrive is the one saying it has finished.
+        return inspected.wait(30000) && !controller.isInspecting();
+    }
+
     /// Writes a whole archive, then a restore record beside a destination
     /// saying a run into it stopped part way. `itemsDone` of nought is a
     /// record that describes nothing, which is a different answer.
@@ -218,8 +234,7 @@ void CarryOnTest::anUnfinishedRestoreIsOffered() {
     ImportController controller;
     QSignalSpy changed(&controller, &ImportController::carryOnChanged);
 
-    controller.inspect(pathTo(QStringLiteral("stopped-restore.txa")));
-    QTRY_VERIFY(!controller.isInspecting());
+    QVERIFY(inspectAndWait(controller, pathTo(QStringLiteral("stopped-restore.txa"))));
     controller.lookForInterruptedRestore(destination);
 
     QVERIFY2(controller.canCarryOn(), "an unfinished restore went unnoticed");
@@ -235,8 +250,7 @@ void CarryOnTest::aFinishedRestoreIsNotOffered() {
     leaveAnUnfinishedRestore(QStringLiteral("done-restore.txa"), destination, 3, true);
 
     ImportController controller;
-    controller.inspect(pathTo(QStringLiteral("done-restore.txa")));
-    QTRY_VERIFY(!controller.isInspecting());
+    QVERIFY(inspectAndWait(controller, pathTo(QStringLiteral("done-restore.txa"))));
     controller.lookForInterruptedRestore(destination);
 
     // Offering to "finish" a restore that finished would mean writing over a
@@ -250,8 +264,7 @@ void CarryOnTest::aRestoreRecordDescribingNothingIsNotOffered() {
     leaveAnUnfinishedRestore(QStringLiteral("barely-started.txa"), destination, 0);
 
     ImportController controller;
-    controller.inspect(pathTo(QStringLiteral("barely-started.txa")));
-    QTRY_VERIFY(!controller.isInspecting());
+    QVERIFY(inspectAndWait(controller, pathTo(QStringLiteral("barely-started.txa"))));
     controller.lookForInterruptedRestore(destination);
 
     // Nothing was put in place, so carrying on would save no work at all.
@@ -266,8 +279,7 @@ void CarryOnTest::aRestoreIntoADifferentFolderIsNotOffered() {
     leaveAnUnfinishedRestore(QStringLiteral("stopped-restore.txa"), destination);
 
     ImportController controller;
-    controller.inspect(pathTo(QStringLiteral("stopped-restore.txa")));
-    QTRY_VERIFY(!controller.isInspecting());
+    QVERIFY(inspectAndWait(controller, pathTo(QStringLiteral("stopped-restore.txa"))));
 
     // The same archive into a different folder is a different restore, and
     // the record says nothing about what is in this one.
@@ -284,8 +296,7 @@ void CarryOnTest::theRestoreOfferCanBeTakenUpAndPutDownAgain() {
     leaveAnUnfinishedRestore(QStringLiteral("stopped-restore.txa"), destination);
 
     ImportController controller;
-    controller.inspect(pathTo(QStringLiteral("stopped-restore.txa")));
-    QTRY_VERIFY(!controller.isInspecting());
+    QVERIFY(inspectAndWait(controller, pathTo(QStringLiteral("stopped-restore.txa"))));
     controller.lookForInterruptedRestore(destination);
     QVERIFY(controller.canCarryOn());
 
@@ -316,8 +327,7 @@ void CarryOnTest::theRestoreOfferOnlySaysSomethingWhenTheAnswerChanges() {
     leaveAnUnfinishedRestore(QStringLiteral("stopped-restore.txa"), destination);
 
     ImportController controller;
-    controller.inspect(pathTo(QStringLiteral("stopped-restore.txa")));
-    QTRY_VERIFY(!controller.isInspecting());
+    QVERIFY(inspectAndWait(controller, pathTo(QStringLiteral("stopped-restore.txa"))));
 
     QSignalSpy changed(&controller, &ImportController::carryOnChanged);
 
@@ -503,8 +513,7 @@ void CarryOnTest::takingTheRestoreOfferUpActuallyCarriesTheRestoreOn() {
     QVERIFY(QDir().mkpath(destination));
 
     ImportController controller;
-    controller.inspect(archive);
-    QTRY_VERIFY(!controller.isInspecting());
+    QVERIFY(inspectAndWait(controller, archive));
 
     // A restore that runs out of room part way. Everything but the record of
     // it stops being writable, which is what a full disk looks like from here.

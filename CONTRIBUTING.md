@@ -29,6 +29,34 @@ clang's alone - so a clean gcc build is not evidence of a clean macOS one. The
 `clang` preset builds the same tree with the same `-Werror`, and finds those
 here rather than eight minutes into a runner.
 
+### Build against the Qt the runners use
+
+CI builds against **Qt 6.8.1**. If your distribution's Qt is older, a clean
+build here is not evidence of a clean build there, and the two ways that has
+gone wrong were both invisible locally and fatal on every job:
+
+- `QTRY_VERIFY` takes an `int` timeout in Qt 6.4 and `std::chrono::milliseconds`
+  in 6.8, where the macro's own expansion narrows a `long` to an `int`. With
+  `-Werror` that is a build failure in a macro you did not write.
+- Qt's ahead-of-time QML compiler writes string literals straight into generated
+  C++. 6.8 compiles bindings 6.4 leaves alone, so a literal that is fine here
+  can produce generated C++ that does not parse there.
+
+Neither is a compiler difference - gcc 13 and 14 both accept them - so nothing
+but the right Qt finds them. It is one command:
+
+```bash
+pip install aqtinstall
+python3 -m aqt install-qt linux desktop 6.8.1 linux_gcc_64 -m qtimageformats -O /opt/Qt
+
+cmake -S . -B build-qt68 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_PREFIX_PATH=/opt/Qt/6.8.1/gcc_64 \
+      -DTRANSMIT_WERROR=ON -DTRANSMIT_BUILD_TESTS=ON
+cmake --build build-qt68 && ctest --test-dir build-qt68
+```
+
+Worth doing before any push that touches QML or a test macro.
+
 `scripts/format.sh` without `--check` fixes the formatting instead of
 reporting it.
 
