@@ -6,6 +6,7 @@
 #include <set>
 #include <utility>
 
+#include "format/JournalFile.h"
 #include "format/Serialization.h"
 #include "format/hash/Blake2b.h"
 #include "format/hash/Crc32.h"
@@ -13,22 +14,8 @@
 namespace transmit::format {
 namespace {
 
-/// "TXAJ", then the version. A journal from a future Transmit is refused
-/// rather than half-understood: the whole point of the file is that what it
-/// says about the drive is exactly true.
-constexpr std::array<char, 4> kMagic = {'T', 'X', 'A', 'J'};
-constexpr std::uint16_t kJournalVersion = 1;
-constexpr std::size_t kFileHeaderSize = 16;
-
-/// Every record: its length, a CRC-32 of the payload, then the payload. The
-/// length comes first so a torn write is caught by the reader running out of
-/// bytes rather than by the checksum, which is the cheaper of the two and the
-/// one that catches a tail cut in the middle of a length field.
-constexpr std::size_t kRecordHeaderSize = 8;
-
-/// A single record is a manifest entry, and a manifest entry is a path plus
-/// some numbers. Anything larger is a corrupt length field being believed.
-constexpr std::uint32_t kMaxRecordSize = 1u << 20;
+/// "TXAJ": the capture journal, as against the restore journal's "TXAR".
+constexpr JournalFormat kFormat{{'T', 'X', 'A', 'J'}, 1};
 
 namespace record_field {
 constexpr std::uint32_t kKind = 1;
@@ -54,32 +41,6 @@ constexpr std::uint32_t kEncrypted = 16;
 // EntryPlaced
 constexpr std::uint32_t kEntry = 12;
 }  // namespace record_field
-
-std::array<Byte, kFileHeaderSize> encodeFileHeader() {
-    std::array<Byte, kFileHeaderSize> out{};
-    for (std::size_t i = 0; i < kMagic.size(); ++i) {
-        out[i] = static_cast<Byte>(kMagic[i]);
-    }
-    writeLe<std::uint16_t>(MutableByteView(out).subspan(4, 2), kJournalVersion);
-    return out;
-}
-
-Status checkFileHeader(ByteView data) {
-    if (data.size() < kFileHeaderSize) {
-        return Error{ErrorCode::CorruptArchive, "The journal is too short to have a header."};
-    }
-    for (std::size_t i = 0; i < kMagic.size(); ++i) {
-        if (data[i] != static_cast<Byte>(kMagic[i])) {
-            return Error{ErrorCode::CorruptArchive, "That file is not a Transmit journal."};
-        }
-    }
-    const auto version = readLe<std::uint16_t>(data.subspan(4, 2));
-    if (version != kJournalVersion) {
-        return Error{ErrorCode::UnsupportedVersion,
-                     "The journal was written by a newer version of Transmit."};
-    }
-    return {};
-}
 
 }  // namespace
 
@@ -169,9 +130,9 @@ Result<std::unique_ptr<TransferJournal>> TransferJournal::begin(
     TRANSMIT_TRY(stream, FileStream::open(pathFor(archive), FileStream::Mode::Write));
     journal->stream_ = std::move(stream);
 
-    const auto header = encodeFileHeader();
+    const auto header = encodeJournalHeader(kFormat);
     TRANSMIT_CHECK(journal->stream_.write(ByteView(header)));
-    journal->bytesWritten_ = kFileHeaderSize;
+    journal->bytesWritten_ = kJournalHeaderSize;
 
     ByteBuffer payload;
     ByteWriter writer(payload);
@@ -227,20 +188,8 @@ Result<std::unique_ptr<TransferJournal>> TransferJournal::reopen(
 }
 
 Status TransferJournal::append(JournalRecordKind kind, ByteView payload) {
-    (void)kind;  // carried inside the payload; the header stays fixed-width
-    if (payload.size() > kMaxRecordSize) {
-        return Error{ErrorCode::Internal, "A journal record grew past its limit."};
-    }
-
-    std::array<Byte, kRecordHeaderSize> header{};
-    writeLe<std::uint32_t>(MutableByteView(header).subspan(0, 4),
-                           static_cast<std::uint32_t>(payload.size()));
-    writeLe<std::uint32_t>(MutableByteView(header).subspan(4, 4), crc32(payload));
-
-    TRANSMIT_CHECK(stream_.write(ByteView(header)));
-    TRANSMIT_CHECK(stream_.write(payload));
-    bytesWritten_ += kRecordHeaderSize + payload.size();
-    return {};
+    (void)kind;  // carried inside the payload; the frame stays fixed-width
+    return appendJournalRecord(stream_, payload, bytesWritten_);
 }
 
 Status TransferJournal::recordBlock(const JournalBlock& block) {
@@ -316,245 +265,225 @@ Result<JournalContents> readTransferJournal(const std::filesystem::path& archive
 
     TRANSMIT_TRY(raw, readWholeFile(path));
     const ByteView data(raw);
-    TRANSMIT_CHECK(checkFileHeader(data));
+    TRANSMIT_CHECK(checkJournalHeader(data, kFormat));
 
     JournalContents contents;
-    contents.validBytes = kFileHeaderSize;
     bool sawStart = false;
 
-    std::size_t offset = kFileHeaderSize;
-    while (offset < data.size()) {
-        // Any of these three is a tail that was being written when the run
-        // stopped. None of them is corruption in the sense that anybody needs
-        // to be told about it - it is what an interrupted append looks like.
-        if (data.size() - offset < kRecordHeaderSize) {
-            contents.tailDiscarded = true;
-            break;
-        }
-        const auto length = readLe<std::uint32_t>(data.subspan(offset, 4));
-        const auto checksum = readLe<std::uint32_t>(data.subspan(offset + 4, 4));
-        if (length > kMaxRecordSize || data.size() - offset - kRecordHeaderSize < length) {
-            contents.tailDiscarded = true;
-            break;
-        }
+    TRANSMIT_TRY(
+        scan, scanJournalRecords(data, [&](ByteView payload) -> Status {
+            ByteReader reader(payload);
+            auto kind = JournalRecordKind::SessionStart;
+            JournalBlock block;
+            std::optional<ManifestEntry> entry;
+            JournalFingerprint fingerprint;
+            bool malformed = false;
 
-        const ByteView payload = data.subspan(offset + kRecordHeaderSize, length);
-        if (crc32(payload) != checksum) {
-            contents.tailDiscarded = true;
-            break;
-        }
-
-        ByteReader reader(payload);
-        auto kind = JournalRecordKind::SessionStart;
-        JournalBlock block;
-        std::optional<ManifestEntry> entry;
-        JournalFingerprint fingerprint;
-        bool malformed = false;
-
-        while (!reader.atEnd()) {
-            auto tag = reader.getTag();
-            if (!tag) {
-                malformed = true;
-                break;
-            }
-            switch (tag->field) {
-                case record_field::kKind: {
-                    auto value = reader.getVarint();
-                    if (!value) {
-                        malformed = true;
-                        break;
-                    }
-                    kind = static_cast<JournalRecordKind>(*value);
+            while (!reader.atEnd()) {
+                auto tag = reader.getTag();
+                if (!tag) {
+                    malformed = true;
                     break;
                 }
-                case record_field::kUuid: {
-                    auto value = reader.getBytes();
-                    if (!value || value->size() != fingerprint.archiveUuid.size()) {
-                        malformed = true;
+                switch (tag->field) {
+                    case record_field::kKind: {
+                        auto value = reader.getVarint();
+                        if (!value) {
+                            malformed = true;
+                            break;
+                        }
+                        kind = static_cast<JournalRecordKind>(*value);
                         break;
                     }
-                    std::copy(value->begin(), value->end(), fingerprint.archiveUuid.begin());
-                    break;
+                    case record_field::kUuid: {
+                        auto value = reader.getBytes();
+                        if (!value || value->size() != fingerprint.archiveUuid.size()) {
+                            malformed = true;
+                            break;
+                        }
+                        std::copy(value->begin(), value->end(), fingerprint.archiveUuid.begin());
+                        break;
+                    }
+                    case record_field::kDestination: {
+                        auto value = reader.getString();
+                        if (!value) {
+                            malformed = true;
+                            break;
+                        }
+                        fingerprint.destination = *value;
+                        break;
+                    }
+                    case record_field::kHostName: {
+                        auto value = reader.getString();
+                        if (!value) {
+                            malformed = true;
+                            break;
+                        }
+                        fingerprint.hostName = *value;
+                        break;
+                    }
+                    case record_field::kUserName: {
+                        auto value = reader.getString();
+                        if (!value) {
+                            malformed = true;
+                            break;
+                        }
+                        fingerprint.userName = *value;
+                        break;
+                    }
+                    case record_field::kOptionsDigest: {
+                        auto value = reader.getVarint();
+                        if (!value) {
+                            malformed = true;
+                            break;
+                        }
+                        fingerprint.optionsDigest = *value;
+                        break;
+                    }
+                    case record_field::kSourceDigest: {
+                        auto value = reader.getVarint();
+                        if (!value) {
+                            malformed = true;
+                            break;
+                        }
+                        fingerprint.sourceDigest = *value;
+                        break;
+                    }
+                    case record_field::kBlockId: {
+                        auto value = reader.getVarint();
+                        if (!value) {
+                            malformed = true;
+                            break;
+                        }
+                        block.blockId = static_cast<std::uint32_t>(*value);
+                        break;
+                    }
+                    case record_field::kLogicalEnd: {
+                        auto value = reader.getVarint();
+                        if (!value) {
+                            malformed = true;
+                            break;
+                        }
+                        block.logicalEnd = *value;
+                        break;
+                    }
+                    case record_field::kRawSize: {
+                        auto value = reader.getVarint();
+                        if (!value) {
+                            malformed = true;
+                            break;
+                        }
+                        block.rawSize = *value;
+                        break;
+                    }
+                    case record_field::kStreamOffset: {
+                        auto value = reader.getVarint();
+                        if (!value) {
+                            malformed = true;
+                            break;
+                        }
+                        block.streamOffset = *value;
+                        break;
+                    }
+                    case record_field::kStoredSize: {
+                        auto value = reader.getVarint();
+                        if (!value) {
+                            malformed = true;
+                            break;
+                        }
+                        block.storedSize = *value;
+                        break;
+                    }
+                    case record_field::kCodec: {
+                        auto value = reader.getVarint();
+                        if (!value) {
+                            malformed = true;
+                            break;
+                        }
+                        block.codec = static_cast<CodecId>(*value);
+                        break;
+                    }
+                    case record_field::kEncrypted: {
+                        auto value = reader.getBool();
+                        if (!value) {
+                            malformed = true;
+                            break;
+                        }
+                        block.encrypted = *value;
+                        break;
+                    }
+                    case record_field::kRawHash: {
+                        auto value = reader.getBytes();
+                        if (!value || value->size() != block.rawHash.size()) {
+                            malformed = true;
+                            break;
+                        }
+                        std::copy(value->begin(), value->end(), block.rawHash.begin());
+                        break;
+                    }
+                    case record_field::kEntry: {
+                        auto value = reader.getBytes();
+                        if (!value) {
+                            malformed = true;
+                            break;
+                        }
+                        auto decoded = decodeManifestEntry(*value);
+                        if (!decoded) {
+                            malformed = true;
+                            break;
+                        }
+                        entry = std::move(decoded).value();
+                        break;
+                    }
+                    default: {
+                        if (!reader.skip(tag->type)) {
+                            malformed = true;
+                        }
+                        break;
+                    }
                 }
-                case record_field::kDestination: {
-                    auto value = reader.getString();
-                    if (!value) {
-                        malformed = true;
-                        break;
-                    }
-                    fingerprint.destination = *value;
-                    break;
-                }
-                case record_field::kHostName: {
-                    auto value = reader.getString();
-                    if (!value) {
-                        malformed = true;
-                        break;
-                    }
-                    fingerprint.hostName = *value;
-                    break;
-                }
-                case record_field::kUserName: {
-                    auto value = reader.getString();
-                    if (!value) {
-                        malformed = true;
-                        break;
-                    }
-                    fingerprint.userName = *value;
-                    break;
-                }
-                case record_field::kOptionsDigest: {
-                    auto value = reader.getVarint();
-                    if (!value) {
-                        malformed = true;
-                        break;
-                    }
-                    fingerprint.optionsDigest = *value;
-                    break;
-                }
-                case record_field::kSourceDigest: {
-                    auto value = reader.getVarint();
-                    if (!value) {
-                        malformed = true;
-                        break;
-                    }
-                    fingerprint.sourceDigest = *value;
-                    break;
-                }
-                case record_field::kBlockId: {
-                    auto value = reader.getVarint();
-                    if (!value) {
-                        malformed = true;
-                        break;
-                    }
-                    block.blockId = static_cast<std::uint32_t>(*value);
-                    break;
-                }
-                case record_field::kLogicalEnd: {
-                    auto value = reader.getVarint();
-                    if (!value) {
-                        malformed = true;
-                        break;
-                    }
-                    block.logicalEnd = *value;
-                    break;
-                }
-                case record_field::kRawSize: {
-                    auto value = reader.getVarint();
-                    if (!value) {
-                        malformed = true;
-                        break;
-                    }
-                    block.rawSize = *value;
-                    break;
-                }
-                case record_field::kStreamOffset: {
-                    auto value = reader.getVarint();
-                    if (!value) {
-                        malformed = true;
-                        break;
-                    }
-                    block.streamOffset = *value;
-                    break;
-                }
-                case record_field::kStoredSize: {
-                    auto value = reader.getVarint();
-                    if (!value) {
-                        malformed = true;
-                        break;
-                    }
-                    block.storedSize = *value;
-                    break;
-                }
-                case record_field::kCodec: {
-                    auto value = reader.getVarint();
-                    if (!value) {
-                        malformed = true;
-                        break;
-                    }
-                    block.codec = static_cast<CodecId>(*value);
-                    break;
-                }
-                case record_field::kEncrypted: {
-                    auto value = reader.getBool();
-                    if (!value) {
-                        malformed = true;
-                        break;
-                    }
-                    block.encrypted = *value;
-                    break;
-                }
-                case record_field::kRawHash: {
-                    auto value = reader.getBytes();
-                    if (!value || value->size() != block.rawHash.size()) {
-                        malformed = true;
-                        break;
-                    }
-                    std::copy(value->begin(), value->end(), block.rawHash.begin());
-                    break;
-                }
-                case record_field::kEntry: {
-                    auto value = reader.getBytes();
-                    if (!value) {
-                        malformed = true;
-                        break;
-                    }
-                    auto decoded = decodeManifestEntry(*value);
-                    if (!decoded) {
-                        malformed = true;
-                        break;
-                    }
-                    entry = std::move(decoded).value();
-                    break;
-                }
-                default: {
-                    if (!reader.skip(tag->type)) {
-                        malformed = true;
-                    }
+                if (malformed) {
                     break;
                 }
             }
+
             if (malformed) {
-                break;
+                // A record whose checksum matched but whose contents do not parse
+                // is not a torn tail - it is a journal that says something this
+                // version cannot read, and continuing past it would silently drop
+                // whatever it claimed.
+                return Error{ErrorCode::CorruptArchive,
+                             "A journal record checksummed correctly and could not be read."};
             }
-        }
 
-        if (malformed) {
-            // A record whose checksum matched but whose contents do not parse
-            // is not a torn tail - it is a journal that says something this
-            // version cannot read, and continuing past it would silently drop
-            // whatever it claimed.
-            return Error{ErrorCode::CorruptArchive,
-                         "A journal record checksummed correctly and could not be read."};
-        }
+            switch (kind) {
+                case JournalRecordKind::SessionStart:
+                    if (sawStart) {
+                        return Error{ErrorCode::CorruptArchive,
+                                     "The journal holds more than one capture."};
+                    }
+                    sawStart = true;
+                    contents.fingerprint = std::move(fingerprint);
+                    break;
+                case JournalRecordKind::BlockWritten:
+                    contents.blocks.push_back(block);
+                    break;
+                case JournalRecordKind::EntryPlaced:
+                    if (!entry) {
+                        return Error{ErrorCode::CorruptArchive,
+                                     "A journal entry record held no entry."};
+                    }
+                    contents.entries.push_back(std::move(*entry));
+                    break;
+                case JournalRecordKind::SessionComplete:
+                    contents.complete = true;
+                    break;
+            }
+            return {};
+        }));
 
-        switch (kind) {
-            case JournalRecordKind::SessionStart:
-                if (sawStart) {
-                    return Error{ErrorCode::CorruptArchive,
-                                 "The journal holds more than one capture."};
-                }
-                sawStart = true;
-                contents.fingerprint = std::move(fingerprint);
-                break;
-            case JournalRecordKind::BlockWritten:
-                contents.blocks.push_back(block);
-                break;
-            case JournalRecordKind::EntryPlaced:
-                if (!entry) {
-                    return Error{ErrorCode::CorruptArchive,
-                                 "A journal entry record held no entry."};
-                }
-                contents.entries.push_back(std::move(*entry));
-                break;
-            case JournalRecordKind::SessionComplete:
-                contents.complete = true;
-                break;
-        }
-
-        offset += kRecordHeaderSize + length;
-        contents.validBytes = offset;
-    }
+    contents.tailDiscarded = scan.tailDiscarded;
+    contents.validBytes = scan.validBytes;
 
     if (!sawStart) {
         return Error{ErrorCode::CorruptArchive, "The journal never says which capture it is for."};

@@ -14,6 +14,7 @@ add_executable(transmit_format_tests
     ManifestTest.cpp
     VerificationTest.cpp
     ResumeTest.cpp
+    RestoreJournalTest.cpp
     TransferJournalTest.cpp)
 
 target_link_libraries(transmit_format_tests
