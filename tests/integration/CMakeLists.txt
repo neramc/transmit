@@ -3,7 +3,8 @@
 # layer alone.
 
 foreach(suite ContinuityRoundTrip PathRewrite SecretStore Catalog SelectionCodec
-              VerifyService StageTimer ResumeCapture ResumeRestore Eject)
+              VerifyService StageTimer ResumeCapture ResumeRestore Eject
+              FormatCompatibility)
     add_executable(transmit_${suite}_test ${suite}Test.cpp)
     target_link_libraries(transmit_${suite}_test
         PRIVATE Transmit::Core Transmit::Warnings Qt6::Test SQLite::SQLite3)
@@ -20,3 +21,10 @@ qt_add_resources(transmit_Catalog_test "catalog_fixtures"
     PREFIX "/fixtures"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/../fixtures"
     FILES "${CMAKE_CURRENT_SOURCE_DIR}/../fixtures/app-catalog-v1.json")
+
+# An archive written before the format was version 2, kept so that a build can
+# always be shown to still read one. It reaches ArchiveReader as a path on
+# disk, not as bytes, so it is a file beside the test rather than a resource
+# compiled into it.
+target_compile_definitions(transmit_FormatCompatibility_test
+    PRIVATE TRANSMIT_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../fixtures")

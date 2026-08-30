@@ -31,7 +31,20 @@ inline constexpr std::uint64_t kDefaultSolidBlockSize = 64ULL * 1024 * 1024;
 
 struct ArchiveHeader {
     static constexpr std::size_t kSize = 96;
-    static constexpr std::uint16_t kVersion = 1;
+
+    /// What this build writes.
+    ///
+    /// Version 2 differs from 1 in three places, all of them things version 1
+    /// had no room for: the footer carries the manifest's whole hash rather
+    /// than its first eight bytes, each block header carries sixteen bytes of
+    /// its hash rather than twelve, and each part records a checksum of the
+    /// payload it holds rather than only of its own header.
+    static constexpr std::uint16_t kVersion = 2;
+
+    /// The oldest this build can read. Archives written by version 1 are still
+    /// opened and restored - there is no reason to strand one - which is what
+    /// the committed fixture in the tests exists to keep true.
+    static constexpr std::uint16_t kOldestReadableVersion = 1;
 
     enum Flags : std::uint16_t {
         FlagEncrypted = 1u << 0,
@@ -51,17 +64,41 @@ struct ArchiveHeader {
     static Result<ArchiveHeader> decode(ByteView data);
 };
 
+/// The last thing written, and the only thing that says an archive is finished.
+///
+/// Version 1 recorded the first eight bytes of the manifest's hash, which was
+/// as much as would fit. Eight bytes is enough to catch a damaged manifest and
+/// not enough to be called a commitment: it is the one place in the format
+/// where the archive says "this is the manifest I closed with", and saying it
+/// in sixty-four bits was a compromise with the layout rather than a decision.
+/// Version 2 carries all thirty-two.
+///
+/// Both are read. A version 1 footer is forty-eight bytes ending in "TXAF"'s
+/// magic at its start; a version 2 footer is eighty ending in "TXAG"'s. The
+/// reader tries the longer one first and falls back, so an archive written
+/// before this change opens exactly as it did.
 struct ArchiveFooter {
-    static constexpr std::size_t kSize = 48;
+    static constexpr std::size_t kSize = 80;
+    static constexpr std::size_t kLegacySize = 48;
 
     std::uint64_t manifestOffset = 0;
     std::uint64_t manifestRawSize = 0;
     std::uint64_t manifestStoredSize = 0;
     std::uint64_t entryCount = 0;
-    std::array<Byte, 8> manifestHash{};
+    Digest256 manifestHash{};
+
+    /// How many bytes of `manifestHash` the footer actually committed to.
+    /// Eight for a version 1 archive, thirty-two for a version 2. Comparing
+    /// more than were written would fail every version 1 archive.
+    std::size_t hashBytes = sizeof(Digest256);
 
     [[nodiscard]] std::array<Byte, kSize> encode() const;
+
+    /// Reads a version 2 footer. `data` must be the last kSize bytes.
     static Result<ArchiveFooter> decode(ByteView data);
+
+    /// Reads a version 1 footer. `data` must be the last kLegacySize bytes.
+    static Result<ArchiveFooter> decodeLegacy(ByteView data);
 };
 
 struct ArchiveOptions {
@@ -245,6 +282,11 @@ public:
 
     [[nodiscard]] const ArchiveUuid& uuid() const noexcept { return header_.uuid; }
     [[nodiscard]] std::int64_t createdUnix() const noexcept { return header_.createdUnix; }
+
+    /// Which version of the format wrote this archive. It decides how much of
+    /// each hash was committed to, so anything checking those has to ask.
+    [[nodiscard]] std::uint16_t version() const noexcept { return header_.version; }
+
     [[nodiscard]] std::size_t partCount() const;
     [[nodiscard]] const std::vector<std::filesystem::path>& parts() const;
 

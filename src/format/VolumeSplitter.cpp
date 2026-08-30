@@ -13,7 +13,15 @@ namespace {
 constexpr std::array<Byte, 8> kVolumeMagic = {Byte{'T'}, Byte{'X'}, Byte{'A'}, Byte{'V'},
                                               Byte{'O'}, Byte{'L'}, Byte{0},   Byte{0}};
 
-constexpr std::size_t kCrcOffset = 40;
+/// Where a part header keeps its own checksum, and what that checksum covers.
+///
+/// Version 3 moved it to the last four bytes so the payload checksum could go
+/// in front of it and be covered by it. A checksum field that is not itself
+/// protected looks like protection and is not one, so the layout moved rather
+/// than the new field being tucked in after the old checksum.
+constexpr std::size_t kLegacyCrcOffset = 40;
+constexpr std::size_t kPayloadCrcOffset = 40;
+constexpr std::size_t kCrcOffset = 44;
 
 /// Three digits of part suffix is the ceiling, which at the FAT32-safe part
 /// size is more than three terabytes in one archive.
@@ -95,8 +103,17 @@ std::array<Byte, VolumeHeader::kSize> VolumeHeader::encode() const {
     writeLe<std::uint16_t>(MutableByteView(raw).subspan(14), flags);
     std::copy(archiveUuid.begin(), archiveUuid.end(), raw.begin() + 16);
     writeLe<std::uint64_t>(MutableByteView(raw).subspan(32), payloadLength);
-    const std::uint32_t checksum = crc32(ByteView(raw).subspan(0, kCrcOffset));
-    writeLe<std::uint32_t>(MutableByteView(raw).subspan(kCrcOffset), checksum);
+
+    // The layout follows the version this header declares, not the one this
+    // build writes. Anything else and a header saying "version 1" would be
+    // written in the version 3 shape, which is a file no reader can make
+    // sense of - including this one, which asks the version where to look.
+    const std::size_t crcAt = version >= 3 ? kCrcOffset : kLegacyCrcOffset;
+    if (version >= 3) {
+        writeLe<std::uint32_t>(MutableByteView(raw).subspan(kPayloadCrcOffset), payloadCrc32);
+    }
+    const std::uint32_t checksum = crc32(ByteView(raw).subspan(0, crcAt));
+    writeLe<std::uint32_t>(MutableByteView(raw).subspan(crcAt), checksum);
     return raw;
 }
 
@@ -107,14 +124,19 @@ Result<VolumeHeader> VolumeHeader::decode(ByteView data) {
     if (!std::equal(kVolumeMagic.begin(), kVolumeMagic.end(), data.begin())) {
         return makeError(ErrorCode::CorruptArchive, "this file is not a Transmit archive volume");
     }
-    const std::uint32_t stored = readLe<std::uint32_t>(data.subspan(kCrcOffset));
-    const std::uint32_t computed = crc32(data.subspan(0, kCrcOffset));
+    // Which bytes the header's own checksum lives in and covers changed at
+    // version 3, and the version is inside the part it covers either way, so
+    // it is read before the check rather than after it.
+    const std::uint16_t declared = readLe<std::uint16_t>(data.subspan(8));
+    const std::size_t crcAt = declared >= 3 ? kCrcOffset : kLegacyCrcOffset;
+    const std::uint32_t stored = readLe<std::uint32_t>(data.subspan(crcAt));
+    const std::uint32_t computed = crc32(data.subspan(0, crcAt));
     if (stored != computed) {
         return makeError(ErrorCode::CorruptArchive, "volume header checksum mismatch");
     }
 
     VolumeHeader header;
-    header.version = readLe<std::uint16_t>(data.subspan(8));
+    header.version = declared;
     if (header.version > kVersion) {
         return makeError(ErrorCode::UnsupportedVersion,
                          "this archive volume was written by a newer Transmit");
@@ -127,6 +149,9 @@ Result<VolumeHeader> VolumeHeader::decode(ByteView data) {
                                        : static_cast<std::uint16_t>(FlagFinalised);
     std::copy_n(data.begin() + 16, header.archiveUuid.size(), header.archiveUuid.begin());
     header.payloadLength = readLe<std::uint64_t>(data.subspan(32));
+    if (header.version >= 3) {
+        header.payloadCrc32 = readLe<std::uint32_t>(data.subspan(kPayloadCrcOffset));
+    }
     return header;
 }
 
@@ -281,6 +306,10 @@ Result<std::unique_ptr<VolumeSink>> VolumeSink::resume(const std::filesystem::pa
     }
     sink->partIndex_ = static_cast<std::uint16_t>(keptParts);
     sink->currentPayload_ = keptInLast;
+    // Nobody has checksummed what is already on the drive, and reading it back
+    // to find out is the cost this whole path exists to avoid.
+    sink->partCrcs_.assign(keptParts, 0);
+    sink->payloadChecksumsKnown_ = false;
     sink->logicalOffset_ = logicalLength;
 
     TRANSMIT_TRY(stream, FileStream::open(last, FileStream::Mode::ReadWrite));
@@ -312,9 +341,11 @@ Status VolumeSink::openNextPart() {
     TRANSMIT_CHECK(current_.write(ByteView(raw)));
 
     currentPayload_ = 0;
+    currentCrc_ = 0;
     sinceSync_ = 0;
     parts_.push_back(path);
     partPayloads_.push_back(0);
+    partCrcs_.push_back(0);
     return ok();
 }
 
@@ -327,6 +358,7 @@ Status VolumeSink::closeCurrentPart() {
     // its last megabytes are still in the page cache.
     TRANSMIT_CHECK(current_.sync());
     partPayloads_.back() = currentPayload_;
+    partCrcs_.back() = currentCrc_;
     current_.close();
     sinceSync_ = 0;
     return ok();
@@ -350,6 +382,10 @@ Status VolumeSink::write(ByteView data) {
         }
 
         TRANSMIT_CHECK(current_.write(data.subspan(0, chunk)));
+        // Accumulated as it goes rather than read back at the end: the bytes
+        // are already in hand here, and reading a finished stick back to
+        // checksum it would double the slowest part of a capture.
+        currentCrc_ = crc32(data.subspan(0, chunk), currentCrc_);
         currentPayload_ += chunk;
         logicalOffset_ += chunk;
         data = data.subspan(chunk);
@@ -390,6 +426,10 @@ Status VolumeSink::finish() {
         header.flags = VolumeHeader::FlagFinalised;
         header.archiveUuid = uuid_;
         header.payloadLength = partPayloads_[i];
+        if (payloadChecksumsKnown_) {
+            header.flags |= VolumeHeader::FlagPayloadChecksum;
+            header.payloadCrc32 = partCrcs_[i];
+        }
         const auto raw = header.encode();
         TRANSMIT_CHECK(stream.seek(0));
         TRANSMIT_CHECK(stream.write(ByteView(raw)));
@@ -484,6 +524,8 @@ Result<std::unique_ptr<VolumeSource>> VolumeSource::open(const std::filesystem::
             part.payloadLength =
                 fileSize > VolumeHeader::kSize ? fileSize - VolumeHeader::kSize : 0;
         }
+        part.payloadCrc32 = header.payloadCrc32;
+        part.hasPayloadCrc = header.hasPayloadChecksum();
         part.stream = std::move(stream);
 
         logicalStart += part.payloadLength;
@@ -543,6 +585,54 @@ Status VolumeSource::readAt(std::uint64_t logicalOffset, MutableByteView out) {
         }
         TRANSMIT_CHECK(attempt);
         written += chunk;
+    }
+    return ok();
+}
+
+Status VolumeSource::verifyPayloadChecksums(
+    const std::function<bool(std::size_t, std::size_t)>& progress, std::size_t* skipped) {
+    if (skipped != nullptr) {
+        *skipped = 0;
+    }
+
+    // A megabyte at a time. Large enough that the per-read cost disappears,
+    // small enough that a part of any size is checked without holding it.
+    constexpr std::size_t kChunk = 1024 * 1024;
+    ByteBuffer buffer(kChunk);
+
+    for (std::size_t i = 0; i < parts_.size(); ++i) {
+        if (progress && !progress(i, parts_.size())) {
+            return makeError(ErrorCode::Cancelled, "cancelled");
+        }
+        Part& part = parts_[i];
+        if (!part.hasPayloadCrc) {
+            if (skipped != nullptr) {
+                ++*skipped;
+            }
+            continue;
+        }
+
+        std::uint32_t running = 0;
+        std::uint64_t remaining = part.payloadLength;
+        std::uint64_t offset = part.logicalStart;
+        while (remaining > 0) {
+            const auto take = static_cast<std::size_t>(std::min<std::uint64_t>(remaining, kChunk));
+            MutableByteView slice(buffer.data(), take);
+            TRANSMIT_CHECK(readAt(offset, slice));
+            running = crc32(ByteView(slice), running);
+            offset += take;
+            remaining -= take;
+        }
+
+        if (running != part.payloadCrc32) {
+            return makeError(ErrorCode::IntegrityMismatch, "part ", std::to_string(i + 1), " of ",
+                             std::to_string(parts_.size()),
+                             " does not hold the bytes it was written with");
+        }
+    }
+
+    if (progress) {
+        progress(parts_.size(), parts_.size());
     }
     return ok();
 }

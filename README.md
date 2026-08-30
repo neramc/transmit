@@ -155,12 +155,21 @@ splits for automatically.
   Identical files are stored once. The default is zstd at its highest level with
   a 128 MiB window, which lands within a few percent of xz while decompressing
   far faster — and restoring is the half you are waiting on.
-- **Integrity.** Every block carries a BLAKE2b hash and every file carries both
-  a BLAKE2b hash and an MD5, all checked on the way out. After writing, the
-  archive is read back off the drive - with a new reader, and with the page
-  cache dropped first where the system allows it, so what is checked is what
-  the drive kept rather than what is still in memory. A capture that does not
-  read back correctly fails; `--no-verify-after` turns it off.
+- **Integrity.** Every part carries a checksum of the bytes it holds, every
+  block a BLAKE2b hash, and every file both a BLAKE2b hash and an MD5 — all
+  checked on the way out. The part checksum is the cheap one and comes first:
+  it says in a single sequential pass whether the drive gave back what it was
+  given, where finding the same damage through the blocks means decompressing
+  the whole archive. After writing, everything is read back off the drive -
+  with a new reader, and with the page cache dropped first where the system
+  allows it, so what is checked is what the drive kept rather than what is
+  still in memory. A capture that does not read back correctly fails;
+  `--no-verify-after` turns it off.
+- **Versions.** The format is at version 2, and version 1 archives are still
+  read and restored — a stick in a drawer does not stop working because the
+  program moved on. A real version 1 archive is committed to the test suite and
+  opened, verified and restored on every build, which is the only way that
+  promise stays true rather than merely intended.
 - **Carrying on.** A capture onto a stick can take twenty minutes, and until the
   last moment the archive cannot be opened: the manifest and the footer are
   written at the end. So a record of what has actually reached the drive is

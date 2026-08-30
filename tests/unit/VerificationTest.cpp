@@ -345,11 +345,16 @@ TEST_F(VerificationTest, AFooterThatNamesADifferentManifestIsRefused) {
         file.seekg(size - static_cast<std::streamoff>(footer.size()));
         file.read(footer.data(), static_cast<std::streamsize>(footer.size()));
 
+        // The hash starts at 36, and the footer's own checksum is the last
+        // four bytes and covers everything before them. Said in terms of the
+        // footer's size rather than in numbers, because the last time the
+        // layout grew this was the only thing that noticed.
+        constexpr std::size_t kChecksumAt = ArchiveFooter::kSize - 4;
         footer[36] = static_cast<char>(footer[36] ^ 0x01);
         const std::uint32_t checksum =
-            crc32(ByteView(reinterpret_cast<const Byte*>(footer.data()), 44));
+            crc32(ByteView(reinterpret_cast<const Byte*>(footer.data()), kChecksumAt));
         for (std::size_t i = 0; i < 4; ++i) {
-            footer[44 + i] = static_cast<char>((checksum >> (i * 8)) & 0xffU);
+            footer[kChecksumAt + i] = static_cast<char>((checksum >> (i * 8)) & 0xffU);
         }
 
         file.seekp(size - static_cast<std::streamoff>(footer.size()));

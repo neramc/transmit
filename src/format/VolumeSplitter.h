@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -29,13 +30,28 @@ inline constexpr std::uint64_t kFat32SafePartSize = 3584ULL * 1024 * 1024;
 /// ordered even if the files were renamed or copied in the wrong sequence.
 struct VolumeHeader {
     static constexpr std::size_t kSize = 48;
-    static constexpr std::uint16_t kVersion = 2;
+
+    /// Version 3 adds a checksum of the part's payload. Until it, a part
+    /// vouched only for its own header: the forty bytes describing the file
+    /// were protected and the gigabytes after them were not, so a part could
+    /// be read as sound and hand back whatever the drive had made of it. The
+    /// blocks inside still caught that on the way past, but only by
+    /// decompressing every one of them, which on a stick is minutes.
+    static constexpr std::uint16_t kVersion = 3;
 
     enum Flags : std::uint16_t {
         /// Set on every part only once the whole set is written and synced.
         /// Parts are stamped last-to-first, so seeing it on part 1 - the one a
         /// reader opens - means every other part was already finished.
         FlagFinalised = 1u << 0,
+
+        /// Set when `payloadCrc32` was actually computed. A capture that was
+        /// carried on from an interrupted one does not set it: the parts
+        /// already on the drive would have to be read back in full to know
+        /// their checksums, which is the cost resuming exists to avoid. Such
+        /// an archive simply has no fast check - the block hashes inside it
+        /// are unaffected.
+        FlagPayloadChecksum = 1u << 1,
     };
 
     std::uint16_t version = kVersion;
@@ -44,6 +60,16 @@ struct VolumeHeader {
     std::uint16_t flags = 0;
     ArchiveUuid archiveUuid{};
     std::uint64_t payloadLength = 0;
+
+    /// CRC-32 of everything after this header. Zero in a part written before
+    /// version 3, and zero in one whose write was interrupted, so `hasPayloadChecksum`
+    /// rather than the value decides whether it means anything.
+    std::uint32_t payloadCrc32 = 0;
+
+    /// Whether this part carries a payload checksum worth checking.
+    [[nodiscard]] bool hasPayloadChecksum() const noexcept {
+        return version >= 3 && (flags & FlagPayloadChecksum) != 0;
+    }
 
     [[nodiscard]] bool isFinalised() const noexcept { return (flags & FlagFinalised) != 0; }
 
@@ -126,6 +152,14 @@ private:
     ArchiveUuid uuid_{};
     FileStream current_;
     std::uint64_t currentPayload_ = 0;
+
+    /// A running CRC-32 of the part being written, and the finished ones.
+    std::uint32_t currentCrc_ = 0;
+    std::vector<std::uint32_t> partCrcs_;
+
+    /// False once a run carries on from an interrupted one, because the parts
+    /// it inherited were checksummed by nobody.
+    bool payloadChecksumsKnown_ = true;
     std::uint64_t logicalOffset_ = 0;
     std::uint16_t partIndex_ = 0;
     std::vector<std::filesystem::path> parts_;
@@ -162,6 +196,23 @@ public:
     /// only place that difference is visible.
     [[nodiscard]] std::uint64_t retriedReads() const noexcept { return retriedReads_; }
 
+    /// Reads every part through and checks it against the checksum its header
+    /// recorded.
+    ///
+    /// This is the cheap half of a deep verification: it says whether the
+    /// bytes came back the way they went on, without decompressing anything
+    /// or knowing what any of them mean. A drive that has quietly rotted a
+    /// megabyte in the middle is caught here in one sequential pass, where
+    /// finding it through the blocks means decompressing the whole archive.
+    ///
+    /// Parts with no recorded checksum - written before version 3, or by a
+    /// capture that carried on from an interrupted one - are skipped and
+    /// counted in `skipped` rather than failed. Nothing is claimed about
+    /// them here; the block hashes still are.
+    Status verifyPayloadChecksums(
+        const std::function<bool(std::size_t done, std::size_t total)>& progress,
+        std::size_t* skipped = nullptr);
+
     /// False when the write that produced these files never reached finish().
     /// Always true for a set written before the finalised flag existed, which
     /// is why the flag lives behind a version bump rather than a bare check.
@@ -176,6 +227,11 @@ private:
         FileStream stream;
         std::uint64_t logicalStart = 0;
         std::uint64_t payloadLength = 0;
+
+        /// What the part's header said about its own payload, and whether it
+        /// said anything at all.
+        std::uint32_t payloadCrc32 = 0;
+        bool hasPayloadCrc = false;
     };
 
     std::vector<Part> parts_;

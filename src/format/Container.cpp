@@ -14,10 +14,25 @@ namespace {
 
 constexpr std::array<Byte, 4> kArchiveMagic = {Byte{'T'}, Byte{'X'}, Byte{'A'}, Byte{'1'}};
 constexpr std::array<Byte, 4> kBlockMagic = {Byte{'T'}, Byte{'X'}, Byte{'A'}, Byte{'B'}};
-constexpr std::array<Byte, 4> kFooterMagic = {Byte{'T'}, Byte{'X'}, Byte{'A'}, Byte{'F'}};
+constexpr std::array<Byte, 4> kLegacyFooterMagic = {Byte{'T'}, Byte{'X'}, Byte{'A'}, Byte{'F'}};
+constexpr std::array<Byte, 4> kFooterMagic = {Byte{'T'}, Byte{'X'}, Byte{'A'}, Byte{'G'}};
+
+/// How much of the manifest's hash a version 1 footer had room for.
+constexpr std::size_t kLegacyManifestHashBytes = 8;
 
 constexpr std::size_t kBlockHeaderSize = 48;
-constexpr std::size_t kBlockHashPrefix = 12;
+
+/// A block header has forty-eight bytes and version 1 used forty-four of them:
+/// twelve of the block's hash at offset 28, then four zeroes, then the header's
+/// own checksum. Version 2 puts four more hash bytes in the gap. They were
+/// already there and already covered by that checksum, so the stronger check
+/// costs nothing at all - which is the only reason it was worth a version.
+constexpr std::size_t kBlockHashPrefixV1 = 12;
+constexpr std::size_t kBlockHashPrefixV2 = 16;
+
+constexpr std::size_t blockHashPrefixFor(std::uint16_t archiveVersion) noexcept {
+    return archiveVersion >= 2 ? kBlockHashPrefixV2 : kBlockHashPrefixV1;
+}
 
 /// A compressed block is only kept if it actually saved space; otherwise the
 /// raw bytes are stored, which keeps already-compressed media from growing.
@@ -44,7 +59,10 @@ struct BlockHeaderFields {
     std::uint16_t flags = 0;
     std::uint64_t rawSize = 0;
     std::uint64_t storedSize = 0;
-    std::array<Byte, kBlockHashPrefix> hashPrefix{};
+    std::array<Byte, kBlockHashPrefixV2> hashPrefix{};
+
+    /// How many of `hashPrefix` the header actually carried.
+    std::size_t hashBytes = kBlockHashPrefixV2;
 };
 
 std::array<Byte, kBlockHeaderSize> encodeBlockHeader(const BlockHeaderFields& fields) {
@@ -56,14 +74,13 @@ std::array<Byte, kBlockHeaderSize> encodeBlockHeader(const BlockHeaderFields& fi
     writeLe<std::uint16_t>(MutableByteView(raw).subspan(10), fields.flags);
     writeLe<std::uint64_t>(MutableByteView(raw).subspan(12), fields.rawSize);
     writeLe<std::uint64_t>(MutableByteView(raw).subspan(20), fields.storedSize);
-    std::copy(fields.hashPrefix.begin(), fields.hashPrefix.end(), raw.begin() + 28);
-    writeLe<std::uint32_t>(MutableByteView(raw).subspan(40), 0);
+    std::copy_n(fields.hashPrefix.begin(), fields.hashBytes, raw.begin() + 28);
     const std::uint32_t checksum = crc32(ByteView(raw).subspan(0, 44));
     writeLe<std::uint32_t>(MutableByteView(raw).subspan(44), checksum);
     return raw;
 }
 
-Result<BlockHeaderFields> decodeBlockHeader(ByteView raw) {
+Result<BlockHeaderFields> decodeBlockHeader(ByteView raw, std::size_t hashBytes) {
     if (raw.size() < kBlockHeaderSize) {
         return makeError(ErrorCode::CorruptArchive, "block header is truncated");
     }
@@ -81,7 +98,8 @@ Result<BlockHeaderFields> decodeBlockHeader(ByteView raw) {
     fields.flags = readLe<std::uint16_t>(raw.subspan(10));
     fields.rawSize = readLe<std::uint64_t>(raw.subspan(12));
     fields.storedSize = readLe<std::uint64_t>(raw.subspan(20));
-    std::copy_n(raw.begin() + 28, fields.hashPrefix.size(), fields.hashPrefix.begin());
+    fields.hashBytes = hashBytes;
+    std::copy_n(raw.begin() + 28, hashBytes, fields.hashPrefix.begin());
     return fields;
 }
 
@@ -143,8 +161,10 @@ std::array<Byte, ArchiveFooter::kSize> ArchiveFooter::encode() const {
     writeLe<std::uint64_t>(MutableByteView(raw).subspan(20), manifestStoredSize);
     writeLe<std::uint64_t>(MutableByteView(raw).subspan(28), entryCount);
     std::copy(manifestHash.begin(), manifestHash.end(), raw.begin() + 36);
-    const std::uint32_t checksum = crc32(ByteView(raw).subspan(0, 44));
-    writeLe<std::uint32_t>(MutableByteView(raw).subspan(44), checksum);
+    // 68..75 are reserved and stay zero. They are inside the checksum, so
+    // anything a later version puts there is protected without another change.
+    const std::uint32_t checksum = crc32(ByteView(raw).subspan(0, 76));
+    writeLe<std::uint32_t>(MutableByteView(raw).subspan(76), checksum);
     return raw;
 }
 
@@ -153,6 +173,29 @@ Result<ArchiveFooter> ArchiveFooter::decode(ByteView raw) {
         return makeError(ErrorCode::CorruptArchive, "archive footer is truncated");
     }
     if (!std::equal(kFooterMagic.begin(), kFooterMagic.end(), raw.begin())) {
+        return makeError(ErrorCode::CorruptArchive,
+                         "the archive has no footer: the write was interrupted");
+    }
+    const std::uint32_t stored = readLe<std::uint32_t>(raw.subspan(76));
+    if (stored != crc32(raw.subspan(0, 76))) {
+        return makeError(ErrorCode::CorruptArchive, "archive footer checksum mismatch");
+    }
+
+    ArchiveFooter footer;
+    footer.manifestOffset = readLe<std::uint64_t>(raw.subspan(4));
+    footer.manifestRawSize = readLe<std::uint64_t>(raw.subspan(12));
+    footer.manifestStoredSize = readLe<std::uint64_t>(raw.subspan(20));
+    footer.entryCount = readLe<std::uint64_t>(raw.subspan(28));
+    std::copy_n(raw.begin() + 36, footer.manifestHash.size(), footer.manifestHash.begin());
+    footer.hashBytes = footer.manifestHash.size();
+    return footer;
+}
+
+Result<ArchiveFooter> ArchiveFooter::decodeLegacy(ByteView raw) {
+    if (raw.size() < kLegacySize) {
+        return makeError(ErrorCode::CorruptArchive, "archive footer is truncated");
+    }
+    if (!std::equal(kLegacyFooterMagic.begin(), kLegacyFooterMagic.end(), raw.begin())) {
         return makeError(ErrorCode::CorruptArchive,
                          "the archive has no footer: the write was interrupted");
     }
@@ -166,7 +209,11 @@ Result<ArchiveFooter> ArchiveFooter::decode(ByteView raw) {
     footer.manifestRawSize = readLe<std::uint64_t>(raw.subspan(12));
     footer.manifestStoredSize = readLe<std::uint64_t>(raw.subspan(20));
     footer.entryCount = readLe<std::uint64_t>(raw.subspan(28));
-    std::copy_n(raw.begin() + 36, footer.manifestHash.size(), footer.manifestHash.begin());
+    // Only the first eight bytes were ever written. The rest of the array
+    // stays zero and hashBytes says so, because comparing thirty-two against
+    // eight that were written would reject every archive version 1 produced.
+    std::copy_n(raw.begin() + 36, kLegacyManifestHashBytes, footer.manifestHash.begin());
+    footer.hashBytes = kLegacyManifestHashBytes;
     return footer;
 }
 
@@ -342,7 +389,8 @@ Status ArchiveWriter::writeRecord(const PreparedBlock& block, bool isManifest) {
     fields.flags = block.encrypted ? 1u : 0u;
     fields.rawSize = block.rawSize;
     fields.storedSize = block.payload.size();
-    std::copy_n(block.rawHash.begin(), fields.hashPrefix.size(), fields.hashPrefix.begin());
+    fields.hashBytes = blockHashPrefixFor(ArchiveHeader::kVersion);
+    std::copy_n(block.rawHash.begin(), fields.hashBytes, fields.hashPrefix.begin());
 
     const std::uint64_t offset = sink_->logicalOffset();
     const auto headerBytes = encodeBlockHeader(fields);
@@ -440,7 +488,7 @@ Result<std::unique_ptr<ArchiveReader>> ArchiveReader::open(const std::filesystem
                          "' was never finished - the capture that wrote it was interrupted");
     }
 
-    if (reader->source_->logicalSize() < ArchiveHeader::kSize + ArchiveFooter::kSize) {
+    if (reader->source_->logicalSize() < ArchiveHeader::kSize + ArchiveFooter::kLegacySize) {
         return makeError(ErrorCode::CorruptArchive, "the archive is too small to be valid");
     }
 
@@ -449,11 +497,26 @@ Result<std::unique_ptr<ArchiveReader>> ArchiveReader::open(const std::filesystem
     TRANSMIT_TRY(header, ArchiveHeader::decode(headerBytes));
     reader->header_ = header;
 
-    std::array<Byte, ArchiveFooter::kSize> footerBytes{};
-    TRANSMIT_CHECK(reader->source_->readAt(reader->source_->logicalSize() - ArchiveFooter::kSize,
-                                           footerBytes));
-    TRANSMIT_TRY(footer, ArchiveFooter::decode(footerBytes));
-    reader->footer_ = footer;
+    // Which footer is at the end follows from the version in the header rather
+    // than from trying one and then the other. Guessing by magic would mean a
+    // version 1 archive whose last eighty bytes happened to start with the
+    // version 2 signature was read the wrong way round, and the header has
+    // already said which it is.
+    const std::uint64_t length = reader->source_->logicalSize();
+    if (reader->header_.version >= 2) {
+        if (length < ArchiveHeader::kSize + ArchiveFooter::kSize) {
+            return makeError(ErrorCode::CorruptArchive, "the archive is too small to be valid");
+        }
+        std::array<Byte, ArchiveFooter::kSize> footerBytes{};
+        TRANSMIT_CHECK(reader->source_->readAt(length - ArchiveFooter::kSize, footerBytes));
+        TRANSMIT_TRY(footer, ArchiveFooter::decode(footerBytes));
+        reader->footer_ = footer;
+    } else {
+        std::array<Byte, ArchiveFooter::kLegacySize> footerBytes{};
+        TRANSMIT_CHECK(reader->source_->readAt(length - ArchiveFooter::kLegacySize, footerBytes));
+        TRANSMIT_TRY(footer, ArchiveFooter::decodeLegacy(footerBytes));
+        reader->footer_ = footer;
+    }
 
     if (reader->header_.uuid != reader->source_->uuid()) {
         return makeError(ErrorCode::CorruptArchive,
@@ -504,7 +567,9 @@ Result<const Manifest*> ArchiveReader::manifest() {
     // it is the one the footer committed to. Read since the format was
     // written, compared for the first time here.
     const Digest256 digest = Blake2b::hash256(raw);
-    if (!std::equal(footer_.manifestHash.begin(), footer_.manifestHash.end(), digest.begin())) {
+    if (!std::equal(footer_.manifestHash.begin(),
+                    footer_.manifestHash.begin() + static_cast<std::ptrdiff_t>(footer_.hashBytes),
+                    digest.begin())) {
         return makeError(ErrorCode::IntegrityMismatch,
                          "the manifest is not the one this archive was closed with");
     }
@@ -598,7 +663,7 @@ Status ArchiveReader::verifyEntryIn(const ManifestEntry& entry, ByteView block) 
 Result<ByteBuffer> ArchiveReader::loadBlock(const BlockRecord& record) {
     std::array<Byte, kBlockHeaderSize> headerBytes{};
     TRANSMIT_CHECK(source_->readAt(record.streamOffset, headerBytes));
-    TRANSMIT_TRY(fields, decodeBlockHeader(headerBytes));
+    TRANSMIT_TRY(fields, decodeBlockHeader(headerBytes, blockHashPrefixFor(header_.version)));
 
     if (fields.blockId != record.blockId) {
         return makeError(ErrorCode::CorruptArchive, "block ", std::to_string(record.blockId),
@@ -656,7 +721,9 @@ Result<ByteBuffer> ArchiveReader::loadBlock(const BlockRecord& record) {
     TRANSMIT_CHECK(codec->decompress(payload, static_cast<std::size_t>(fields.rawSize), raw));
 
     const auto digest = Blake2b::hash256(raw);
-    if (!std::equal(fields.hashPrefix.begin(), fields.hashPrefix.end(), digest.begin())) {
+    if (!std::equal(fields.hashPrefix.begin(),
+                    fields.hashPrefix.begin() + static_cast<std::ptrdiff_t>(fields.hashBytes),
+                    digest.begin())) {
         return makeError(ErrorCode::IntegrityMismatch, "block ", std::to_string(record.blockId),
                          " does not match its recorded hash");
     }
@@ -816,6 +883,15 @@ Result<ByteBuffer> ArchiveReader::readEntryFromThisArchive(const ManifestEntry& 
 
 Status ArchiveReader::verifyAllBlocks(
     const std::function<bool(std::size_t done, std::size_t total)>& progress) {
+    // The parts first, and in one sequential pass each.
+    //
+    // It answers a narrower question than the blocks do - whether the bytes
+    // came back the way they went on - but it answers it about every byte,
+    // including the ones no block covers, and it answers it in the order the
+    // drive likes. When a stick has rotted, this is what says so; the block
+    // hashes then say which files it cost.
+    TRANSMIT_CHECK(source_->verifyPayloadChecksums(nullptr, nullptr));
+
     TRANSMIT_TRY(loaded, manifest());
     const std::size_t total = loaded->blocks.size();
 
