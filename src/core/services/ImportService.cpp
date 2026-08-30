@@ -5,9 +5,11 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QScopeGuard>
 #include <QSet>
 #include <QTemporaryDir>
 
+#include <algorithm>
 #include <optional>
 #include <unordered_map>
 #include <vector>
@@ -26,6 +28,8 @@
 #include "core/utils/Logging.h"
 #include "format/FileIo.h"
 #include "format/NameSanitizer.h"
+#include "format/RestoreJournal.h"
+#include "format/TransferJournal.h"
 #include "format/hash/Blake2b.h"
 
 #ifndef Q_OS_WIN
@@ -83,6 +87,33 @@ bool writeFileContents(const QString& path, const format::ByteBuffer& content, Q
 /// It used to return the original path in that case, which under KeepBoth -
 /// the default policy - meant the one outcome the user explicitly asked to
 /// avoid: their existing file overwritten, reported as a success.
+/// Covers the choices that decide where a restore puts things.
+///
+/// A run with a different conflict policy, a different emulated OS or a
+/// different set of domains is a different restore that happens to share an
+/// archive, and carrying on from its record would put files where this run did
+/// not intend them.
+std::uint64_t restoreOptionsDigest(const ImportRequest& request, OsFamily targetOs) {
+    format::ByteBuffer bytes;
+    const auto put = [&bytes](std::uint64_t value) {
+        for (int shift = 0; shift < 64; shift += 8) {
+            bytes.push_back(static_cast<format::Byte>((value >> shift) & 0xFFu));
+        }
+    };
+    put(static_cast<std::uint64_t>(request.conflictPolicy));
+    put(static_cast<std::uint64_t>(targetOs));
+    put(static_cast<std::uint64_t>(request.createRollback));
+
+    // Sorted, so the same set of domains asked for in a different order is
+    // recognised as the same set.
+    QList<int> domains(request.domains.begin(), request.domains.end());
+    std::sort(domains.begin(), domains.end());
+    for (const int domain : domains) {
+        put(static_cast<std::uint64_t>(domain));
+    }
+    return format::journalDigest(format::ByteView(bytes));
+}
+
 /// Whether the file already at `path` is exactly the file the archive holds.
 ///
 /// A restore that was interrupted leaves a machine with some of the files on
@@ -589,8 +620,93 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
         }
     }
 
+    // ------------------------------------------------------- the record
+    //
+    // Beside the undo point, in the destination's own folder, named for the
+    // archive. Two archives restored into one place must not read each
+    // other's records, and the same archive has to find the one it left.
+    const QString stateDirectory =
+        QDir(request.destinationOverride.isEmpty() ? platform_.environment().homeDirectory
+                                                   : request.destinationOverride)
+            .filePath(QString::fromLatin1(RollbackWriter::kDirectoryName));
+
+    const std::filesystem::path journalPath =
+        format::RestoreJournal::pathFor(format::toFsPath(toUtf8(stateDirectory)), reader->uuid());
+
+    format::RestoreFingerprint fingerprint;
+    fingerprint.archiveUuid = reader->uuid();
+    fingerprint.destination = toUtf8(request.destinationOverride);
+    fingerprint.hostName = toUtf8(platform_.environment().hostName);
+    fingerprint.userName = toUtf8(platform_.environment().userName);
+    fingerprint.optionsDigest = restoreOptionsDigest(request, targetOs);
+    fingerprint.rollbackArchivePath = toUtf8(report.rollbackArchivePath);
+
+    // What an interrupted run already settled, by the archive path it came
+    // from - which is what this run has in hand before it has worked out
+    // where anything goes.
+    std::unordered_map<std::string, format::RestorePlacement> alreadySettled;
+    std::uint64_t carryOnFrom = 0;
+    bool carryingOn = false;
+
+    if (request.resume && request.keepJournal && !request.dryRun) {
+        auto previous = format::readRestoreJournal(journalPath);
+        if (!previous) {
+            // No record is not a failure: it means nothing was interrupted
+            // here, and every item is settled afresh. Anything else is, since
+            // carrying on from a record that cannot be read would mean
+            // guessing which files are already on disk.
+            if (previous.error().code != format::ErrorCode::NotFound) {
+                return fail(QCoreApplication::translate(
+                                "Import",
+                                "The record of the interrupted restore could not be "
+                                "read, so it was not carried on: %1")
+                                .arg(describeError(previous.error())));
+            }
+        } else if (previous->complete) {
+            report.notes.push_back(
+                ContinuityNote{ContinuityGrade::Full, DomainId::Unknown,
+                               QCoreApplication::translate("Import", "Nothing to carry on"),
+                               QCoreApplication::translate(
+                                   "Import",
+                                   "The last restore of this archive here finished, so this one "
+                                   "started afresh.")});
+        } else if (!(previous->fingerprint == fingerprint)) {
+            return fail(QCoreApplication::translate(
+                "Import",
+                "The record beside this folder is of a different restore, so carrying on "
+                "from it would put files where this one did not intend them."));
+        } else {
+            carryingOn = true;
+            carryOnFrom = previous->validBytes;
+            for (format::RestorePlacement& placement : previous->placements) {
+                alreadySettled.emplace(placement.source, std::move(placement));
+            }
+        }
+    }
+
+    std::unique_ptr<format::RestoreJournal> journal;
+    if (request.keepJournal && !request.dryRun) {
+        QDir().mkpath(stateDirectory);
+        auto opened = carryingOn ? format::RestoreJournal::reopen(journalPath, carryOnFrom)
+                                 : format::RestoreJournal::begin(journalPath, fingerprint);
+        if (opened) {
+            journal = std::move(opened).value();
+            report.resumed = carryingOn;
+        } else {
+            // Not a reason to refuse a restore the user asked for. It only
+            // means an interruption would have to be started over.
+            qCWarning(logRestore) << "no restore journal:" << describeError(opened.error());
+        }
+    }
+
     QElapsedTimer throttle;
     throttle.start();
+
+    // The journal is allowed to fall behind the disk - see its header - so it
+    // is pushed to the device every so often rather than per item. What an
+    // unsynced tail costs is those items being settled again.
+    constexpr quint64 kJournalSyncInterval = 256;
+    quint64 sinceJournalSync = 0;
 
     for (const format::ManifestEntry* entryPtr : ordered) {
         if (cancelToken.isCancelled()) {
@@ -606,18 +722,85 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
         const std::string safeRelative = sanitizer.sanitizeRelativePath(placed.relative);
         const format::TokenizedPath safePath{placed.token, safeRelative};
 
+        RestoredItem item;
+        item.sourcePath = fromUtf8(entry.path.toDisplayString());
+
+        // Records where this item ended up, whichever way the iteration
+        // leaves.
+        //
+        // The body below has a dozen exits - a policy that says leave it, a
+        // folder that could not be made, a read that failed - and an item
+        // missed at any one of them is an item a resumed run believes it has
+        // never seen. Rather than a call at each exit and the standing chance
+        // of forgetting one when a thirteenth is added, the record is written
+        // on the way out of the scope, and what happened is read off the
+        // report's own counters rather than said twice.
+        const quint64 restoredBefore = report.filesRestored;
+        const quint64 skippedBefore = report.filesSkipped;
+        const quint64 failedBefore = report.filesFailed;
+        const auto settle = qScopeGuard([&] {
+            if (!journal) {
+                return;
+            }
+            format::RestorePlacement placement;
+            placement.source = toUtf8(item.sourcePath);
+            placement.target = toUtf8(item.targetPath);
+            if (report.filesFailed != failedBefore) {
+                placement.outcome = format::RestoreOutcome::Failed;
+            } else if (report.filesSkipped != skippedBefore) {
+                placement.outcome = format::RestoreOutcome::Skipped;
+            } else if (report.filesRestored != restoredBefore) {
+                placement.outcome = format::RestoreOutcome::Written;
+            } else {
+                return;  // nothing was settled, so there is nothing to say
+            }
+
+            // A journal that cannot be written is not a reason to stop a
+            // restore that is working. Because this record is allowed to lag
+            // the disk, the whole cost of losing it is that those items get
+            // settled a second time.
+            if (const auto status = journal->recordPlacement(placement); !status) {
+                qCWarning(logRestore)
+                    << "could not record a placement:" << describeError(status.error());
+                journal.reset();
+                return;
+            }
+            if (++sinceJournalSync >= kJournalSyncInterval) {
+                sinceJournalSync = 0;
+                if (const auto status = journal->sync(); !status) {
+                    qCWarning(logRestore)
+                        << "could not flush the restore journal:" << describeError(status.error());
+                }
+            }
+        });
+
+        // Settled by the run this one is carrying on from, and still there.
+        // Doing it again would cost a read and a hash of every file the first
+        // run managed - and under "keep both" it would invent a second name
+        // for a file already saved under one.
+        if (const auto done = alreadySettled.find(toUtf8(item.sourcePath));
+            done != alreadySettled.end() &&
+            done->second.outcome == format::RestoreOutcome::Written &&
+            !done->second.target.empty() && QFileInfo::exists(fromUtf8(done->second.target))) {
+            item.targetPath = fromUtf8(done->second.target);
+            item.note = QCoreApplication::translate(
+                "Import", "Already put here by the restore this one carried on from.");
+            report.items.push_back(item);
+            ++report.filesRestored;
+            ++report.filesCarriedOver;
+            continue;
+        }
+
         const auto resolved = tokens.resolve(safePath);
         if (!resolved) {
             report.notes.push_back(ContinuityNote{ContinuityGrade::Manual, entry.domain,
-                                                  fromUtf8(entry.path.toDisplayString()),
+                                                  item.sourcePath,
                                                   describeError(resolved.error())});
             ++report.filesFailed;
             continue;
         }
 
         QString targetPath = fromUtf8(*resolved);
-        RestoredItem item;
-        item.sourcePath = fromUtf8(entry.path.toDisplayString());
         item.targetPath = targetPath;
 
         if (safeRelative != placed.relative) {
@@ -1021,6 +1204,45 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
             QCoreApplication::translate("Import", "%n file(s) could not be restored.", nullptr,
                                         static_cast<int>(report.filesFailed));
     }
+
+    // The record goes when the restore is whole and stands on its own. It
+    // stays when items failed: those are exactly the ones somebody may want
+    // retried, and the record is what tells a later run not to redo the rest.
+    if (journal) {
+        // A journal that will not close is only a journal whose last records
+        // may be missing, and those items would simply be settled again.
+        const auto closeQuietly = [&journal] {
+            if (const auto status = journal->close(); !status) {
+                qCWarning(logRestore)
+                    << "could not close the restore journal:" << describeError(status.error());
+            }
+            journal.reset();
+        };
+
+        if (report.succeeded) {
+            if (const auto status = journal->recordComplete(); !status) {
+                qCWarning(logRestore)
+                    << "could not mark the restore finished:" << describeError(status.error());
+            }
+            closeQuietly();
+            if (const auto status = format::RestoreJournal::discard(journalPath); !status) {
+                qCWarning(logRestore)
+                    << "could not remove the restore journal:" << describeError(status.error());
+            }
+        } else {
+            closeQuietly();
+            report.canBeCarriedOn = true;
+            report.notes.push_back(ContinuityNote{
+                ContinuityGrade::Manual, DomainId::Unknown,
+                QCoreApplication::translate("Import", "You can finish this"),
+                QCoreApplication::translate(
+                    "Import",
+                    "What was restored has been noted, so running this again with "
+                    "\"carry on\" will settle only what is left rather than every file "
+                    "a second time.")});
+        }
+    }
+
     report.elapsedMilliseconds = timer.elapsed();
 
     qCInfo(logRestore) << "restored" << report.filesRestored << "items,"

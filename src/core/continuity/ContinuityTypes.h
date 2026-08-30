@@ -403,6 +403,23 @@ struct ImportRequest {
     /// worse than a file that was never written. Costs one device flush per
     /// file, so a dry run into scratch space turns it off.
     bool durableWrites = true;
+
+    /// Keep a record of where each item landed, so an interrupted restore can
+    /// be finished rather than redone, and so the undo point stays findable
+    /// after the process that made it is gone.
+    ///
+    /// A dry run turns this off: it writes nothing, so there is nothing to
+    /// carry on from.
+    bool keepJournal = true;
+
+    /// Carry on from where an interrupted restore stopped, if there is a
+    /// record of one for this archive in this destination.
+    ///
+    /// Off by default. Without it any record is ignored and every item is
+    /// settled afresh - which is still safe, because a file that is already
+    /// exactly right is recognised, but it is slower and it forgets the names
+    /// the interrupted run invented for collisions.
+    bool resume = false;
 };
 
 struct RestoredItem {
@@ -430,6 +447,15 @@ struct ImportReport {
 
     quint64 bytesWritten = 0;
     qint64 elapsedMilliseconds = 0;
+
+    /// The restore stopped part way and its record was left in place, so it
+    /// can be finished rather than started again.
+    bool canBeCarriedOn = false;
+
+    /// It carried on from an interrupted run, and how many items it did not
+    /// have to settle a second time.
+    bool resumed = false;
+    quint64 filesCarriedOver = 0;
 
     /// True when some files were restored and some failed. The run is
     /// neither a success to report nor an error to hand back, and the
