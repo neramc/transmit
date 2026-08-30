@@ -17,14 +17,14 @@ concurrency:
 
 # Every job has a deadline.
 #
-# Without one a job that hangs holds a runner for six hours and reports
-# nothing, which is how a green tree and a stuck tree look identical from
-# outside. This is not hypothetical: installing the Windows dependencies,
-# normally ten minutes, has sat at eighty-five with nothing to show and no
-# prospect of stopping on its own.
+# Without one, a job that hangs holds a runner until GitHub's own six-hour
+# limit and then reports nothing - and from outside, a tree that is stuck
+# looks exactly like a tree that is still working. That is the worst thing a
+# check can be, and six hours is far too long to find out.
 #
 # The budgets are roughly three times what each job takes on a machine that is
-# behaving, so a slow runner still finishes and a stuck one is cut off.
+# behaving, so a slow runner still finishes and a stuck one is cut off early
+# enough to be worth knowing about.
 jobs:
   build:
     name: ${{ matrix.name }}
