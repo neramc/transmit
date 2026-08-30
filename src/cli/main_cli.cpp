@@ -749,6 +749,8 @@ int runImport(QCommandLineParser& parser, const QString& archivePath,
                           archiveIsEncrypted(archivePath), false);
     request.dryRun = parser.isSet(dryRunOption);
     request.verifyFirst = parser.isSet(verifyOption);
+    request.keepJournal = !parser.isSet(QStringLiteral("no-journal"));
+    request.resume = parser.isSet(QStringLiteral("resume"));
 
     if (parser.isSet(emulateOption)) {
         const auto family = format::osFamilyFromName(toUtf8(parser.value(emulateOption)));
@@ -816,10 +818,23 @@ int runImport(QCommandLineParser& parser, const QString& archivePath,
                  .arg(report.filesRestored)
                  .arg(report.filesSkipped)
           << Qt::endl;
+    if (report.resumed) {
+        out() << QStringLiteral(
+                     "  carried on from an interrupted restore: %1 item(s) were "
+                     "already in place")
+                     .arg(report.filesCarriedOver)
+              << Qt::endl;
+    }
     if (report.filesFailed > 0) {
         out() << QStringLiteral("  %1 could not be restored - see the notes below")
                      .arg(report.filesFailed)
               << Qt::endl;
+        if (report.canBeCarriedOn) {
+            out() << QStringLiteral(
+                         "  what did land has been noted: run the same command with "
+                         "--resume to settle only what is left")
+                  << Qt::endl;
+        }
     }
     if (!request.dryRun) {
         out() << QStringLiteral("  %1 written").arg(core::formatBytes(report.bytesWritten))
@@ -1456,16 +1471,17 @@ int main(int argc, char** argv) {
                            QStringLiteral("Keep the per-file MD5s in the archive but do not "
                                           "write the .md5 file beside it.")),
         QCommandLineOption(QStringLiteral("resume"),
-                           QStringLiteral("Carry on with the capture a previous run left "
-                                          "unfinished, instead of starting again. Refused when "
-                                          "the machine, the settings or the files have changed "
-                                          "since, because half of one state and half of another "
-                                          "is not a capture of either.")),
+                           QStringLiteral("Carry on with the capture or restore a previous run "
+                                          "left unfinished, instead of starting again. Refused "
+                                          "when the machine, the settings or the files have "
+                                          "changed since, because half of one state and half of "
+                                          "another is not a capture - or a restore - of either.")),
         QCommandLineOption(QStringLiteral("no-journal"),
-                           QStringLiteral("Do not keep a record beside the archive of what has "
-                                          "reached the drive. Saves a device sync per block, and "
-                                          "gives up being able to carry on with an interrupted "
-                                          "capture: what it had written is deleted instead.")),
+                           QStringLiteral("Do not keep a record of what has been written. For a "
+                                          "capture that saves a device sync per block and means "
+                                          "an interrupted one is deleted rather than finished; "
+                                          "for a restore it means an interrupted one settles "
+                                          "every item again rather than only what is left.")),
         QCommandLineOption(QStringLiteral("md5-sidecar-names"),
                            QStringLiteral("List the file names in the .md5 file even when the "
                                           "archive is encrypted. They will be readable by "

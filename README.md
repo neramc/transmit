@@ -185,6 +185,25 @@ splits for automatically.
   Thursday is not a capture of either. A capture you cancel yourself still
   leaves nothing behind - you asked for it to stop, not to pause - and
   `--no-journal` opts out of keeping the record at all.
+
+  A restore keeps the same kind of record, for a reason that is about more
+  than saving time. Running an interrupted restore again is safe, because a
+  file that is already byte for byte what the archive holds is recognised and
+  left alone. But when the folder already has a file of that name holding
+  something else - the ordinary case of restoring onto a machine somebody is
+  already using - `keep-both` saves the archive's copy alongside under a name
+  it invents, and only the record remembers which name. Without it the second
+  run meets its own earlier work, does not recognise it, and invents another:
+
+  ```
+  transmit-cli import /media/usb/laptop.txa --into ~ --conflict keep-both
+  # warning: 19 file(s) could not be restored.
+  # what did land has been noted: run the same command with --resume to
+  # settle only what is left
+
+  transmit-cli import /media/usb/laptop.txa --into ~ --conflict keep-both --resume
+  # carried on from an interrupted restore: 22 item(s) were already in place
+  ```
 - **Checking it elsewhere.** A `.md5` file is written beside the archive in
   `md5sum`'s own format, so a drive can be checked with a tool that has never
   heard of Transmit:
@@ -308,6 +327,7 @@ transmit-cli export --out X --timings
 transmit-cli import ARCHIVE [--into DIR] [--dry-run] [--verify]
                     [--conflict skip|overwrite|newer|keep-both]
                     [--emulate-os windows|macos|linux]
+                    [--resume] [--no-journal]
 transmit-cli rollback UNDO-POINT  # reverse a restore
 ```
 
