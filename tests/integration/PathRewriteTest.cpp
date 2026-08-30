@@ -2,6 +2,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
@@ -39,6 +40,7 @@ private slots:
     void iniRewritePreservesCommentsAndOrdering();
     void jsonRewriteTouchesOnlyTheNamedKeys();
     void plistRewriteRepointsTheKeysItWasGiven();
+    void jsonRewriteReachesInsideArraysAndObjects();
     void textRewriteKeepsUtf16Encoding();
     void sqliteRewriteUpdatesOnlyTheNamedColumn();
 
@@ -202,6 +204,61 @@ void PathRewriteTest::iniRewritePreservesCommentsAndOrdering() {
 // nothing: the key name was never captured, so no value ever matched, so every
 // preference restored onto a Mac kept the paths of the machine it came from
 // while the restore reported success.
+// "A key naming an array or object has every string inside it considered" is
+// what the rewriters' contract promises. Nothing checked it, and the same
+// promise turned out to be false for property lists - so it is worth asking of
+// each format rather than assuming the sentence covers them all.
+void PathRewriteTest::jsonRewriteReachesInsideArraysAndObjects() {
+    const QByteArray original = R"({
+  "recent": ["C:\\Users\\Bob\\Documents\\a.txt", 7, "C:\\Users\\Bob\\Documents\\b.txt"],
+  "workspace": {
+    "root": "C:\\Users\\Bob\\Documents\\project",
+    "nested": { "deeper": "C:\\Users\\Bob\\Documents\\deep" },
+    "count": 3
+  },
+  "elsewhere": ["C:\\Users\\Bob\\Documents\\untouched"]
+}
+)";
+    write(QStringLiteral("settings.json"), original);
+
+    core::AppRecipe recipe;
+    recipe.id = QStringLiteral("test.arrays");
+    recipe.rewrites.push_back(
+        core::RecipeRewriteRule{QStringLiteral("settings.json"),
+                                QStringLiteral("json"),
+                                {QStringLiteral("recent"), QStringLiteral("workspace")},
+                                {},
+                                1,
+                                {},
+                                {}});
+
+    core::RewritePlan plan;
+    core::PathRewriter(windowsToLinux()).planFor(recipe, workspace_->path(), plan);
+
+    // Two strings in the array, one at the object's root, one two levels down.
+    // The number in the array and the number in the object are not strings and
+    // are not edits.
+    QCOMPARE(plan.edits().size(), 4);
+    QCOMPARE(plan.apply(), 1);
+
+    const QJsonObject result =
+        QJsonDocument::fromJson(read(QStringLiteral("settings.json"))).object();
+    const QJsonArray recent = result.value("recent").toArray();
+    QCOMPARE(recent.at(0).toString(), QStringLiteral("/home/bob/Documents/a.txt"));
+    QCOMPARE(recent.at(1).toInt(), 7);
+    QCOMPARE(recent.at(2).toString(), QStringLiteral("/home/bob/Documents/b.txt"));
+
+    const QJsonObject workspace = result.value("workspace").toObject();
+    QCOMPARE(workspace.value("root").toString(), QStringLiteral("/home/bob/Documents/project"));
+    QCOMPARE(workspace.value("nested").toObject().value("deeper").toString(),
+             QStringLiteral("/home/bob/Documents/deep"));
+    QCOMPARE(workspace.value("count").toInt(), 3);
+
+    // A path under a key the rule did not name is left alone, however deep.
+    QCOMPARE(result.value("elsewhere").toArray().at(0).toString(),
+             QStringLiteral("C:\\Users\\Bob\\Documents\\untouched"));
+}
+
 void PathRewriteTest::plistRewriteRepointsTheKeysItWasGiven() {
     const QByteArray original =
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
