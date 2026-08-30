@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "app/models/AppCatalogModel.h"
+#include "app/models/CaptureFolderModel.h"
 #include "app/models/ContinuityReportModel.h"
 #include "core/continuity/ContinuityTypes.h"
 #include "core/services/ExportService.h"
@@ -95,6 +96,16 @@ public:
 
     /// What the read-back found, in a sentence. Empty when none was asked for.
     [[nodiscard]] QString verificationText() const;
+
+    /// What a profile plus the user's choices actually add up to.
+    ///
+    /// Shared by the capture and the pre-flight check, so the check cannot be
+    /// answering a different question from the one the capture will ask - and
+    /// public because "what would this take" is a fair question to ask of the
+    /// controller, not a hole opened for a test.
+    [[nodiscard]] core::CaptureSelection selectionFor(const QString& profileId,
+                                                      const QStringList& domains,
+                                                      bool includeSecrets) const;
 
     [[nodiscard]] const core::ExportReport& report() const { return report_; }
 
@@ -193,6 +204,17 @@ public slots:
 
     void chooseApplications(AppCatalogModel* model);
 
+    /// Narrows the capture to the folders of your own that were ticked.
+    ///
+    /// A profile decides which folders a capture would take; this takes some
+    /// of them away. It only ever removes: a folder the profile never asked
+    /// for is not added by ticking it, because the profile is what says
+    /// whether that domain is being captured at all.
+    void chooseFolders(CaptureFolderModel* model);
+
+    /// Back to whatever the profile says, which is the default.
+    void captureEveryFolder();
+
     /// Back to carrying every application's data, which is the default and
     /// what a profile on its own means.
     void carryEveryApplication();
@@ -243,13 +265,6 @@ private:
     void handleFinished();
     void handleProgramCheckFinished();
 
-    /// What a profile plus the user's tick boxes actually add up to. Shared by
-    /// the capture and the pre-flight check so the check cannot be answering a
-    /// different question from the one the capture will ask.
-    [[nodiscard]] core::CaptureSelection selectionFor(const QString& profileId,
-                                                      const QStringList& domains,
-                                                      bool includeSecrets) const;
-
     std::unique_ptr<platform::PlatformService> platform_;
     std::unique_ptr<core::ExportService> service_;
     core::CancelToken cancelToken_;
@@ -260,6 +275,11 @@ private:
     bool checkingPrograms_ = false;
     bool programsChecked_ = false;
     core::ScopeRule scope_;
+
+    /// Set when the user has narrowed the folders by hand. Empty means the
+    /// profile's own list stands.
+    QList<core::CaptureRoot> chosenFolders_;
+    bool foldersNarrowed_ = false;
     QList<core::AppSelection> apps_;
     core::AppSelectionMode appMode_ = core::AppSelectionMode::All;
     int appsChosen_ = 0;

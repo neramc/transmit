@@ -71,6 +71,29 @@ core::CaptureSelection ExportController::selectionFor(const QString& profileId,
     selection.scope = scope_;
     selection.appMode = appMode_;
     selection.apps = apps_;
+
+    // Folders the user unticked are taken out of what the profile asked for.
+    //
+    // Removed rather than replaced: the profile's roots include things this
+    // list never offered - application configuration, for one - and swapping
+    // the whole list for the ticked folders would silently drop them. So only
+    // the user-data roots this list is actually about are filtered, and every
+    // other root the profile named is left exactly as it was.
+    if (foldersNarrowed_) {
+        QSet<int> keep;
+        for (const core::CaptureRoot& root : chosenFolders_) {
+            keep.insert(static_cast<int>(root.token));
+        }
+        QList<core::CaptureRoot> roots;
+        for (const core::CaptureRoot& root : selection.roots) {
+            const bool isUserFolder =
+                root.domain == core::DomainId::UserData && root.appId.isEmpty();
+            if (!isUserFolder || keep.contains(static_cast<int>(root.token))) {
+                roots.push_back(root);
+            }
+        }
+        selection.roots = roots;
+    }
     return selection;
 }
 
@@ -88,6 +111,29 @@ void ExportController::chooseApplications(AppCatalogModel* model) {
 
     // The pre-flight answer was about a different set of applications, so it
     // is no longer an answer to this question.
+    forgetRunningPrograms();
+    emit scopeChanged();
+}
+
+void ExportController::chooseFolders(CaptureFolderModel* model) {
+    if (model == nullptr) {
+        return;
+    }
+    chosenFolders_ = model->chosenRoots();
+    foldersNarrowed_ = model->isNarrowed();
+
+    // The estimate and the list of programs to close were both answers about
+    // a different set of files.
+    forgetRunningPrograms();
+    emit scopeChanged();
+}
+
+void ExportController::captureEveryFolder() {
+    if (!foldersNarrowed_ && chosenFolders_.isEmpty()) {
+        return;
+    }
+    chosenFolders_.clear();
+    foldersNarrowed_ = false;
     forgetRunningPrograms();
     emit scopeChanged();
 }

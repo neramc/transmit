@@ -157,9 +157,14 @@ Item {
     Component.onCompleted: {
         adoptProfileDomains(profileId)
         appCatalog.refresh()
+        // Measured once, up front. Somebody deciding what to leave behind
+        // needs the sizes in front of them, and asking for them when the step
+        // opens would mean an empty list for the seconds it takes.
+        folders.measure()
     }
 
     AppCatalogModel { id: appCatalog }
+    CaptureFolderModel { id: folders }
 
     ColumnLayout {
         anchors.fill: parent
@@ -277,6 +282,98 @@ Item {
                                 enabledControl: ExportController.secretsAvailable()
                                                 && AppController.encryptionAvailable
                                 onCheckedChanged: page.includeSecrets = checked
+                            }
+                        }
+                    }
+
+                    // Which of your own folders, with what each one costs.
+                    //
+                    // The domain tick above says whether files of your own come
+                    // at all; this says which of them. Turning "your files" off
+                    // takes the whole question away rather than leaving a list
+                    // that quietly means nothing.
+                    AppCard {
+                        Layout.fillWidth: true
+                        visible: page.includeUserData
+                        implicitHeight: folderColumn.implicitHeight + Spacing.cardPadding * 2
+
+                        ColumnLayout {
+                            id: folderColumn
+                            anchors.fill: parent
+                            anchors.margins: Spacing.cardPadding
+                            spacing: Spacing.s12
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Spacing.controlGap
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Spacing.s4
+
+                                    Text {
+                                        text: qsTr("Which folders?")
+                                        color: Colors.textPrimary
+                                        font.family: Typography.family
+                                        font.pixelSize: Typography.body
+                                        font.weight: Typography.semiBold
+                                    }
+
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: folders.selectionSummary
+                                        color: Colors.textSecondary
+                                        font.family: Typography.family
+                                        font.pixelSize: Typography.caption
+                                        wrapMode: Text.WordWrap
+                                    }
+                                }
+
+                                AppSpinner {
+                                    running: folders.measuring
+                                    size: Sizing.iconSizeSmall
+                                    visible: folders.measuring
+                                }
+
+                                AppButton {
+                                    text: qsTr("All")
+                                    variant: "ghost"
+                                    onClicked: {
+                                        folders.selectAll()
+                                        ExportController.chooseFolders(folders)
+                                    }
+                                }
+
+                                AppButton {
+                                    text: qsTr("None")
+                                    variant: "ghost"
+                                    onClicked: {
+                                        folders.selectNone()
+                                        ExportController.chooseFolders(folders)
+                                    }
+                                }
+                            }
+
+                            Repeater {
+                                model: folders
+
+                                delegate: AppCheckRow {
+                                    required property int index
+                                    required property string displayName
+                                    required property string sizeText
+                                    required property bool selected
+                                    required property bool present
+
+                                    Layout.fillWidth: true
+                                    label: displayName
+                                    description: sizeText
+                                    checked: selected
+                                    enabledControl: present
+                                    onCheckedChanged: {
+                                        folders.setSelected(index, checked)
+                                        ExportController.chooseFolders(folders)
+                                    }
+                                }
                             }
                         }
                     }

@@ -556,6 +556,34 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
         request.selection.apps.push_back(app);
     }
 
+    // Which of the user's own folders to take. Removes only: a folder the
+    // profile never asked for is not added by naming it here, because the
+    // profile is what decides whether that domain is captured at all.
+    if (parser.isSet(QStringLiteral("folders"))) {
+        QSet<int> keep;
+        for (const QString& name :
+             parser.value(QStringLiteral("folders")).split(u',', Qt::SkipEmptyParts)) {
+            const auto token = format::tokenFromName(toUtf8(name.trimmed()));
+            if (!token) {
+                return reportError(
+                    QStringLiteral("unknown folder '%1' (try documents, pictures, music, "
+                                   "videos, downloads, desktop or templates)")
+                        .arg(name.trimmed()));
+            }
+            keep.insert(static_cast<int>(*token));
+        }
+
+        QList<core::CaptureRoot> roots;
+        for (const core::CaptureRoot& root : request.selection.roots) {
+            const bool isUserFolder =
+                root.domain == core::DomainId::UserData && root.appId.isEmpty();
+            if (!isUserFolder || keep.contains(static_cast<int>(root.token))) {
+                roots.push_back(root);
+            }
+        }
+        request.selection.roots = roots;
+    }
+
     if (parser.isSet(QStringLiteral("save-selection"))) {
         core::CaptureDocument saved;
         saved.selection = request.selection;
@@ -1408,6 +1436,13 @@ int main(int argc, char** argv) {
         QCommandLineOption(QStringLiteral("no-app-data"),
                            QStringLiteral("Note these applications as installed but leave their "
                                           "data behind."),
+                           QStringLiteral("list")),
+        QCommandLineOption(QStringLiteral("folders"),
+                           QStringLiteral("Only these folders of your own, by name: documents, "
+                                          "desktop, pictures, music, videos, downloads, "
+                                          "templates. It only ever takes folders away - a "
+                                          "profile that was not going to capture pictures does "
+                                          "not start because you named them."),
                            QStringLiteral("list")),
         QCommandLineOption(QStringLiteral("app-roots"),
                            QStringLiteral("Only these state folders of the chosen applications, "

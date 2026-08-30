@@ -5,7 +5,7 @@
 # RestoreUndoTest, AppSelectionTest and CarryOnTest drive the controllers
 # rather than the QML, but they need the same application layer, so they are
 # built here rather than in integration/.
-foreach(suite UiSmoke LayoutConformance RestoreUndo AppSelection CarryOn)
+foreach(suite UiSmoke LayoutConformance RestoreUndo AppSelection CarryOn FolderSelection)
     add_executable(transmit_${suite}_test ${suite}Test.cpp)
     set_target_properties(transmit_${suite}_test PROPERTIES AUTOMOC ON)
     add_test(NAME ${suite} COMMAND transmit_${suite}_test)
@@ -14,7 +14,7 @@ foreach(suite UiSmoke LayoutConformance RestoreUndo AppSelection CarryOn)
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endforeach()
 
-foreach(suite RestoreUndo AppSelection CarryOn)
+foreach(suite RestoreUndo AppSelection CarryOn FolderSelection)
     target_link_libraries(transmit_${suite}_test PRIVATE
         Transmit::Core Transmit::Warnings
         Qt6::Test Qt6::Gui Qt6::Qml

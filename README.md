@@ -307,6 +307,7 @@ transmit-cli export --out ARCHIVE [--profile full|documents|developer]
                     [--apps all|none|ID,ID] [--no-app-data ID,ID] [--app-roots ID,ID]
 
                     # which files
+                    [--folders documents,pictures]
                     [--max-file-size 2G] [--min-file-size 1K]
                     [--modified-since 6m] [--modified-before 2024-01-01]
                     [--include-ext txt,md] [--exclude-ext iso,vmdk]

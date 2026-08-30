@@ -13,6 +13,7 @@ qt_add_qml_module(transmit_backend
         ExportController.h ExportController.cpp
         ImportController.h ImportController.cpp
         models/AppCatalogModel.h models/AppCatalogModel.cpp
+        models/CaptureFolderModel.h models/CaptureFolderModel.cpp
         models/DriveListModel.h models/DriveListModel.cpp
         models/ProfileListModel.h models/ProfileListModel.cpp
         models/ContinuityReportModel.h models/ContinuityReportModel.cpp
