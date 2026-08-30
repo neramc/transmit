@@ -12,10 +12,16 @@ add_executable(transmit_format_tests
     ContainerTest.cpp
     FileIoTest.cpp
     ManifestTest.cpp
-    VerificationTest.cpp)
+    VerificationTest.cpp
+    TransferJournalTest.cpp)
 
 target_link_libraries(transmit_format_tests
     PRIVATE Transmit::Format Transmit::Warnings GTest::gtest GTest::gtest_main)
+
+# The shared temporary-directory helper is included as
+# "support/TempDirectory.h", so the tests directory itself is on the
+# include path.
+target_include_directories(transmit_format_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
 
 gtest_discover_tests(transmit_format_tests
     PROPERTIES LABELS format

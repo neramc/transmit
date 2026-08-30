@@ -8,22 +8,16 @@
 
 #include "format/FileIo.h"
 
+#include "support/TempDirectory.h"
+
 namespace transmit::format {
 namespace {
 
 class FileIoTest : public testing::Test {
 protected:
-    void SetUp() override {
-        directory_ = std::filesystem::temp_directory_path() /
-                     ("transmit-fileio-" + std::to_string(counter_++));
-        std::filesystem::remove_all(directory_);
-        std::filesystem::create_directories(directory_);
-    }
+    void SetUp() override { directory_ = test_support::makeTemporaryDirectory("transmit-fileio"); }
 
-    void TearDown() override {
-        std::error_code ec;
-        std::filesystem::remove_all(directory_, ec);
-    }
+    void TearDown() override { test_support::removeTemporaryDirectory(directory_); }
 
     [[nodiscard]] std::string contentsOf(const std::filesystem::path& path) const {
         std::ifstream stream(path, std::ios::binary);
@@ -31,7 +25,6 @@ protected:
     }
 
     std::filesystem::path directory_;
-    static inline int counter_ = 0;
 };
 
 ByteBuffer textBytes(std::string_view text) {

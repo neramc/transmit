@@ -20,6 +20,7 @@
 #include "format/Manifest.h"
 
 #include "property/Generators.h"
+#include "support/TempDirectory.h"
 
 namespace transmit::format {
 namespace {
@@ -89,16 +90,10 @@ std::vector<GeneratedFile> generateFiles(Gen& gen, std::uint64_t blockSize) {
 class RoundTripProperty : public testing::TestWithParam<int> {
 protected:
     void SetUp() override {
-        directory_ = std::filesystem::temp_directory_path() /
-                     ("transmit-property-" + std::to_string(GetParam()));
-        std::filesystem::remove_all(directory_);
-        std::filesystem::create_directories(directory_);
+        directory_ = test_support::makeTemporaryDirectory("transmit-property");
     }
 
-    void TearDown() override {
-        std::error_code ignored;
-        std::filesystem::remove_all(directory_, ignored);
-    }
+    void TearDown() override { test_support::removeTemporaryDirectory(directory_); }
 
     std::filesystem::path directory_;
 };

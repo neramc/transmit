@@ -11,6 +11,8 @@
 #include "format/Container.h"
 #include "format/FileIo.h"
 
+#include "support/TempDirectory.h"
+
 namespace transmit::format {
 namespace {
 
@@ -19,19 +21,10 @@ namespace {
 class ContainerTest : public testing::Test {
 protected:
     void SetUp() override {
-        directory_ =
-            std::filesystem::temp_directory_path() /
-            ("transmit-test-" +
-             std::to_string(::testing::UnitTest::GetInstance()->current_test_info()->line()) + "-" +
-             std::to_string(counter_++));
-        std::filesystem::remove_all(directory_);
-        std::filesystem::create_directories(directory_);
+        directory_ = test_support::makeTemporaryDirectory("transmit-container");
     }
 
-    void TearDown() override {
-        std::error_code ec;
-        std::filesystem::remove_all(directory_, ec);
-    }
+    void TearDown() override { test_support::removeTemporaryDirectory(directory_); }
 
     [[nodiscard]] std::filesystem::path archivePath(const std::string& name = "test.txa") const {
         return directory_ / name;
@@ -47,7 +40,6 @@ protected:
     }
 
     std::filesystem::path directory_;
-    static inline int counter_ = 0;
 };
 
 /// Builds an archive holding the given files and returns the finished manifest.

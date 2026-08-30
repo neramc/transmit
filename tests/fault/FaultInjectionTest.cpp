@@ -30,6 +30,8 @@
 #include "format/IoHooks.h"
 #include "format/Manifest.h"
 
+#include "support/TempDirectory.h"
+
 namespace transmit::format {
 namespace {
 
@@ -44,17 +46,11 @@ constexpr std::uint64_t kSeed = 0x1a2b3c4d5e6f7788ull;
 
 class FaultInjectionTest : public testing::Test {
 protected:
-    void SetUp() override {
-        directory_ = std::filesystem::temp_directory_path() /
-                     ("transmit-fault-" + std::to_string(counter_++));
-        std::filesystem::remove_all(directory_);
-        std::filesystem::create_directories(directory_);
-    }
+    void SetUp() override { directory_ = test_support::makeTemporaryDirectory("transmit-fault"); }
 
     void TearDown() override {
         setIoHooks(nullptr);
-        std::error_code ec;
-        std::filesystem::remove_all(directory_, ec);
+        test_support::removeTemporaryDirectory(directory_);
     }
 
     [[nodiscard]] std::filesystem::path archivePath(const std::string& name = "fault.txa") const {
@@ -62,7 +58,6 @@ protected:
     }
 
     std::filesystem::path directory_;
-    static inline int counter_ = 0;
 };
 
 struct Fixture {
