@@ -55,6 +55,7 @@ private slots:
     void theMoreSpecificRootKeepsTheApplicationItBelongsTo();
     void everyFileGetsItsOwnersNameNotJustTheFirst();
     void aWriteProtectedDriveIsRefusedBeforeAnythingIsWritten();
+    void aVolumeThatCallsItselfReadOnlyIsStillTriedIfTheFolderTakesFiles();
     void aDriveFarTooSmallIsRefusedBeforeAnythingIsWritten();
     void aDriveThatMightJustFitIsTriedAndSaysSo();
     void cleanupTestCase();
@@ -201,9 +202,21 @@ platform::StorageVolume driveAt(const QString& root, quint64 total, quint64 free
 
 // A stick with its switch flipped used to produce whatever error the first
 // failed write happened to give, after the whole scan had run.
+// The folder is made genuinely unwritable rather than merely declared so. A
+// volume that says it is read-only and a folder that accepts files is not the
+// situation this is about, and building it that way was how the check came to
+// be written against a flag that is wrong on macOS for most of the disk.
 void ContinuityRoundTripTest::aWriteProtectedDriveIsRefusedBeforeAnythingIsWritten() {
+#if defined(Q_OS_WIN)
+    QSKIP("a folder's permissions do not deny writes this way on Windows");
+#else
+    if (::geteuid() == 0) {
+        QSKIP("running as root, where permissions do not deny anything");
+    }
+
     const QString destination = workspace_.filePath(QStringLiteral("readonly"));
     QVERIFY(QDir().mkpath(destination));
+    QVERIFY(QFile::setPermissions(destination, QFileDevice::ReadOwner | QFileDevice::ExeOwner));
 
     testing::PlatformWithDrives platform(platform::PlatformService::create(),
                                          {driveAt(destination, 64ULL << 30, 32ULL << 30, true)});
@@ -216,11 +229,42 @@ void ContinuityRoundTripTest::aWriteProtectedDriveIsRefusedBeforeAnythingIsWritt
     request.packaging.preset = format::CompressionPreset::Fast;
 
     const core::ExportReport report = exporter.run(request, token, {});
+
+    // Put it back before any assertion can leave the workspace undeletable.
+    QVERIFY(QFile::setPermissions(
+        destination, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner));
+
     QVERIFY2(!report.succeeded, "a write-protected drive was written to");
     QVERIFY2(report.errorMessage.contains(QStringLiteral("write-protected")),
              qPrintable(report.errorMessage));
     QVERIFY2(!QFileInfo::exists(request.destinationPath),
              "nothing should have been created on a drive that cannot be written");
+#endif
+}
+
+// The other half of the same check, and the one macOS needs: a volume that
+// reports itself read-only while the folder on it takes files perfectly well.
+// Since the system volume was split in two, that describes everything under
+// the root volume on a Mac - which is to say most of the disk - and refusing
+// on the flag refused all of it.
+void ContinuityRoundTripTest::aVolumeThatCallsItselfReadOnlyIsStillTriedIfTheFolderTakesFiles() {
+    const QString destination = workspace_.filePath(QStringLiteral("says-readonly"));
+    QVERIFY(QDir().mkpath(destination));
+
+    testing::PlatformWithDrives platform(platform::PlatformService::create(),
+                                         {driveAt(destination, 64ULL << 30, 32ULL << 30, true)});
+    core::ExportService exporter(platform);
+    core::CancelToken token;
+
+    core::ExportRequest request;
+    request.destinationPath = destination + QStringLiteral("/written.txa");
+    request.selection = documentsSelection();
+    request.packaging.preset = format::CompressionPreset::Fast;
+
+    const core::ExportReport report = exporter.run(request, token, {});
+    QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
+    QVERIFY(!report.archiveParts.isEmpty());
+    QVERIFY(QFileInfo::exists(report.archiveParts.first()));
 }
 
 // Refused on the number, not on a guess: no compression saves ninety-five

@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFileInfo>
+#include <QTemporaryFile>
 
 #include <algorithm>
 #include <chrono>
@@ -420,19 +421,10 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     // ------------------------------------------------------- can it go there
     //
     // Asked here, after the scan and before a single byte is written: a stick
-    // that is write-protected, or plainly too small, should say so now rather
-    // than at ninety-eight percent of an hour's work.
-    if (destination.readOnly) {
-        return fail(
-            QCoreApplication::translate(
-                "Export",
-                "%1 is write-protected, so nothing can be written to it. Some drives have a "
-                "small switch on the side; otherwise choose somewhere else.")
-                .arg(destination.displayName.isEmpty()
-                         ? QDir::toNativeSeparators(request.destinationPath)
-                         : destination.displayName));
-    }
-
+    // that is plainly too small should say so now rather than at ninety-eight
+    // percent of an hour's work. Whether it can be written to at all is asked
+    // a little further down, once the folder is known to exist.
+    //
     // Only when the platform actually knows about this volume - a
     // default-constructed one means "a drive we do not enumerate", and refusing
     // on a number nobody measured would be worse than trying.
@@ -498,6 +490,43 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         if (!parent.mkdir(folder.dirName())) {
             return fail(QCoreApplication::translate("Export", "Could not make the folder %1.")
                             .arg(QDir::toNativeSeparators(folder.absolutePath())));
+        }
+    }
+
+    // Whether the destination can be written to, settled by writing to it.
+    //
+    // The volume's own read-only flag is not enough, and on macOS it is wrong
+    // for the ordinary case: since the system volume was split in two, the
+    // root volume is read-only by design and everything a person can write to
+    // lives on a data volume mounted inside it. A destination anywhere under
+    // it therefore sits on a volume that reports itself read-only while being
+    // perfectly writable, and refusing on that flag refuses most of the disk.
+    //
+    // The flag is also not the only way this ends badly - a folder somebody
+    // has no permission for, a full-disk-access prompt nobody answered, a
+    // stick with its switch on - and only one of those is visible in a mount
+    // record. So the question is put to the folder itself, and the flag is
+    // kept only to choose the wording.
+    {
+        QTemporaryFile probe(folder.filePath(QStringLiteral(".transmit-write-test-XXXXXX")));
+        const bool created = probe.open();
+        const bool written = created && probe.write("t", 1) == 1 && probe.flush();
+        if (!written) {
+            if (destination.readOnly) {
+                return fail(
+                    QCoreApplication::translate(
+                        "Export",
+                        "%1 is write-protected, so nothing can be written to it. Some drives "
+                        "have a small switch on the side; otherwise choose somewhere else.")
+                        .arg(destination.displayName.isEmpty()
+                                 ? QDir::toNativeSeparators(request.destinationPath)
+                                 : destination.displayName));
+            }
+            return fail(QCoreApplication::translate("Export", "Nothing can be written into %1: %2")
+                            .arg(QDir::toNativeSeparators(folder.absolutePath()),
+                                 created ? probe.errorString()
+                                         : QCoreApplication::translate(
+                                               "Export", "the folder would not accept a file")));
         }
     }
 
