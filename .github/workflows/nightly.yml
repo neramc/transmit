@@ -1,0 +1,230 @@
+name: nightly
+
+# The checks that are too slow to sit in front of a push.
+#
+# Everything here is looking for the same kind of fault: one that does not
+# happen every time. A test that passes nineteen runs out of twenty, an input
+# a minute of fuzzing never reaches, a property that only fails on one seed in
+# ten thousand. None of those can gate a pull request - the wait would be
+# longer than the work - but all of them are faults somebody would otherwise
+# meet on their own machine, with their own files, and no way to report it.
+#
+# So they run once a night against main, where taking an hour costs nothing.
+on:
+  schedule:
+    # 03:00 UTC, which is a quiet hour on the shared runners and so the least
+    # noisy time to measure anything.
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+# Deliberately not cancel-in-progress. A nightly that is cancelled by the next
+# nightly never finishes, and these are exactly the checks that take long
+# enough for that to happen.
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # A test that fails one run in twenty is not a test that passes.
+  #
+  # It is a test that will fail on somebody else's machine, at the worst
+  # possible moment, and be dismissed as "just a flake" - and this project has
+  # already had one real fault wear that disguise: two test processes writing
+  # to the same fixed path in the temporary directory, which looked like
+  # random failure and was a genuine collision.
+  flakes:
+    name: Run everything twenty times
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          modules: 'qtimageformats'
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libzstd-dev liblzma-dev libssl-dev \
+                                  libsqlite3-dev libsecret-1-dev \
+                                  libgl1-mesa-dev libxkbcommon-x11-0 xvfb \
+                                  gnome-keyring libsecret-tools dbus-x11
+
+      - name: Build
+        run: |
+          cmake --preset default -DTRANSMIT_WERROR=ON
+          cmake --build --preset default
+
+      # until-fail rather than a plain repeat: it stops at the first failure
+      # and leaves that run's output, which is the run somebody has to read.
+      - name: Twenty times, stopping at the first failure
+        run: ctest --preset default --repeat until-fail:20 --output-on-failure
+
+  # The same properties the pull request checks, given twenty times as many
+  # chances to be wrong.
+  #
+  # Twenty and not two hundred because the suites are already a minute at the
+  # ordinary two hundred cases, so a hundredfold would run past the timeout -
+  # and a nightly that is killed half way through finds nothing at all. Twenty
+  # times over is a different search every night, which over a week is more
+  # coverage than one enormous run that never completes.
+  properties:
+    name: Four thousand cases
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          modules: 'qtimageformats'
+          cache: true
+
+      # The same list the other jobs install. The build is the whole project,
+      # not only the suites this job runs, so anything short of it fails at
+      # configure time - every night, quietly, until somebody looks.
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libzstd-dev liblzma-dev libssl-dev \
+                                  libsqlite3-dev libsecret-1-dev \
+                                  libgl1-mesa-dev libxkbcommon-x11-0 xvfb \
+                                  gnome-keyring libsecret-tools dbus-x11
+
+      - name: Build
+        run: |
+          cmake --preset default -DTRANSMIT_WERROR=ON
+          cmake --build --preset default
+
+      # The seed is the run number, so two nights are two different searches
+      # rather than the same one done twice - and it is printed by every
+      # suite, so a failure can be reproduced exactly with one variable.
+      - name: Search
+        env:
+          TRANSMIT_PROPERTY_CASES: 4000
+          TRANSMIT_PROPERTY_SEED: ${{ github.run_number }}
+        run: ctest --preset default -L property --output-on-failure
+
+  # A minute a target is enough to catch what a bad refactor breaks. It is not
+  # enough to find the input nobody thought of, which is what fuzzing is for.
+  fuzz:
+    name: Fifteen minutes a target
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang-18 libclang-rt-18-dev \
+                                  libzstd-dev liblzma-dev libssl-dev libsqlite3-dev
+
+      - name: Build the fuzzers
+        run: |
+          cmake -S . -B build-fuzz -G Ninja \
+                -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+                -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 \
+                -DTRANSMIT_BUILD_TESTS=ON -DTRANSMIT_BUILD_FUZZERS=ON \
+                -DTRANSMIT_BUILD_APP=OFF -DTRANSMIT_BUILD_CLI=OFF
+          cmake --build build-fuzz
+
+      - name: Fuzz
+        run: |
+          set -e
+          for target in FuzzManifest FuzzContainerOpen FuzzSerialization FuzzPathToken; do
+              echo "::group::$target"
+              mkdir -p "corpus/$target"
+              cp -r "tests/fuzz/corpus/regressions/$target/." "corpus/$target/" 2>/dev/null || true
+              ./build-fuzz/tests/fuzz/transmit_fuzz_$target \
+                  -max_total_time=900 -rss_limit_mb=4096 "corpus/$target"
+              echo "::endgroup::"
+          done
+
+      # The input that crashed is the whole value of the run. Without it the
+      # report is "something crashed last night", which nobody can act on.
+      - name: Keep whatever crashed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-fuzz-crashers
+          path: |
+            crash-*
+            timeout-*
+            oom-*
+          if-no-files-found: ignore
+
+      # A corpus that grows is a corpus that found new ways through the code.
+      # Kept so the next night starts where this one got to, and so a case
+      # worth committing as a regression can be taken out of it.
+      - name: Keep the corpus
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-fuzz-corpus
+          path: corpus
+          if-no-files-found: ignore
+
+  # Windows and macOS, run the way somebody's machine runs them rather than
+  # the way the pull request checks do: everything, twice, with nothing else
+  # on the runner competing.
+  other-systems:
+    name: ${{ matrix.name }}, twice
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+          - name: macOS
+            os: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          modules: 'qtimageformats'
+          cache: true
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja zstd xz openssl@3 sqlite
+
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          vcpkg install zlib:x64-windows zstd:x64-windows liblzma:x64-windows `
+                        openssl:x64-windows sqlite3:x64-windows
+          echo "CMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" >> $env:GITHUB_ENV
+        shell: pwsh
+
+      - name: Build
+        run: |
+          cmake --preset default -DTRANSMIT_WERROR=ON
+          cmake --build --preset default
+
+      # Twice rather than twenty times. These runners are slower and shared,
+      # so twenty would run past the hour without finding much that two does
+      # not: what this is looking for is a test that depends on state the
+      # first run left behind, and one repeat shows that.
+      - name: Twice
+        run: ctest --preset default --repeat until-fail:2 --output-on-failure

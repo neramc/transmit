@@ -24,6 +24,82 @@ permissions:
   contents: read
 
 jobs:
+  # A red tree must not be able to ship.
+  #
+  # The tag points at a commit, and the checks either passed on that commit or
+  # they did not. This asks rather than rebuilding, deliberately: running the
+  # suite again would only prove that the second run passed, whereas what has
+  # to be true is that the checks people rely on ran against exactly the bytes
+  # being published.
+  #
+  # It names the jobs rather than reading the run's overall conclusion. A run
+  # can be green with a job skipped - a cancelled leg, a matrix entry that
+  # never started - and "nothing failed" is not the same claim as "the
+  # sanitisers passed on this commit".
+  checks:
+    name: Refuse to ship a red tree
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      # Deliberately a skipped step rather than a skipped job. A job that does
+      # not run takes everything that needs it down with it, so gating the
+      # whole job on the event would mean the gate quietly disappearing the
+      # day somebody makes a manual run publish something.
+      - name: A manual run publishes nothing, so there is nothing to gate
+        if: github.event_name == 'workflow_dispatch'
+        run: echo "A manual run publishes nothing, so the checks are not consulted."
+
+      - name: Ask what the checks said about this commit
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          echo "Looking for a completed CI run on $SHA"
+
+          runs=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&per_page=100" \
+                   --jq '[.workflow_runs[] | select(.status == "completed")]')
+          latest=$(printf '%s' "$runs" | jq -r 'sort_by(.run_number) | last | .id // empty')
+
+          if [ -z "$latest" ]; then
+            echo "::error::No completed CI run for $SHA. Nothing is published from a commit"
+            echo "::error::whose checks have not finished - push the commit, wait for CI, then tag it."
+            exit 1
+          fi
+          echo "CI run $latest"
+
+          jobs=$(gh api "repos/$REPO/actions/runs/$latest/jobs?per_page=100" --jq '.jobs')
+          printf '%s' "$jobs" | jq -r '.[] | "  \(.conclusion // .status)\t\(.name)"'
+
+          # Every job that has to have passed, by the name it reports. Missing
+          # counts as failure: a job that did not run cannot have passed.
+          required=(
+            "Linux" "Windows" "macOS"
+            "Formatting and static analysis"
+            "Sanitisers (asan-ubsan)" "Sanitisers (tsan)"
+            "Application catalog"
+          )
+
+          bad=0
+          for name in "${required[@]}"; do
+            got=$(printf '%s' "$jobs" | jq -r --arg n "$name" \
+                    '[.[] | select(.name == $n)] | last | .conclusion // "did not run"')
+            if [ "$got" != "success" ]; then
+              echo "::error::$name: $got"
+              bad=1
+            fi
+          done
+
+          if [ "$bad" -ne 0 ]; then
+            echo "::error::Refusing to publish: the checks above did not pass on $SHA."
+            exit 1
+          fi
+          echo "Every required check passed on this commit."
+
   # The version is worked out once and handed to every job, so the installer,
   # the disk image and the file names cannot disagree with each other.
   version:
@@ -329,7 +405,7 @@ jobs:
 
   publish:
     name: Publish the release
-    needs: [version, linux, macos, windows]
+    needs: [version, checks, linux, macos, windows]
     if: needs.version.outputs.tag != ''
     runs-on: ubuntu-latest
     permissions:
