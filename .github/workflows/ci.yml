@@ -467,6 +467,65 @@ jobs:
             oom-*
           if-no-files-found: ignore
 
+  # Which lines the suite actually runs, and - the question that matters more -
+  # whether the lines a change adds are among them.
+  #
+  # A project this size can absorb a great deal of untested new code before its
+  # overall percentage moves at all, and by the time it does the untested code
+  # is everywhere. So the overall floor is set just under where the project
+  # already is, to catch a real fall, while new lines are held to a standard
+  # nobody could retrofit but everybody can meet on the code they just wrote.
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The changed-line check needs the history back to where this branch
+          # left main; a shallow clone has no merge base to diff against.
+          fetch-depth: 0
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          modules: 'qtimageformats'
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang-18 llvm-18 libclang-rt-18-dev \
+                                  libzstd-dev liblzma-dev libssl-dev \
+                                  libsqlite3-dev libsecret-1-dev \
+                                  libgl1-mesa-dev libxkbcommon-x11-0 xvfb \
+                                  gnome-keyring libsecret-tools dbus-x11
+
+      - name: Measure
+        env:
+          CC: clang-18
+          CXX: clang++-18
+        run: |
+          # On a pull request the base is the branch being merged into; on a
+          # push to main it is the commit before, so "the lines this change
+          # adds" means the same thing either way.
+          if [ -n "${{ github.base_ref }}" ]; then
+              base="origin/${{ github.base_ref }}"
+          else
+              base="${{ github.event.before }}"
+          fi
+          git rev-parse --verify "$base" >/dev/null 2>&1 || base=""
+          scripts/coverage.sh ${base:+--base "$base"}
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: build-coverage/coverage.json
+          if-no-files-found: ignore
+
   # The numbers this project promises, checked against the ones it promised
   # last time.
   #

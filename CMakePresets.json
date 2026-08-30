@@ -60,6 +60,20 @@
       }
     },
     {
+      "name": "coverage",
+      "inherits": "clang",
+      "displayName": "Line coverage",
+      "description": "Instrumented with clang's source-based coverage, so the report is which lines the suite actually executed rather than which files it linked. Built on the clang preset because llvm-cov reads clang's own profiles; a gcc build produces nothing it can use.",
+      "binaryDir": "${sourceDir}/build-coverage",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS": "-fprofile-instr-generate -fcoverage-mapping -O0 -g",
+        "CMAKE_C_FLAGS": "-fprofile-instr-generate -fcoverage-mapping -O0 -g",
+        "CMAKE_EXE_LINKER_FLAGS": "-fprofile-instr-generate",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fprofile-instr-generate"
+      }
+    },
+    {
       "name": "asan",
       "inherits": "debug",
       "displayName": "Address and undefined behaviour sanitisers",
@@ -103,6 +117,10 @@
       "configurePreset": "clang"
     },
     {
+      "name": "coverage",
+      "configurePreset": "coverage"
+    },
+    {
       "name": "asan",
       "configurePreset": "asan"
     },
@@ -141,6 +159,16 @@
       "name": "clang",
       "inherits": "default",
       "configurePreset": "clang"
+    },
+    {
+      "name": "coverage",
+      "configurePreset": "coverage",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
     }
   ]
 }

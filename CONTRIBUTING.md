@@ -32,6 +32,21 @@ here rather than eight minutes into a runner.
 `scripts/format.sh` without `--check` fixes the formatting instead of
 reporting it.
 
+For a change of any size, it is worth also asking what the suite did not run:
+
+```bash
+scripts/coverage.sh --base main    # the lines this branch adds, and which are untested
+```
+
+It builds instrumented, runs everything, prints coverage by area, and then -
+the useful part - names the lines the branch adds that no test reached. CI runs
+the same script and requires 90% of new lines to be covered, which is a
+standard nobody could retrofit across fourteen thousand lines and everybody can
+meet on the thirty they just wrote. Twice already it has pointed at a claim the
+tests were not actually checking: that the restore fingerprint distinguishes
+one set of domains from another, and that an unreadable record is refused
+rather than ignored.
+
 The suite is grouped by label, so a slice can be run on its own:
 
 ```bash

@@ -64,6 +64,8 @@ private slots:
     void aFinishedRestoreLeavesNoRecordBehind();
     void carryingOnWithDifferentSettingsIsRefused();
     void withoutTheRecordEveryItemIsSettledAgain();
+    void carryingOnWithADifferentSetOfDomainsIsRefused();
+    void aRecordThatCannotBeReadIsRefusedRatherThanIgnored();
 
 private:
     [[nodiscard]] QString sourceHome() const { return workspace_.filePath("home"); }
@@ -81,7 +83,8 @@ private:
     /// once `failAfterFiles` files have been written.
     [[nodiscard]] core::ImportReport restore(
         bool resume, int failAfterFiles = -1, bool keepJournal = true,
-        core::ConflictPolicy policy = core::ConflictPolicy::KeepBoth);
+        core::ConflictPolicy policy = core::ConflictPolicy::KeepBoth,
+        const QSet<int>& domains = {});
 
     QTemporaryDir workspace_;
     QTemporaryDir restored_;
@@ -175,7 +178,8 @@ QStringList ResumeRestoreTest::restoredFileNames() const {
 }
 
 core::ImportReport ResumeRestoreTest::restore(bool resume, int failAfterFiles, bool keepJournal,
-                                              core::ConflictPolicy policy) {
+                                              core::ConflictPolicy policy,
+                                              const QSet<int>& domains) {
     core::ImportService importer(*platform_);
     core::CancelToken token;
 
@@ -183,6 +187,7 @@ core::ImportReport ResumeRestoreTest::restore(bool resume, int failAfterFiles, b
     request.archivePath = archivePath();
     request.destinationOverride = restoreInto();
     request.conflictPolicy = policy;
+    request.domains = domains;
     request.createRollback = false;
     request.durableWrites = false;
     request.keepJournal = keepJournal;
@@ -355,6 +360,62 @@ void ResumeRestoreTest::withoutTheRecordEveryItemIsSettledAgain() {
     QCOMPARE(again.filesCarriedOver, 0U);
 
     QCOMPARE(restoredFileNames().size(), expected_.size());
+}
+
+// Which domains were asked for decides what a restore puts where, so a record
+// made under one set says nothing dependable about a run under another. This
+// is the half of the fingerprint the conflict-policy test does not reach: it
+// would still pass with the domains left out of the digest entirely, and then
+// a run asked for less than the interrupted one would skip items on the
+// strength of a record that was never about it.
+void ResumeRestoreTest::carryingOnWithADifferentSetOfDomainsIsRefused() {
+    const QSet<int> everything{static_cast<int>(core::DomainId::UserData),
+                               static_cast<int>(core::DomainId::AppState)};
+    const QSet<int> lessThanThat{static_cast<int>(core::DomainId::UserData)};
+
+    const core::ImportReport stopped =
+        restore(false, 10, true, core::ConflictPolicy::KeepBoth, everything);
+    QVERIFY(!stopped.succeeded);
+    QVERIFY(stopped.canBeCarriedOn);
+
+    const core::ImportReport refused =
+        restore(true, -1, true, core::ConflictPolicy::KeepBoth, lessThanThat);
+    QVERIFY2(!refused.succeeded, "carried on from a restore that was asked for different things");
+    QVERIFY2(refused.errorMessage.contains(QStringLiteral("different restore")),
+             qPrintable(refused.errorMessage));
+
+    // And the same set, asked for again, is recognised as the same - or the
+    // check above would be passing because every resume is refused.
+    const core::ImportReport carried =
+        restore(true, -1, true, core::ConflictPolicy::KeepBoth, everything);
+    QVERIFY2(carried.succeeded, qPrintable(carried.errorMessage));
+    QVERIFY2(carried.resumed, "refused a resume that matched in every way");
+}
+
+// A record that cannot be read is the one case where doing nothing is not the
+// safe answer. Ignoring it means settling every item again, which is merely
+// slow - but it also means the names the interrupted run invented are gone,
+// so a second copy of each is saved beside the first. The restore says so and
+// stops instead of guessing which files are already on disk.
+void ResumeRestoreTest::aRecordThatCannotBeReadIsRefusedRatherThanIgnored() {
+    const core::ImportReport stopped = restore(false, 10);
+    QVERIFY(!stopped.succeeded);
+    QVERIFY(stopped.canBeCarriedOn);
+
+    // Its first bytes replaced, so it is no longer recognisable as a restore
+    // journal at all. This is what a damaged file looks like, as against a
+    // missing one.
+    {
+        QFile record(QString::fromStdString(journalPath().string()));
+        QVERIFY(record.open(QIODevice::ReadWrite));
+        QCOMPARE(record.write("XXXX", 4), 4);
+        record.close();
+    }
+
+    const core::ImportReport refused = restore(true);
+    QVERIFY2(!refused.succeeded, "carried on from a record it could not read");
+    QVERIFY2(refused.errorMessage.contains(QStringLiteral("could not be read")),
+             qPrintable(refused.errorMessage));
 }
 
 QTEST_MAIN(ResumeRestoreTest)
