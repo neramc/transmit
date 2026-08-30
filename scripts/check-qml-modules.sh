@@ -41,3 +41,33 @@ if [ "$missing" -ne 0 ]; then
 fi
 
 echo "Every QML file is registered in its module."
+
+# A QML string holding an escaped NUL breaks the build, and not here.
+#
+# Qt compiles QML bindings ahead of time into C++, and the generated source
+# embeds string literals verbatim. An embedded NUL terminates the literal in
+# the generated file rather than in the string, so what comes out is C++ that
+# does not parse - "error: missing terminating \" character" in a file nobody
+# wrote. Worse, the compiler that does this is version-dependent: Qt 6.4 here
+# accepted the binding and Qt 6.8 on the runners did not, so it cost a full
+# matrix and looked like a Qt bug rather than a line somebody typed.
+#
+# There is always another separator. This costs one grep to never spend that
+# afternoon again.
+literals=0
+for file in $(find src/ui/qml -name '*.qml'); do
+    if grep -nE '"[^"]*\\u0000' "$file"; then
+        echo "  ^ $file has an escaped NUL in a string literal"
+        literals=1
+    fi
+done
+
+if [ "$literals" -ne 0 ]; then
+    echo
+    echo "Qt's ahead-of-time QML compiler writes string literals straight into"
+    echo "generated C++, where a NUL ends the literal and the generated file"
+    echo "stops parsing. Use a separator that is not a control character."
+    exit 1
+fi
+
+echo "No QML string literal holds a character that breaks the generated C++."

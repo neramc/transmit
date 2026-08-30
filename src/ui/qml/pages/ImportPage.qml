@@ -38,12 +38,19 @@ Item {
 
     // Whether there is an unfinished restore to offer depends on both halves:
     // the same archive into a different folder is a different restore, and a
-    // different archive into the same folder is too. Joined with a character
-    // no path holds so that moving a separator between the two cannot make
-    // two different pairs look like one.
-    readonly property string carryOnKey:
-        ImportController.archivePath + "\u0000" + page.effectiveDestination
-    onCarryOnKeyChanged: ImportController.lookForInterruptedRestore(page.effectiveDestination)
+    // different archive into the same folder is too. So either changing is a
+    // reason to ask again, and the controller says nothing when the answer
+    // has not moved.
+    function lookForCarryOn() {
+        ImportController.lookForInterruptedRestore(page.effectiveDestination)
+    }
+
+    onEffectiveDestinationChanged: page.lookForCarryOn()
+
+    Connections {
+        target: ImportController
+        function onSummaryChanged() { page.lookForCarryOn() }
+    }
 
     ColumnLayout {
         anchors.fill: parent
