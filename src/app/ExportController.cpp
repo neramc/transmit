@@ -7,7 +7,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <optional>
 
 #include "core/secrets/SecretsDomain.h"
 #include "core/services/ProfileService.h"
@@ -396,41 +395,21 @@ QString ExportController::packagingSummary() const {
     return parts.join(tr(", "));
 }
 
-namespace {
-
-/// The volume a folder sits on, by the longest root that is a prefix of it.
-///
-/// Longest wins because volumes nest: a stick mounted inside a home directory
-/// matches both, and the answer wanted is the stick.
-std::optional<platform::StorageVolume> volumeHolding(const platform::PlatformService& platform,
-                                                     const QString& folder) {
-    std::optional<platform::StorageVolume> best;
-    for (const platform::StorageVolume& volume : platform.storageVolumes()) {
-        if (volume.rootPath.isEmpty() || !folder.startsWith(volume.rootPath)) {
-            continue;
-        }
-        if (!best || volume.rootPath.size() > best->rootPath.size()) {
-            best = volume;
-        }
-    }
-    return best;
-}
-
-}  // namespace
-
 bool ExportController::canEject() const {
     if (!finished_ || !report_.succeeded || ejected_ || destinationFolder_.isEmpty()) {
         return false;
     }
-    const auto volume = volumeHolding(*platform_, destinationFolder_);
-    return volume && volume->removable;
+    // The capture's own idea of which drive it wrote to, rather than a second
+    // one kept here. Two answers to "which volume is this path on" is one more
+    // than a question with a single right answer needs.
+    return service_->volumeForPath(destinationFolder_).removable;
 }
 
 void ExportController::ejectDestination() {
     ejectMessage_.clear();
 
-    const auto volume = volumeHolding(*platform_, destinationFolder_);
-    if (!volume) {
+    const platform::StorageVolume volume = service_->volumeForPath(destinationFolder_);
+    if (volume.rootPath.isEmpty()) {
         ejectMessage_ = tr("Transmit cannot tell which drive %1 is on, so it will not try to "
                            "eject it.")
                             .arg(QDir::toNativeSeparators(destinationFolder_));
@@ -438,13 +417,13 @@ void ExportController::ejectDestination() {
         return;
     }
 
-    const QString refused = platform_->eject(volume->rootPath);
+    const QString refused = platform_->eject(volume.rootPath);
     if (refused.isEmpty()) {
         ejected_ = true;
         ejectMessage_ =
             tr("%1 has been ejected. It is safe to unplug now.")
-                .arg(volume->displayName.isEmpty() ? QDir::toNativeSeparators(volume->rootPath)
-                                                   : volume->displayName);
+                .arg(volume.displayName.isEmpty() ? QDir::toNativeSeparators(volume.rootPath)
+                                                  : volume.displayName);
     } else {
         ejectMessage_ = refused;
     }
