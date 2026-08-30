@@ -1,8 +1,10 @@
 #include "format/TransferJournal.h"
 
 #include <algorithm>
+#include <map>
 #include <optional>
 #include <set>
+#include <utility>
 
 #include "format/Serialization.h"
 #include "format/hash/Blake2b.h"
@@ -105,6 +107,35 @@ std::size_t dropEntriesWithoutABlock(std::vector<ManifestEntry>& entries,
                                  }),
                   entries.end());
     return before - entries.size();
+}
+
+/// Keeps the last record of each entry and drops the earlier ones.
+///
+/// The journal is an append-only log, so the last word about an entry is the
+/// truth about it - and a resumed capture really can write about the same file
+/// twice. It happens like this: the first run records an entry, the block it
+/// went into never reaches the drive, the resume therefore drops that entry
+/// and captures the file again, and appends a second record for it. The first
+/// record is still in the file, in front of the resume point, and if both were
+/// believed the manifest would carry the same path twice - which a restore
+/// would then write twice, or refuse.
+void keepTheLastWordOnEachEntry(std::vector<ManifestEntry>& entries) {
+    std::map<std::pair<PathTokenId, std::string>, std::size_t> latest;
+    for (std::size_t i = 0; i < entries.size(); ++i) {
+        latest[{entries[i].path.token, entries[i].path.relative}] = i;
+    }
+    if (latest.size() == entries.size()) {
+        return;
+    }
+
+    std::vector<ManifestEntry> kept;
+    kept.reserve(latest.size());
+    for (std::size_t i = 0; i < entries.size(); ++i) {
+        if (latest[{entries[i].path.token, entries[i].path.relative}] == i) {
+            kept.push_back(std::move(entries[i]));
+        }
+    }
+    entries = std::move(kept);
 }
 
 }  // namespace
@@ -529,6 +560,7 @@ Result<JournalContents> readTransferJournal(const std::filesystem::path& archive
         return Error{ErrorCode::CorruptArchive, "The journal never says which capture it is for."};
     }
 
+    keepTheLastWordOnEachEntry(contents.entries);
     dropEntriesWithoutABlock(contents.entries, contents.blocks);
     return contents;
 }

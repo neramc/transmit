@@ -517,6 +517,12 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
     if (parser.isSet(QStringLiteral("md5-sidecar-names"))) {
         request.packaging.sidecarNamesEvenWhenEncrypted = true;
     }
+    if (parser.isSet(QStringLiteral("no-journal"))) {
+        request.packaging.keepJournal = false;
+    }
+    if (parser.isSet(QStringLiteral("resume"))) {
+        request.resume = true;
+    }
 
     // ------------------------------------------------ which applications
     if (parser.isSet(QStringLiteral("apps"))) {
@@ -608,7 +614,26 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
                   << Qt::endl;
             return kInterruptedExitCode;
         }
-        return reportError(report.errorMessage);
+        const int code = reportError(report.errorMessage);
+        if (report.canBeCarriedOn) {
+            // The archive and its journal are still there on purpose. Say so,
+            // because the alternative somebody will otherwise reach for is to
+            // delete them and start the hour again.
+            err() << QStringLiteral(
+                         "What was written is still on the drive. Run the same command again "
+                         "with --resume to carry on from where it stopped.")
+                  << Qt::endl;
+        }
+        return code;
+    }
+
+    if (report.resumed) {
+        out() << QStringLiteral(
+                     "Carried on from an interrupted capture: %1 files (%2) were "
+                     "already on the drive")
+                     .arg(report.filesCarriedOver)
+                     .arg(core::formatBytes(report.bytesCarriedOver))
+              << Qt::endl;
     }
 
     out() << QStringLiteral("Captured %1 files, %2 folders and %3 links")
@@ -1430,6 +1455,17 @@ int main(int argc, char** argv) {
         QCommandLineOption(QStringLiteral("no-md5-sidecar"),
                            QStringLiteral("Keep the per-file MD5s in the archive but do not "
                                           "write the .md5 file beside it.")),
+        QCommandLineOption(QStringLiteral("resume"),
+                           QStringLiteral("Carry on with the capture a previous run left "
+                                          "unfinished, instead of starting again. Refused when "
+                                          "the machine, the settings or the files have changed "
+                                          "since, because half of one state and half of another "
+                                          "is not a capture of either.")),
+        QCommandLineOption(QStringLiteral("no-journal"),
+                           QStringLiteral("Do not keep a record beside the archive of what has "
+                                          "reached the drive. Saves a device sync per block, and "
+                                          "gives up being able to carry on with an interrupted "
+                                          "capture: what it had written is deleted instead.")),
         QCommandLineOption(QStringLiteral("md5-sidecar-names"),
                            QStringLiteral("List the file names in the .md5 file even when the "
                                           "archive is encrypted. They will be readable by "

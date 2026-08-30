@@ -439,6 +439,47 @@ TEST_F(TransferJournalTest, ABlockComesBackAsTheManifestRecordsIt) {
     EXPECT_TRUE(record.encrypted);
 }
 
+// The journal is an append-only log and a resumed capture really does write
+// about the same file twice: the first run records an entry, the block it went
+// into never reaches the drive, so the resume drops that entry, captures the
+// file again and appends a second record. The first record is still in the
+// file. Believing both would put the same path in the manifest twice, and a
+// restore would then write it twice or refuse outright.
+//
+// This was found by running the command line against a drive that filled up,
+// not by reading the code: the capture reported "61 files" out of sixty.
+TEST_F(TransferJournalTest, TheLastRecordOfAnEntryIsTheOneThatCounts) {
+    {
+        auto journal = TransferJournal::begin(archivePath(), fingerprint());
+        ASSERT_TRUE(journal);
+        ASSERT_TRUE((*journal)->recordBlock(block(1, 1000)));
+
+        // The first run's version, pointing into a block that did land.
+        ASSERT_TRUE((*journal)->recordEntry(entry(1, "twice.txt", 1)));
+
+        // The resumed run's version of the same file, in a later block.
+        ASSERT_TRUE((*journal)->recordBlock(block(2, 2000)));
+        ManifestEntry again = entry(7, "twice.txt", 2);
+        again.location = BlockLocation{2, 512, 4096};
+        ASSERT_TRUE((*journal)->recordEntry(again));
+
+        ASSERT_TRUE((*journal)->recordEntry(entry(8, "once.txt", 2)));
+        ASSERT_TRUE((*journal)->close());
+    }
+
+    const auto contents = readTransferJournal(archivePath());
+    ASSERT_TRUE(contents) << contents.error().toString();
+    ASSERT_EQ(contents->entries.size(), 2U) << "the same file came back twice";
+
+    const auto twice =
+        std::find_if(contents->entries.begin(), contents->entries.end(),
+                     [](const ManifestEntry& e) { return e.path.relative == "twice.txt"; });
+    ASSERT_NE(twice, contents->entries.end());
+    EXPECT_EQ(twice->id, 7U) << "the earlier record won";
+    EXPECT_EQ(twice->location.blockId, 2U);
+    EXPECT_EQ(twice->location.offset, 512U);
+}
+
 TEST_F(TransferJournalTest, AJournalWithNoSessionStartIsRefusedRatherThanResumedFromZero) {
     auto journal = TransferJournal::begin(archivePath(), fingerprint());
     ASSERT_TRUE(journal);

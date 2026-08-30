@@ -232,6 +232,16 @@ struct PackagingOptions {
     /// encrypted. A deliberate choice: it puts every path on the drive in
     /// plain text next to the thing that was encrypted to hide them.
     bool sidecarNamesEvenWhenEncrypted = false;
+
+    /// Keep a journal beside the archive, so a capture the machine interrupts
+    /// can be carried on instead of started again.
+    ///
+    /// It costs a few hundred bytes per file and a device sync per block. On a
+    /// capture that takes twenty minutes onto a USB stick, that buys back the
+    /// nineteen minutes an interruption would otherwise throw away, which is
+    /// why it is on by default. The journal is deleted when the capture
+    /// finishes.
+    bool keepJournal = true;
 };
 
 struct ExportRequest {
@@ -242,6 +252,15 @@ struct ExportRequest {
 
     /// Required when the selection includes credentials.
     QString passphrase;
+
+    /// Carry on from where an interrupted run stopped, if there is a journal
+    /// beside the destination describing this same capture.
+    ///
+    /// Off by default, and deliberately so: writing into a file somebody
+    /// already has data in is not something to do because a file happened to
+    /// be there. Without it an existing journal is ignored and the archive is
+    /// written afresh.
+    bool resume = false;
 };
 
 /// Which part of a run an update comes from.
@@ -294,6 +313,21 @@ struct ExportReport {
     quint64 verificationFailures = 0;
     quint64 verificationRetriedReads = 0;
     qint64 verificationMilliseconds = 0;
+
+    /// The run stopped part way and what it had written was left in place,
+    /// with its journal, so it can be finished rather than done again.
+    ///
+    /// Only ever true on a failure, and only when a journal was being kept:
+    /// the drive filled up, the write failed, somebody pulled the stick out.
+    /// A capture the user cancelled leaves nothing behind, because they asked
+    /// for it to stop rather than for it to pause.
+    bool canBeCarriedOn = false;
+
+    /// The capture carried on from an interrupted run rather than starting
+    /// again, and what it did not have to do a second time.
+    bool resumed = false;
+    quint64 filesCarriedOver = 0;
+    quint64 bytesCarriedOver = 0;
 
     /// Where the time went, stage by stage.
     ///

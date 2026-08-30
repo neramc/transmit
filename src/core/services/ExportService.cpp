@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <optional>
 #include <system_error>
 #include <vector>
 
@@ -26,6 +27,7 @@
 #include "format/ChecksumSidecar.h"
 #include "format/Container.h"
 #include "format/Serialization.h"
+#include "format/TransferJournal.h"
 #include "format/hash/ContentHash.h"
 
 namespace transmit::core {
@@ -129,6 +131,77 @@ format::ManifestEntry toManifestEntry(const ScannedItem& item, quint64 id) {
     return entry;
 }
 
+/// A key for the entry an item would become, so a resumed capture can tell
+/// what a previous run already stored.
+///
+/// The tokenized path and nothing else: two files with the same path in the
+/// same token folder are the same file, and every other field - size, times,
+/// ownership - is already covered by the source digest, which has to match
+/// before any of this is looked at.
+QString entryKey(const format::TokenizedPath& path) {
+    return QString::number(static_cast<int>(path.token)) + QLatin1Char('\0') +
+           fromUtf8(path.relative);
+}
+
+/// Everything a resume has to agree about, in two numbers.
+///
+/// The packaging one covers how the bytes already on the drive were written:
+/// blocks compressed under a different preset or a different block size cannot
+/// be mixed with new ones. The source one covers the scan itself - every
+/// item's path, size and modification time, in the order the capture will walk
+/// them - and is the strict one. A single file changed since the interrupted
+/// run and the resume is refused, because the entries in the journal describe
+/// the old state of the machine and nothing here can tell whether that
+/// matters.
+format::JournalFingerprint fingerprintFor(const ExportRequest& request,
+                                          const format::ArchiveOptions& options,
+                                          const ScanResult& scan,
+                                          const platform::EnvironmentInfo& environment,
+                                          const format::ArchiveUuid& uuid) {
+    format::JournalFingerprint print;
+    print.archiveUuid = uuid;
+    print.destination = toUtf8(QFileInfo(request.destinationPath).absoluteFilePath());
+    print.hostName = toUtf8(environment.hostName);
+    print.userName = toUtf8(environment.userName);
+
+    format::ByteBuffer packaging;
+    format::ByteWriter writer(packaging);
+    writer.putUInt(1, static_cast<quint64>(options.preset));
+    writer.putUInt(2, options.partSize);
+    writer.putUInt(3, options.solidBlockSize);
+    writer.putBool(4, !options.passphrase.empty());
+    writer.putBool(5, options.recordMd5);
+    print.optionsDigest = format::journalDigest(packaging);
+
+    format::ByteBuffer source;
+    format::ByteWriter items(source);
+    for (const ScannedItem& item : scan.items) {
+        items.putString(1, toUtf8(item.absolutePath));
+        items.putUInt(2, item.size);
+        items.putInt(3, item.modifiedUnixNs);
+        items.putUInt(4, static_cast<quint64>(item.type));
+    }
+    print.sourceDigest = format::journalDigest(source);
+    return print;
+}
+
+/// How long the archive on the drive really is, or nothing when there is no
+/// archive there to measure.
+std::optional<quint64> archiveLengthOnDisk(const std::filesystem::path& basePath,
+                                           quint64 partSize) {
+    const std::filesystem::path anyPart =
+        partSize == 0 ? basePath : format::partPathFor(basePath, 1);
+    std::error_code code;
+    if (!std::filesystem::exists(anyPart, code)) {
+        return std::nullopt;
+    }
+    auto source = format::VolumeSource::open(anyPart);
+    if (!source) {
+        return std::nullopt;
+    }
+    return (*source)->logicalSize();
+}
+
 }  // namespace
 
 ExportService::ExportService(platform::PlatformService& platformService)
@@ -210,24 +283,52 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     struct PartialArchiveCleanup {
         std::vector<std::filesystem::path> parts;
 
+        /// Removed with them. A journal describing an archive that has just
+        /// been deleted would send the next `--resume` at a file that is not
+        /// there, or worse at a different one that took its name.
+        std::filesystem::path journal;
+
         ~PartialArchiveCleanup() {
             for (const std::filesystem::path& part : parts) {
                 std::error_code ignored;
                 std::filesystem::remove(part, ignored);
             }
+            if (!parts.empty() && !journal.empty()) {
+                std::error_code ignored;
+                std::filesystem::remove(journal, ignored);
+            }
         }
     } cleanup;
 
     const std::vector<std::filesystem::path>* writtenParts = nullptr;
+    std::filesystem::path journalPathHolder;
+    const std::filesystem::path* journalPath = &journalPathHolder;
 
-    const auto fail = [&report, &timer, &writtenParts, &cleanup](const QString& message) {
+    /// What to do with the half-written archive when a run gives up.
+    ///
+    /// Removing it is right when the run was told to stop, or gave up before
+    /// anything worth keeping existed: a half archive that looks like a whole
+    /// one is dangerous, and nobody asked for it.
+    ///
+    /// It is wrong when the drive failed part way through - a full stick, a
+    /// bad write, somebody pulling it out - and a journal was being kept. That
+    /// is the one case where an hour of work can still be finished rather than
+    /// done again, and deleting it is the difference between "plug it back in
+    /// and carry on" and "start from the beginning".
+    enum class OnFailure { RemoveWhatWasWritten, KeepItToCarryOn };
+
+    const auto fail = [&report, &timer, &writtenParts, &journalPath, &cleanup](
+                          const QString& message,
+                          OnFailure keep = OnFailure::RemoveWhatWasWritten) {
         report.succeeded = false;
         report.errorMessage = message;
         report.elapsedMilliseconds = timer.elapsed();
 
-        if (writtenParts != nullptr) {
+        if (writtenParts != nullptr && keep == OnFailure::RemoveWhatWasWritten) {
             cleanup.parts = *writtenParts;
+            cleanup.journal = *journalPath;
         }
+        report.canBeCarriedOn = keep == OnFailure::KeepItToCarryOn;
 
         qCWarning(logCapture) << "capture failed:" << message;
         return report;
@@ -530,20 +631,164 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         }
     }
 
-    auto writerResult =
-        format::ArchiveWriter::create(format::toFsPath(toUtf8(request.destinationPath)), options);
-    if (!writerResult) {
-        return fail(describeError(writerResult.error()));
+    const std::filesystem::path archiveBase = format::toFsPath(toUtf8(request.destinationPath));
+
+    // ------------------------------------------------ carry on, or start over
+    //
+    // Deciding this before the writer is opened, because the two paths open it
+    // differently: a fresh capture makes a new header, a resumed one has to
+    // keep the header already on the drive.
+    std::optional<format::JournalContents> carried;
+    if (request.resume) {
+        auto existing = format::readTransferJournal(archiveBase);
+        if (!existing && existing.error().code != format::ErrorCode::NotFound) {
+            return fail(QCoreApplication::translate(
+                            "Export", "There is a journal beside %1 that cannot be read: %2")
+                            .arg(QDir::toNativeSeparators(request.destinationPath),
+                                 describeError(existing.error())));
+        }
+        if (!existing) {
+            // No journal, but something is already there. A finished capture
+            // deletes its journal, so this is what one looks like afterwards -
+            // and rewriting it from the beginning is the opposite of what was
+            // asked for, with a good archive destroyed to do it.
+            if (archiveLengthOnDisk(archiveBase, request.packaging.partSize)) {
+                return fail(QCoreApplication::translate(
+                                "Export",
+                                "There is already an archive at %1 and no record of an "
+                                "unfinished capture beside it. Remove it to capture again.")
+                                .arg(QDir::toNativeSeparators(request.destinationPath)));
+            }
+        }
+        if (existing) {
+            if (existing->complete) {
+                return fail(QCoreApplication::translate(
+                                "Export",
+                                "That capture already finished. There is nothing to carry on "
+                                "with; remove %1 to start again.")
+                                .arg(QDir::toNativeSeparators(request.destinationPath)));
+            }
+
+            // Every field, before a byte of it is reused. Resuming into an
+            // archive whose source has moved on would produce a file that is
+            // internally consistent and describes a machine that never
+            // existed: half of it from Tuesday, half from Thursday, and
+            // nothing saying so.
+            const format::JournalFingerprint wanted = fingerprintFor(
+                request, options, scan, environment, existing->fingerprint.archiveUuid);
+            if (!(existing->fingerprint == wanted)) {
+                return fail(
+                    QCoreApplication::translate(
+                        "Export",
+                        "What is beside %1 was left by a different capture - a different "
+                        "machine, different settings, or the same folders after they changed. "
+                        "It cannot be carried on with.")
+                        .arg(QDir::toNativeSeparators(request.destinationPath)));
+            }
+
+            // The journal is synced ahead of the data it describes, so it can
+            // outlive it. What is really on the drive decides.
+            const std::optional<quint64> onDisk =
+                archiveLengthOnDisk(archiveBase, request.packaging.partSize);
+            if (!onDisk) {
+                return fail(
+                    QCoreApplication::translate(
+                        "Export", "There is a journal beside %1 but no archive to carry on with.")
+                        .arg(QDir::toNativeSeparators(request.destinationPath)));
+            }
+            existing->keepOnlyWhatFitsIn(*onDisk);
+
+            if (!existing->blocks.empty()) {
+                carried = std::move(existing).value();
+            }
+        }
     }
-    auto writer = std::move(writerResult).value();
+
+    std::unique_ptr<format::ArchiveWriter> writer;
+    if (carried) {
+        format::ArchiveWriter::ResumePoint point;
+        point.logicalLength = carried->resumableLength();
+        for (const format::JournalBlock& block : carried->blocks) {
+            point.blocks.push_back(block.asBlockRecord());
+        }
+        auto resumed = format::ArchiveWriter::resume(archiveBase, options, point);
+        if (!resumed) {
+            return fail(QCoreApplication::translate("Export", "Could not carry on with %1: %2")
+                            .arg(QDir::toNativeSeparators(request.destinationPath),
+                                 describeError(resumed.error())));
+        }
+        writer = std::move(resumed).value();
+        report.resumed = true;
+        qCInfo(logCapture) << "carrying on from" << carried->entries.size() << "files and"
+                           << carried->blocks.size() << "blocks already written";
+    } else {
+        auto created = format::ArchiveWriter::create(archiveBase, options);
+        if (!created) {
+            return fail(describeError(created.error()));
+        }
+        writer = std::move(created).value();
+    }
     writtenParts = &writer->parts();
+    journalPathHolder = format::TransferJournal::pathFor(archiveBase);
+
+    // The journal is opened before the first block is written and synced as it
+    // goes, so it never falls behind what is on the drive.
+    std::unique_ptr<format::TransferJournal> journal;
+    if (request.packaging.keepJournal) {
+        auto opened = carried ? format::TransferJournal::reopen(archiveBase, carried->validBytes)
+                              : format::TransferJournal::begin(
+                                    archiveBase, fingerprintFor(request, options, scan, environment,
+                                                                writer->uuid()));
+        if (!opened) {
+            return fail(
+                QCoreApplication::translate("Export", "Could not keep a record beside %1: %2")
+                    .arg(QDir::toNativeSeparators(request.destinationPath),
+                         describeError(opened.error())));
+        }
+        journal = std::move(opened).value();
+    } else {
+        // A stale journal describing an archive that is being replaced would
+        // send a later resume into the wrong file.
+        (void)format::TransferJournal::discard(archiveBase);
+    }
+
+    // Only worth keeping what was written when there is a journal to make
+    // sense of it. Without one, a half-written archive is bytes nobody can
+    // read and nobody can carry on with.
+    const auto whenTheDriveFails = [&journal]() {
+        return journal ? OnFailure::KeepItToCarryOn : OnFailure::RemoveWhatWasWritten;
+    };
 
     BlockPipeline pipeline(*writer, request.packaging.workerCount);
     pipeline.setAbortCheck([&cancelToken] { return cancelToken.isCancelled(); });
+    if (journal) {
+        pipeline.setBlockWritten(
+            [&journal](const format::BlockRecord& record, quint64 logicalEnd) -> format::Status {
+                format::JournalBlock block;
+                block.blockId = record.blockId;
+                block.streamOffset = record.streamOffset;
+                block.logicalEnd = logicalEnd;
+                block.rawSize = record.rawSize;
+                block.storedSize = record.storedSize;
+                block.codec = record.codec;
+                block.encrypted = record.encrypted;
+                TRANSMIT_CHECK(journal->recordBlock(block));
+                // One sync per block rather than per entry: a block is tens of
+                // megabytes and a sync on a stick is milliseconds, so this is
+                // free, while syncing every entry would cost more than the
+                // capture.
+                return journal->sync();
+            });
+    }
     format::BlockPacker packer(request.packaging.solidBlockSize,
                                [&pipeline](format::ByteView raw) -> format::Result<quint32> {
                                    return pipeline.submit(raw);
                                });
+    if (carried) {
+        for (const format::ManifestEntry& entry : carried->entries) {
+            packer.remember(entry.contentHash, entry.location);
+        }
+    }
 
     // ---------------------------------------------------------- capture
     format::Manifest manifest;
@@ -595,12 +840,62 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     quint64 filesDone = 0;
     bool reportedProgress = false;
 
+    // A placement's location becomes final when the block holding it reaches
+    // the drive, which is not the order the files were added in: an empty file
+    // and one whose content the archive already holds settle the instant they
+    // arrive, while the small files buffered ahead of them wait for their
+    // block to fill. The packer says which ones have settled; this writes them
+    // down. Placement ids are handed out in order, so a placement's id is its
+    // own position in the two lists kept beside it.
+    const auto recordSettledEntries = [&]() -> format::Status {
+        for (const format::BlockPacker::PlacementId id : packer.takeResolved()) {
+            if (id >= static_cast<format::BlockPacker::PlacementId>(placements.size())) {
+                return format::Error{format::ErrorCode::Internal,
+                                     "the packer settled a placement nobody asked for"};
+            }
+            TRANSMIT_TRY(location, packer.location(id));
+            format::ManifestEntry& entry = manifest.entries[static_cast<std::size_t>(
+                placementEntryIndex[static_cast<qsizetype>(id)])];
+            entry.location = location;
+            if (journal) {
+                TRANSMIT_CHECK(journal->recordEntry(entry));
+            }
+        }
+        return format::ok();
+    };
+
+    // What a previous run already got onto the drive goes into the manifest
+    // unchanged, and its files are not read a second time. Ids carry on past
+    // the highest already used rather than from the count, so an entry the
+    // journal lost the record of cannot have its id handed out again.
+    QSet<QString> alreadyCaptured;
+    if (carried) {
+        for (format::ManifestEntry& entry : carried->entries) {
+            alreadyCaptured.insert(entryKey(entry.path));
+            nextId = std::max<quint64>(nextId, entry.id + 1);
+            bytesDone += entry.size;
+            if (entry.type == format::EntryType::File) {
+                ++filesDone;
+            }
+            report.bytesCarriedOver += entry.size;
+            manifest.entries.push_back(std::move(entry));
+        }
+        // Files, as the name says: the folders come back too, and counting
+        // them here would report more files carried over than the capture
+        // found in the first place.
+        report.filesCarriedOver = filesDone;
+    }
+
     for (const ScannedItem& item : scan.items) {
         if (cancelToken.isCancelled()) {
             return fail(QCoreApplication::translate("Export", "Cancelled."));
         }
 
-        format::ManifestEntry entry = toManifestEntry(item, nextId++);
+        format::ManifestEntry entry = toManifestEntry(item, 0);
+        if (!alreadyCaptured.isEmpty() && alreadyCaptured.contains(entryKey(entry.path))) {
+            continue;
+        }
+        entry.id = nextId++;
 
         if (item.type == format::EntryType::File && item.size > 0) {
             const QString readPath = snapshot->translate(item.absolutePath);
@@ -643,16 +938,28 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
             auto handle = packer.add(entry.contentHash, bytes);
             stages.add(QStringLiteral("pack"), elapsedNanoseconds(packStarted));
             if (!handle) {
-                return fail(describeError(handle.error()));
+                return fail(describeError(handle.error()), whenTheDriveFails());
             }
             placements.push_back(*handle);
             placementEntryIndex.push_back(static_cast<qsizetype>(manifest.entries.size()));
 
             bytesDone += entry.size;
             ++filesDone;
-        }
+            manifest.entries.push_back(std::move(entry));
 
-        manifest.entries.push_back(std::move(entry));
+            if (const auto status = recordSettledEntries(); !status) {
+                return fail(describeError(status.error()));
+            }
+        } else {
+            // Nothing to store, so nothing to wait for: a directory or a link
+            // is complete the moment it is described.
+            manifest.entries.push_back(std::move(entry));
+            if (journal) {
+                if (const auto status = journal->recordEntry(manifest.entries.back()); !status) {
+                    return fail(describeError(status.error()));
+                }
+            }
+        }
 
         // The first item reports straight away: the throttle would otherwise
         // hold every update back by an interval, which on a small capture is
@@ -675,11 +982,11 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     }
 
     if (const auto status = packer.flush(); !status) {
-        return fail(describeError(status.error()));
+        return fail(describeError(status.error()), whenTheDriveFails());
     }
     if (const auto status = pipeline.drain([&cancelToken] { return cancelToken.isCancelled(); });
         !status) {
-        return fail(describeError(status.error()));
+        return fail(describeError(status.error()), whenTheDriveFails());
     }
     // A drain that stopped early leaves blocks the manifest would point at but
     // the archive does not hold, so this is checked before anything is written
@@ -688,8 +995,14 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         return fail(QCoreApplication::translate("Export", "Cancelled."));
     }
 
+    if (const auto status = recordSettledEntries(); !status) {
+        return fail(describeError(status.error()));
+    }
+
     // Block ids are only final once their block has been written, so the
-    // manifest entries are patched here rather than during the walk.
+    // manifest entries are patched here rather than during the walk. Every one
+    // of these was already settled above; doing it again costs nothing and
+    // means the manifest does not depend on the journal having been kept.
     for (qsizetype i = 0; i < placements.size(); ++i) {
         const auto location = packer.location(placements[i]);
         if (!location) {
@@ -706,7 +1019,30 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
     const auto finishStatus = writer->finish(manifest);
     stages.end();
     if (!finishStatus) {
-        return fail(describeError(finishStatus.error()));
+        return fail(describeError(finishStatus.error()), whenTheDriveFails());
+    }
+
+    // The archive is whole from here: it has a manifest, a footer and part
+    // headers that say so, and nothing later in this function could be helped
+    // by carrying on rather than starting again. So the journal stops being a
+    // resume point and goes.
+    if (journal) {
+        if (const auto status = journal->recordComplete(); !status) {
+            return fail(describeError(status.error()));
+        }
+        (void)journal->close();
+        journal.reset();
+        if (const auto status = format::TransferJournal::discard(archiveBase); !status) {
+            report.notes.push_back(ContinuityNote{
+                ContinuityGrade::Adapted, DomainId::Unknown,
+                QCoreApplication::translate("Export", "Leftover record"),
+                QCoreApplication::translate(
+                    "Export",
+                    "The archive is complete, but the record kept beside it could not be "
+                    "removed. It is safe to delete %1 by hand.")
+                    .arg(QDir::toNativeSeparators(fromUtf8(
+                        format::fromFsPath(format::TransferJournal::pathFor(archiveBase)))))});
+        }
     }
 
     // ----------------------------------------------------------- report

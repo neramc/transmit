@@ -31,6 +31,19 @@ public:
     /// `workers` of 0 picks a thread count from the machine and the preset.
     BlockPipeline(format::ArchiveWriter& writer, int workers = 0, int maxInFlight = 0);
 
+    /// Called after a block's bytes have reached the writer, with the record
+    /// the manifest will carry for it and how long the stream is now.
+    ///
+    /// This is the moment - and the only one - at which a block can honestly
+    /// be written down as being on the drive. Compression runs on several
+    /// threads and a block's id is handed out when it is queued, so anywhere
+    /// earlier would record a block the archive has not got. Runs on the
+    /// calling thread, never on a worker. A failure here fails the capture:
+    /// a journal that has fallen behind the archive is worse than none.
+    using BlockWritten =
+        std::function<format::Status(const format::BlockRecord& record, quint64 logicalEnd)>;
+    void setBlockWritten(BlockWritten callback) { blockWritten_ = std::move(callback); }
+
     /// Lets a run stop part way through compressing a block as well as between
     /// blocks. Read from the worker threads, so it must be safe to call from
     /// several at once; set it before the first submit().
@@ -67,6 +80,7 @@ private:
 
     format::ArchiveWriter& writer_;
     format::AbortCheck abort_;
+    BlockWritten blockWritten_;
     std::unique_ptr<QThreadPool> pool_;
     std::deque<Pending> pending_;
     int workers_ = 1;

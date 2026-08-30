@@ -76,7 +76,12 @@ format::Status BlockPipeline::writeFront() {
     if (!prepared) {
         return std::move(prepared).error();
     }
-    return writer_.writePrepared(prepared.value());
+    TRANSMIT_CHECK(writer_.writePrepared(prepared.value()));
+
+    if (blockWritten_) {
+        return blockWritten_(writer_.blocks().back(), writer_.logicalLength());
+    }
+    return format::ok();
 }
 
 format::Result<quint32> BlockPipeline::submit(format::ByteView raw) {
