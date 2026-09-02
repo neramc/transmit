@@ -1,0 +1,113 @@
+           PID: 1795 (AppRun)
+           TID: 1795 (AppRun)
+           UID: 1000 (kisj0633)
+           GID: 1000 (kisj0633)
+        Signal: 6 (ABRT) si_code: SI_TKILL
+     Timestamp: Wed 2026-09-02 18:15:17 KST (2s ago)
+  Command Line: /home/kisj0633/Downloads/Transmit-0.1.0-linux-x86_64.AppImage
+    Executable: /tmp/.mount_TransmmEfBME/usr/bin/transmit
+ Control Group: /user.slice/user-1000.slice/user@1000.service/app.slice/app-\x2fhome\x2fkisj0633\x2fDownloads\x2fTransmit\x2d0.1.0\x2dlinux\x2dx86_64.AppImage@1fa3172642e64d5f9e5b9d89c031a1e3.service
+          Unit: user@1000.service
+     User Unit: app-\x2fhome\x2fkisj0633\x2fDownloads\x2fTransmit\x2d0.1.0\x2dlinux\x2dx86_64.AppImage@1fa3172642e64d5f9e5b9d89c031a1e3.service
+         Slice: user-1000.slice
+     Owner UID: 1000 (kisj0633)
+       Boot ID: c9125023f1c94b43b59ffca9526ce6df
+    Machine ID: a2c6e9e1c873443488df89eb9461c45e
+      Hostname: lenovo-ideapad
+       Storage: /var/lib/systemd/coredump/core.AppRun.1000.c9125023f1c94b43b59ffca9526ce6df.1795.1788340517000000.zst (present)
+  Size on Disk: 3.3M
+       Message: Process 1795 (AppRun) of user 1000 dumped core.
+                
+                Module /tmp/.mount_TransmmEfBME/usr/qml/QtQuick/Dialogs/libqtquickdialogsplugin.so without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/qml/QtQuick/Dialogs/libqtquickdialogsplugin.so
+                Module /tmp/.mount_TransmmEfBME/usr/qml/QtQuick/Controls/libqtquickcontrols2plugin.so without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/qml/QtQuick/Controls/libqtquickcontrols2plugin.so
+                Module /tmp/.mount_TransmmEfBME/usr/qml/QtQuick/Layouts/libqquicklayoutsplugin.so without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/qml/QtQuick/Layouts/libqquicklayoutsplugin.so
+                Module /tmp/.mount_TransmmEfBME/usr/qml/QtQuick/Templates/libqtquicktemplates2plugin.so without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/qml/QtQuick/Templates/libqtquicktemplates2plugin.so
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqwebp.so without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqwebp.so
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqwbmp.so without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqwbmp.so
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqtiff.so without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqtiff.so
+                Module /tmp/.mount_TransmmEfBME/usr/qml/QtQuick/Controls/Basic/libqtquickcontrols2basicstyleplugin.so without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/qml/QtQuick/Controls/Basic/libqtquickcontrols2basicstyleplugin.so
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqtga.so without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqtga.so
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqjpeg.so without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqjpeg.so
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqico.so without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqico.so
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqicns.so without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqicns.so
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqsvg.so without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqsvg.so
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqgif.so without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/imageformats/libqgif.so
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/platforminputcontexts/libcomposeplatforminputcontextplugin.so without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/platforminputcontexts/libcomposeplatforminputcontextplugin.so
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/wayland-shell-integration/libxdg-shell.so without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/wayland-shell-integration/libxdg-shell.so
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libwayland-cursor.so.0 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libwayland-cursor.so.0
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/platforms/libqwayland-generic.so without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/plugins/platforms/libqwayland-generic.so
+                Module /tmp/.mount_TransmmEfBME/usr/lib/liblz4.so.1 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/liblz4.so.1
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libpcre2-8.so.0 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libpcre2-8.so.0
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libcap.so.2 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libcap.so.2
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libblkid.so.1 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libblkid.so.1
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libsystemd.so.0 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libsystemd.so.0
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libkeyutils.so.1 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libkeyutils.so.1
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libkrb5support.so.0 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libkrb5support.so.0
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libk5crypto.so.3 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libk5crypto.so.3
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libmount.so.1 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libmount.so.1
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libdbus-1.so.3 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libdbus-1.so.3
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libgcrypt.so.20 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libgcrypt.so.20
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libgio-2.0.so.0 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libgio-2.0.so.0
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libselinux.so.1 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libselinux.so.1
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libpcre.so.3 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libpcre.so.3
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libgssapi_krb5.so.2 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libgssapi_krb5.so.2
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libgmodule-2.0.so.0 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libgmodule-2.0.so.0
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libffi.so.8 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libffi.so.8
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libcrypto.so.3 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libcrypto.so.3
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libxkbcommon.so.0 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libxkbcommon.so.0
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libglib-2.0.so.0 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libglib-2.0.so.0
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libgobject-2.0.so.0 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libgobject-2.0.so.0
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libzstd.so.1 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libzstd.so.1
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libsecret-1.so.0 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libsecret-1.so.0
+                Module /tmp/.mount_TransmmEfBME/usr/lib/liblzma.so.5 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/liblzma.so.5
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libsqlite3.so.0 without build-id.
+                Module /tmp/.mount_TransmmEfBME/usr/lib/libsqlite3.so.0
+                Stack trace of thread 1795:
+                #0  0x00007f62f9c9a17c n/a (libc.so.6 + 0x9a17c)
+                #1  0x00007f62f9c3e5d0 raise (libc.so.6 + 0x3e5d0)
+                #2  0x00007f62f9c25685 abort (libc.so.6 + 0x25685)
+                #3  0x00007f62fa4bd012 n/a (/tmp/.mount_TransmmEfBME/usr/lib/libQt6Core.so.6 + 0xbd012)
+                #4  0x0000000000000000 n/a (n/a + 0x0)
+                ELF object binary architecture: AMD x86-64
