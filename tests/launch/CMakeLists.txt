@@ -22,6 +22,23 @@ set(cases
     "wayland"                    # a real compositor
     "wayland-no-buffers")        # the exact shape of the 0.1.0 crash
 
+# Under a sanitiser, only the case that loads no third-party platform plugin.
+#
+# The xcb and Wayland plugins are Qt's, built without instrumentation, and
+# running them under AddressSanitizer reports faults inside them that this
+# project can neither fix nor silence honestly - a heap overflow while
+# QXcbConnection reads the X server's setup, a null dereference in the Wayland
+# input handling on a compositor with no text-input protocol. Neither is
+# Transmit's, and a check that fails for somebody else's reason stops being
+# read. The offscreen plugin does almost nothing, so it stays: it is the one
+# that walks the whole of main() and the QML engine under the sanitiser.
+#
+# The Linux build job runs all four, uninstrumented, which is where the
+# question these ask actually belongs.
+if(CMAKE_CXX_FLAGS MATCHES "-fsanitize")
+    set(cases "offscreen")
+endif()
+
 foreach(case ${cases})
     set(arguments --binary "$<TARGET_FILE:transmit>")
     if(case STREQUAL "wayland-no-buffers")
