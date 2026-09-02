@@ -173,8 +173,14 @@ jobs:
           TRANSMIT_STARTUP_BENCHMARK: 1
           QT_LOGGING_RULES: transmit.performance.debug=true
         run: |
+          # macOS builds the interface as an application bundle, so the
+          # executable is not where it is on the other two systems.
+          interface=./build/transmit.app/Contents/MacOS/transmit
+          [ -x "$interface" ] || interface=./build/transmit
+          echo "starting $interface"
+
           set +e
-          ./build/transmit > started.log 2>&1 &
+          "$interface" > started.log 2>&1 &
           pid=$!
           for _ in $(seq 1 90); do
               kill -0 "$pid" 2>/dev/null || break
@@ -206,6 +212,12 @@ jobs:
         env:
           TRANSMIT_STARTUP_BENCHMARK: 1
           QT_LOGGING_RULES: transmit.performance.debug=true
+          # Qt builds the interface for the windowed subsystem, and its default
+          # message handler sends output to the debugger rather than to stderr
+          # when the process has no console. Started from here it has none, so
+          # without this the log it is being read for is written somewhere
+          # nothing can read it.
+          QT_LOGGING_TO_CONSOLE: 1
         run: |
           $process = Start-Process -FilePath build/transmit.exe -PassThru `
               -RedirectStandardOutput started.log -RedirectStandardError started.err
@@ -218,7 +230,10 @@ jobs:
           if ($process.ExitCode -ne 0) {
               throw "the interface exited with $($process.ExitCode)"
           }
-          if (-not (Select-String -Path started.err -Pattern "first frame after" -Quiet)) {
+          # Both streams, because which one carries the log depends on how Qt
+          # decided to write it.
+          if (-not (Select-String -Path started.log, started.err `
+                        -Pattern "first frame after" -Quiet)) {
               throw "the interface finished without drawing anything"
           }
 

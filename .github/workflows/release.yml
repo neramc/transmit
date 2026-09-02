@@ -491,6 +491,11 @@ jobs:
         env:
           TRANSMIT_STARTUP_BENCHMARK: 1
           QT_LOGGING_RULES: transmit.performance.debug=true
+          # Qt builds the interface for the windowed subsystem, and its default
+          # message handler sends output to the debugger rather than to stderr
+          # when the process has no console - which, started from here, it has
+          # not got.
+          QT_LOGGING_TO_CONSOLE: 1
         run: |
           $staged = "packaging/windows/staging/transmit.exe"
           $process = Start-Process -FilePath $staged -PassThru `
@@ -504,10 +509,14 @@ jobs:
           if ($process.ExitCode -ne 0) {
               throw "the packaged interface exited with $($process.ExitCode)"
           }
-          if (-not (Select-String -Path started.err -Pattern "first frame after" -Quiet)) {
+          # Both streams, because which one carries the log depends on how Qt
+          # decided to write it.
+          if (-not (Select-String -Path started.log, started.err `
+                        -Pattern "first frame after" -Quiet)) {
               throw "the packaged interface drew nothing"
           }
-          if (Select-String -Path started.err -Pattern "is not a type|failed to load|not installed" -Quiet) {
+          if (Select-String -Path started.log, started.err `
+                  -Pattern "is not a type|failed to load|not installed" -Quiet) {
               throw "the packaged interface started with QML errors"
           }
 
