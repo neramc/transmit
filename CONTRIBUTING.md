@@ -82,7 +82,31 @@ ctest --preset default -L format         # the archive format, no Qt
 ctest --preset default -L property       # randomised round trips
 ctest --preset default -L fault          # deliberate breakage - see below
 ctest --preset default -L integration    # capture and restore end to end
+ctest --preset default -L launch         # the interface, actually started
 ```
+
+`-L launch` is the only slice that runs the built executable rather than
+linking its pieces into a test process. It starts the interface under the
+offscreen platform, under a real X server, and under a real Wayland
+compositor, and each one has to paint a frame before the test passes. It needs
+two programs that are not build dependencies:
+
+```bash
+sudo apt-get install -y xvfb weston
+```
+
+Without them the cases skip themselves, which is right on a machine that has
+no use for them and wrong on a build machine - so CI sets
+`TRANSMIT_LAUNCH_TESTS_REQUIRED=1`, which turns a skip into a failure.
+
+These exist because version 0.1.0 shipped an AppImage that aborted the instant
+it was started on a Wayland desktop, with the whole suite green. Everything
+that touched the interface ran under the offscreen platform, which loads no
+platform plugin, builds no graphics context and never involves the scene graph
+- so the one thing that was broken was the one thing nothing could see. The
+fourth case, `Launch.wayland-no-buffers`, takes the graphics plugin away
+deliberately and requires the interface to fall back to drawing in software
+instead of dying.
 
 The application catalog is data, and is checked as data:
 

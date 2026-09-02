@@ -7,7 +7,25 @@ notes say so.
 
 ## Unreleased
 
-Nothing yet.
+### Fixed
+
+- The Linux AppImage aborted on start on a Wayland desktop. The bundle was
+  built without `plugins/wayland-graphics-integration-client`, so Qt could not
+  give the window an OpenGL context, and Qt Quick's response to that is to end
+  the process. The plugin is now carried, and the release build refuses to
+  publish a bundle that is missing it.
+- Transmit no longer dies when there is no graphics backend at all. It asks
+  before it draws, falls back to rendering in software, and says so — a remote
+  desktop, a virtual machine without OpenGL, or a broken driver now costs
+  speed rather than the whole program.
+
+### Testing
+
+- The interface is now launched for real, on a real X server and a real Wayland
+  compositor, and has to paint a frame. Every interface check before this ran
+  under the offscreen platform, which loads no platform plugin and builds no
+  graphics context — which is why a build that could not start on Wayland
+  passed everything. The packaged bundles on all three systems are started too.
 
 ## 0.1.0
 

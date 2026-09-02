@@ -168,7 +168,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build libzstd-dev liblzma-dev libssl-dev \
                                   libsqlite3-dev libsecret-1-dev \
-                                  libgl1-mesa-dev libxkbcommon-x11-0 \
+                                  libgl1-mesa-dev libgl1-mesa-dri libxkbcommon-x11-0 \
+                                  libxcb-cursor0 xvfb weston \
                                   libfuse2 file
 
       - name: Build
@@ -210,6 +211,23 @@ jobs:
           export EXTRA_PLATFORM_PLUGINS="$plugins"
           echo "extra platform plugins: $EXTRA_PLATFORM_PLUGINS"
 
+          # Carried in by hand, because nothing else carries it.
+          #
+          # The Qt plugin deploys the Wayland shell and decoration plugins and
+          # stops there. The client buffer integration - the piece that gives a
+          # Wayland window an OpenGL context - is left behind, and Qt Quick
+          # does not survive its absence: it prints "Failed to initialize
+          # graphics backend for OpenGL" and calls qFatal, so the bundle dumps
+          # core before a window ever appears. That is how 0.1.0 shipped, and
+          # every check the project had was green, because none of them ran it
+          # on Wayland.
+          #
+          # --deploy-deps-only makes linuxdeploy treat what was copied as part
+          # of the bundle and pull in the libraries it needs.
+          mkdir -p AppDir/usr/plugins
+          cp -r "${QT_ROOT_DIR}/plugins/wayland-graphics-integration-client" \
+                AppDir/usr/plugins/
+
           # The command line tool travels with the interface: they share the
           # bundled Qt, and somebody restoring onto a headless machine needs it.
           ./linuxdeploy --appdir AppDir \
@@ -217,6 +235,7 @@ jobs:
               --executable build-release/transmit-cli \
               --desktop-file resources/transmit.desktop \
               --icon-file resources/icons/transmit.svg \
+              --deploy-deps-only=AppDir/usr/plugins/wayland-graphics-integration-client \
               --plugin qt \
               --output appimage
 
@@ -224,11 +243,10 @@ jobs:
           mv Transmit*.AppImage \
              "artifacts/Transmit-${{ needs.version.outputs.version }}-linux-x86_64.AppImage"
 
-      # Packaging is where a QML module goes missing without anything failing
-      # to build, so the bundle is started rather than merely produced.
-      - name: Check it runs
-        env:
-          QT_QPA_PLATFORM: offscreen
+      # Packaging is where a QML module or a plugin goes missing without
+      # anything failing to build, so the bundle is unpacked and inspected
+      # before it is started.
+      - name: Check what the bundle carries
         run: |
           chmod +x artifacts/*.AppImage
           ./artifacts/*.AppImage --appimage-extract >/dev/null
@@ -238,25 +256,72 @@ jobs:
               exit 1
           fi
 
-          # A window with nobody to close it should still be running when the
-          # timeout fires, and `timeout` says so with 124. Grepping the output
-          # for known failures is not enough on its own: an interface that dies
-          # for a reason nobody has seen before prints something else and would
-          # pass.
-          set +e
-          timeout 30 ./squashfs-root/AppRun > started.log 2>&1
-          status=$?
-          set -e
+          # Named one by one rather than counted, because the failure this
+          # guards against is a single directory quietly not being copied.
+          # 0.1.0 shipped without wayland-graphics-integration-client and
+          # aborted on every Wayland desktop.
+          missing=0
+          for directory in platforms imageformats platformthemes \
+                           wayland-shell-integration \
+                           wayland-decoration-client \
+                           wayland-graphics-integration-client; do
+              if [ ! -d "squashfs-root/usr/plugins/$directory" ]; then
+                  echo "::error::the bundle has no plugins/$directory"
+                  missing=1
+              fi
+          done
 
-          cat started.log
-          if [ "$status" -ne 124 ]; then
-              echo "::error::the packaged interface exited on its own (status $status)"
-              exit 1
+          # The platform plugins a Linux desktop actually uses. Only xcb is
+          # deployed by default, and a bundle with no Wayland platform plugin
+          # never opens a window on a session that has no XWayland.
+          for plugin in libqxcb.so libqwayland-generic.so; do
+              if [ ! -e "squashfs-root/usr/plugins/platforms/$plugin" ]; then
+                  echo "::error::the bundle has no platforms/$plugin"
+                  missing=1
+              fi
+          done
+
+          # The client buffer integration is only useful if the library behind
+          # it came too.
+          if [ ! -e squashfs-root/usr/plugins/wayland-graphics-integration-client/libqt-plugin-wayland-egl.so ]; then
+              echo "::error::the Wayland OpenGL integration plugin is missing"
+              missing=1
           fi
-          if grep -qE "is not a type|failed to load|not installed" started.log; then
-              echo "::error::the packaged interface started with QML errors"
-              exit 1
-          fi
+
+          echo "::group::Plugins in the bundle"
+          find squashfs-root/usr/plugins -type f -name '*.so' | sort
+          echo "::endgroup::"
+
+          exit "$missing"
+
+      # And then it is started, on a real X server and a real Wayland
+      # compositor, and has to paint a frame on both.
+      #
+      # The check this replaced started the bundle under the offscreen platform
+      # and waited for a timeout. It passed on the build that dumped core on
+      # every Wayland desktop, because offscreen loads no platform plugin and
+      # builds no graphics context.
+      - name: Check it runs
+        env:
+          TRANSMIT_LAUNCH_TESTS_REQUIRED: 1
+        run: |
+          for mode in offscreen xcb wayland; do
+              echo "::group::Launching the bundle: $mode"
+              bash tests/launch/launch-test.sh \
+                  --binary squashfs-root/usr/bin/transmit --mode "$mode"
+              echo "::endgroup::"
+          done
+
+          # The same run again with the Wayland client buffer integration taken
+          # away, which is what a bundle that lost the plugin looks like from
+          # the inside. It has to fall back to drawing in software rather than
+          # aborting, so that a packaging mistake costs speed and not the whole
+          # program.
+          echo "::group::Launching the bundle: Wayland with no OpenGL"
+          bash tests/launch/launch-test.sh \
+              --binary squashfs-root/usr/bin/transmit --mode wayland \
+              --without-buffer-integration --expect-software
+          echo "::endgroup::"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -312,6 +377,45 @@ jobs:
                   exit 1
               fi
           done
+
+      # Started, not merely produced. A bundle whose frameworks or QML were
+      # deployed incompletely builds, installs and then fails to open a window,
+      # which is the worst way for somebody to find out.
+      - name: Check it runs
+        env:
+          TRANSMIT_STARTUP_BENCHMARK: 1
+          QT_LOGGING_RULES: transmit.performance.debug=true
+        run: |
+          set +e
+          ./build-release/transmit.app/Contents/MacOS/transmit > started.log 2>&1 &
+          pid=$!
+          for _ in $(seq 1 90); do
+              kill -0 "$pid" 2>/dev/null || break
+              sleep 1
+          done
+          if kill -0 "$pid" 2>/dev/null; then
+              kill -9 "$pid"
+              cat started.log
+              echo "::error::the packaged interface never painted a frame"
+              exit 1
+          fi
+          wait "$pid"
+          status=$?
+          set -e
+
+          cat started.log
+          if [ "$status" -ne 0 ]; then
+              echo "::error::the packaged interface exited with $status"
+              exit 1
+          fi
+          grep -q "first frame after" started.log || {
+              echo "::error::the packaged interface drew nothing"
+              exit 1
+          }
+          if grep -qE "is not a type|failed to load|not installed" started.log; then
+              echo "::error::the packaged interface started with QML errors"
+              exit 1
+          fi
 
       - name: Collect
         run: |
@@ -378,6 +482,33 @@ jobs:
               if (-not (Test-Path "$staging/$needed")) {
                   throw "windeployqt did not produce $needed"
               }
+          }
+
+      # The staged tree is what both the installer and the portable archive are
+      # made of, so it is started here, once, before either is built.
+      - name: Check it runs
+        shell: pwsh
+        env:
+          TRANSMIT_STARTUP_BENCHMARK: 1
+          QT_LOGGING_RULES: transmit.performance.debug=true
+        run: |
+          $staged = "packaging/windows/staging/transmit.exe"
+          $process = Start-Process -FilePath $staged -PassThru `
+              -RedirectStandardOutput started.log -RedirectStandardError started.err
+          if (-not $process.WaitForExit(90000)) {
+              $process.Kill()
+              Get-Content started.log, started.err -ErrorAction SilentlyContinue
+              throw "the packaged interface never painted a frame"
+          }
+          Get-Content started.log, started.err -ErrorAction SilentlyContinue
+          if ($process.ExitCode -ne 0) {
+              throw "the packaged interface exited with $($process.ExitCode)"
+          }
+          if (-not (Select-String -Path started.err -Pattern "first frame after" -Quiet)) {
+              throw "the packaged interface drew nothing"
+          }
+          if (Select-String -Path started.err -Pattern "is not a type|failed to load|not installed" -Quiet) {
+              throw "the packaged interface started with QML errors"
           }
 
       - name: Build the installer

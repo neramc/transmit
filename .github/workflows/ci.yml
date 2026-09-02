@@ -57,7 +57,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build libzstd-dev liblzma-dev libssl-dev \
                                   libsqlite3-dev libsecret-1-dev \
-                                  libgl1-mesa-dev libxkbcommon-x11-0 xvfb \
+                                  libgl1-mesa-dev libgl1-mesa-dri libxkbcommon-x11-0 \
+                                  xvfb weston libxcb-cursor0 \
                                   gnome-keyring libsecret-tools dbus-x11
 
       - name: Install dependencies (macOS)
@@ -143,31 +144,83 @@ jobs:
               exit 1
           fi
 
-      # The interface has to start, not merely link. This catches a QML module
-      # that failed to register, which no unit test would notice.
-      - name: Check the interface starts
+      # The interface has to open a window on a real windowing system and draw
+      # into it, not merely link and stay alive under the offscreen platform.
+      #
+      # This replaced a step that started the binary offscreen and waited for a
+      # timeout. That check was green for the whole life of 0.1.0, which
+      # aborted on every Wayland desktop the moment it was launched: offscreen
+      # never loads a platform plugin, never builds a graphics context and
+      # never involves the scene graph, so the one thing that was broken was
+      # the one thing it could not see.
+      #
+      # TRANSMIT_LAUNCH_TESTS_REQUIRED turns a missing Xvfb or weston into a
+      # failure. Skipping is right on a developer's machine and useless here.
+      - name: The interface has to start on a real display
         if: runner.os == 'Linux'
-        run: |
-          export QT_QPA_PLATFORM=offscreen
+        env:
+          TRANSMIT_LAUNCH_TESTS_REQUIRED: 1
+        run: ctest --test-dir build -L launch --output-on-failure
 
-          # A window with nobody to close it should still be running when the
-          # timeout fires, and `timeout` says so with 124. Grepping the output
-          # is not enough on its own: an interface that dies for a reason
-          # nobody has seen before prints something else and would pass.
+      # The same question on the two platforms with no headless session to
+      # drive: start the interface on whatever the runner has and require a
+      # painted frame. TRANSMIT_STARTUP_BENCHMARK quits once the window has
+      # drawn, so finishing is the pass and a timeout is the failure - the
+      # opposite way round from waiting to see whether it dies.
+      - name: The interface has to start (macOS)
+        if: runner.os == 'macOS'
+        env:
+          TRANSMIT_STARTUP_BENCHMARK: 1
+          QT_LOGGING_RULES: transmit.performance.debug=true
+        run: |
           set +e
-          timeout 20 ./build/transmit > started.log 2>&1
+          ./build/transmit > started.log 2>&1 &
+          pid=$!
+          for _ in $(seq 1 90); do
+              kill -0 "$pid" 2>/dev/null || break
+              sleep 1
+          done
+          if kill -0 "$pid" 2>/dev/null; then
+              kill -9 "$pid"
+              cat started.log
+              echo "::error::the interface never painted a frame"
+              exit 1
+          fi
+          wait "$pid"
           status=$?
           set -e
 
           cat started.log
-          if [ "$status" -ne 124 ]; then
-            echo "::error::the interface exited on its own (status $status)"
-            exit 1
+          if [ "$status" -ne 0 ]; then
+              echo "::error::the interface exited with $status"
+              exit 1
           fi
-          if grep -qE "is not a type|failed to load|not installed" started.log; then
-            echo "::error::the interface started with QML errors"
-            exit 1
-          fi
+          grep -q "first frame after" started.log || {
+              echo "::error::the interface finished without drawing anything"
+              exit 1
+          }
+
+      - name: The interface has to start (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          TRANSMIT_STARTUP_BENCHMARK: 1
+          QT_LOGGING_RULES: transmit.performance.debug=true
+        run: |
+          $process = Start-Process -FilePath build/transmit.exe -PassThru `
+              -RedirectStandardOutput started.log -RedirectStandardError started.err
+          if (-not $process.WaitForExit(90000)) {
+              $process.Kill()
+              Get-Content started.log, started.err -ErrorAction SilentlyContinue
+              throw "the interface never painted a frame"
+          }
+          Get-Content started.log, started.err -ErrorAction SilentlyContinue
+          if ($process.ExitCode -ne 0) {
+              throw "the interface exited with $($process.ExitCode)"
+          }
+          if (-not (Select-String -Path started.err -Pattern "first frame after" -Quiet)) {
+              throw "the interface finished without drawing anything"
+          }
 
       - name: Round trip through the command line
         shell: bash

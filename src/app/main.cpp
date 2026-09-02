@@ -1,12 +1,77 @@
 #include <QElapsedTimer>
 #include <QGuiApplication>
 #include <QIcon>
+#include <QOffscreenSurface>
+#include <QOpenGLContext>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QSGRendererInterface>
+#include <QSurfaceFormat>
 #include <QUrl>
 
 #include "core/utils/Logging.h"
+
+namespace {
+
+/// Whether the scene graph would be able to build an OpenGL context.
+///
+/// Qt Quick does not cope with the answer being no: it prints
+/// "Failed to initialize graphics backend for OpenGL" and calls qFatal, so the
+/// process dumps core with no window and nothing the person in front of it can
+/// act on. That is not a theoretical machine. A Wayland session whose Qt
+/// installation is missing the client buffer integration reaches it, and so
+/// does a remote desktop, a virtual machine with no GL, and a driver that
+/// fails to load.
+///
+/// Asking first costs one context that is thrown away immediately, and turns
+/// the crash into a slower window.
+bool openGlIsUsable() {
+    QOffscreenSurface surface;
+    surface.setFormat(QSurfaceFormat::defaultFormat());
+    surface.create();
+    if (!surface.isValid()) {
+        return false;
+    }
+
+    QOpenGLContext context;
+    context.setFormat(surface.format());
+    if (!context.create()) {
+        return false;
+    }
+    if (!context.makeCurrent(&surface)) {
+        return false;
+    }
+    context.doneCurrent();
+    return true;
+}
+
+/// Picks the scene graph backend before the first window exists, which is the
+/// only moment Qt allows the choice to be made.
+///
+/// Only the platforms whose default backend is OpenGL are probed: Windows
+/// draws through Direct3D and macOS through Metal, and neither would learn
+/// anything from an OpenGL context. Anyone who has already chosen a backend
+/// keeps it - an explicit QSG_RHI_BACKEND or QT_QUICK_BACKEND is an
+/// instruction, not a suggestion.
+void chooseGraphicsBackend() {
+#if defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD) || defined(Q_OS_OPENBSD)
+    for (const char* const chosen : {"QSG_RHI_BACKEND", "QT_QUICK_BACKEND", "QMLSCENE_DEVICE"}) {
+        if (qEnvironmentVariableIsSet(chosen)) {
+            return;
+        }
+    }
+
+    if (openGlIsUsable()) {
+        return;
+    }
+
+    qCWarning(logApp) << "no usable OpenGL context; drawing in software instead";
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::Software);
+#endif
+}
+
+}  // namespace
 
 int main(int argc, char** argv) {
     // Started before anything else so the number below is the whole cost of
@@ -38,6 +103,8 @@ int main(int argc, char** argv) {
 
     transmit::core::configureLogging(qEnvironmentVariableIsSet("TRANSMIT_VERBOSE"));
 
+    chooseGraphicsBackend();
+
     QQmlApplicationEngine engine;
 
     // Qt 6.5 and later search ":/qt/qml" for modules by default; 6.4 does not,
@@ -68,6 +135,21 @@ int main(int argc, char** argv) {
     qCDebug(logPerformance) << "window built after" << startup.elapsed() << "ms";
 
     if (auto* const window = qobject_cast<QQuickWindow*>(engine.rootObjects().constFirst())) {
+        // The second half of the graphics fallback, and the reason the window
+        // is reached at all rather than the process being aborted from under
+        // it. Qt Quick only calls qFatal when nothing is listening here, so a
+        // connection - even one that does nothing but say what happened and
+        // leave - is what turns a core dump into an error message.
+        //
+        // Connected before exec(), because the scene graph is initialised from
+        // the expose event and that arrives once the loop is running.
+        QObject::connect(window, &QQuickWindow::sceneGraphError, &app,
+                         [](QQuickWindow::SceneGraphError, const QString& message) {
+                             qCCritical(logApp)
+                                 << "the graphics backend could not be started:" << message;
+                             QCoreApplication::exit(1);
+                         });
+
         QObject::connect(
             window, &QQuickWindow::frameSwapped, window,
             [&startup, benchmarking]() {
