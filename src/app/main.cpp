@@ -14,6 +14,8 @@
 
 namespace {
 
+#if defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD) || defined(Q_OS_OPENBSD)
+
 /// Whether the scene graph would be able to build an OpenGL context.
 ///
 /// Qt Quick does not cope with the answer being no: it prints
@@ -49,13 +51,9 @@ bool openGlIsUsable() {
 /// Picks the scene graph backend before the first window exists, which is the
 /// only moment Qt allows the choice to be made.
 ///
-/// Only the platforms whose default backend is OpenGL are probed: Windows
-/// draws through Direct3D and macOS through Metal, and neither would learn
-/// anything from an OpenGL context. Anyone who has already chosen a backend
-/// keeps it - an explicit QSG_RHI_BACKEND or QT_QUICK_BACKEND is an
-/// instruction, not a suggestion.
+/// Anyone who has already chosen a backend keeps it - an explicit
+/// QSG_RHI_BACKEND or QT_QUICK_BACKEND is an instruction, not a suggestion.
 void chooseGraphicsBackend() {
-#if defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD) || defined(Q_OS_OPENBSD)
     for (const char* const chosen : {"QSG_RHI_BACKEND", "QT_QUICK_BACKEND", "QMLSCENE_DEVICE"}) {
         if (qEnvironmentVariableIsSet(chosen)) {
             return;
@@ -68,8 +66,18 @@ void chooseGraphicsBackend() {
 
     qCWarning(logApp) << "no usable OpenGL context; drawing in software instead";
     QQuickWindow::setGraphicsApi(QSGRendererInterface::Software);
-#endif
 }
+
+#else
+
+/// Only the platforms whose default backend is OpenGL are probed. Windows
+/// draws through Direct3D and macOS through Metal, so an OpenGL context would
+/// answer a question neither of them asks - and a helper left compiled but
+/// unreferenced is an error under -Werror, so there is nothing here to leave
+/// behind.
+void chooseGraphicsBackend() {}
+
+#endif
 
 }  // namespace
 
