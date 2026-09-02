@@ -123,19 +123,31 @@ case "$mode" in
         chmod 700 "$XDG_RUNTIME_DIR"
         socket="transmit-launch-$$"
 
-        weston --backend=headless --socket="$socket" \
-               --width=1440 --height=900 > "$work/weston.log" 2>&1 &
-        compositor_pid=$!
+        # weston named its backends "headless-backend.so" until version 11 and
+        # "headless" after, and both spellings are still in use on the systems
+        # this runs on. Rather than parse a version, ask for one and then the
+        # other: a wrong name fails immediately and costs nothing.
+        start_compositor() {
+            weston --backend="$1" --socket="$socket" \
+                   --width=1440 --height=900 >> "$work/weston.log" 2>&1 &
+            compositor_pid=$!
 
-        # The socket appears a moment after the process does, and connecting
-        # before it exists fails in a way that looks like the interface's
-        # fault.
-        for _ in $(seq 1 100); do
-            [ -S "$XDG_RUNTIME_DIR/$socket" ] && break
-            kill -0 "$compositor_pid" 2>/dev/null || break
-            sleep 0.1
-        done
-        if [ ! -S "$XDG_RUNTIME_DIR/$socket" ]; then
+            # The socket appears a moment after the process does, and
+            # connecting before it exists fails in a way that looks like the
+            # interface's fault.
+            for _ in $(seq 1 100); do
+                [ -S "$XDG_RUNTIME_DIR/$socket" ] && return 0
+                kill -0 "$compositor_pid" 2>/dev/null || break
+                sleep 0.1
+            done
+
+            kill "$compositor_pid" 2>/dev/null
+            wait "$compositor_pid" 2>/dev/null
+            compositor_pid=""
+            return 1
+        }
+
+        if ! start_compositor headless && ! start_compositor headless-backend.so; then
             echo "the compositor never came up:" >&2
             cat "$work/weston.log" >&2
             skip "weston could not start on this machine"
