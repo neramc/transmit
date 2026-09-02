@@ -96,6 +96,10 @@ export XDG_CACHE_HOME="$HOME/.cache" XDG_STATE_HOME="$HOME/.local/state"
 export TRANSMIT_STARTUP_BENCHMARK=1
 export QT_LOGGING_RULES="transmit.performance.debug=true"
 
+# Nothing here needs the internet, and a launch that waits on somebody else's
+# server is a launch measurement of their server.
+export TRANSMIT_NO_UPDATE_CHECK=1
+
 run_it() {
     timeout --signal=KILL "$timeout_seconds" "$binary" > "$log" 2>&1
     echo $?

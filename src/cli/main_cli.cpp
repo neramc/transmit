@@ -8,6 +8,7 @@
 #include <QCommandLineParser>
 #include <QCoreApplication>
 #include <QDir>
+#include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -27,6 +28,8 @@
 #include "core/services/RollbackWriter.h"
 #include "core/services/ScanService.h"
 #include "core/services/VerifyService.h"
+#include "core/update/UpdateInstaller.h"
+#include "core/update/UpdateService.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
 #include "format/FileIo.h"
@@ -1273,6 +1276,112 @@ int runApps(bool onlyThoseThatCarryData) {
     return 0;
 }
 
+/// `update` - ask whether there is a newer Transmit, and optionally take it.
+///
+/// Exit codes carry the answer, because this is the command most likely to be
+/// run from something that is not a person: 0 when there is nothing to do or
+/// the update went on, 3 when there is one and it was not installed, 1 when
+/// the question could not be answered at all.
+int runUpdate(bool apply, bool asJson) {
+    using namespace transmit::core;
+
+    UpdateService service;
+    UpdateDecision decision;
+
+    // A command line tool should not sit in an event loop after it has its
+    // answer, and should not return before it has one.
+    QEventLoop loop;
+    QObject::connect(&service, &UpdateService::checked, &loop, [&](const UpdateDecision& answer) {
+        decision = answer;
+        loop.quit();
+    });
+    service.checkForUpdate();
+    loop.exec();
+
+    const QString offered =
+        decision.release ? QString::fromStdString(decision.release->version.toString()) : QString();
+
+    if (asJson) {
+        QJsonObject report;
+        report[QStringLiteral("running")] = QString::fromLatin1(TRANSMIT_VERSION);
+        report[QStringLiteral("action")] = describe(decision.action);
+        report[QStringLiteral("mandatory")] = decision.mandatory;
+        report[QStringLiteral("reason")] = decision.reason;
+        if (decision.release) {
+            report[QStringLiteral("available")] = offered;
+            report[QStringLiteral("severity")] = describe(decision.release->severity);
+            report[QStringLiteral("notes")] = decision.release->notes;
+        }
+        report[QStringLiteral("releases")] = UpdateService::releasesPage().toString();
+        QTextStream(stdout) << QJsonDocument(report).toJson(QJsonDocument::Indented);
+    } else {
+        QTextStream out(stdout);
+        out << decision.reason << Qt::endl;
+        if (decision.release && !decision.release->notes.isEmpty()) {
+            out << Qt::endl << decision.release->notes << Qt::endl;
+        }
+        if (decision.action == UpdateAction::TellThemOnly) {
+            out << Qt::endl
+                << "Fetch it from " << UpdateService::releasesPage().toString() << Qt::endl;
+        }
+    }
+
+    switch (decision.action) {
+        case UpdateAction::CannotCheck:
+            return 1;
+        case UpdateAction::NothingToDo:
+            return 0;
+        case UpdateAction::TellThemOnly:
+            return 3;
+        case UpdateAction::Offer:
+            if (!apply) {
+                return 3;
+            }
+            break;
+        case UpdateAction::InstallNow:
+            // A critical fix goes on whether or not --apply was given. That is
+            // the point of the severity, and a machine left running a version
+            // with a hole in it because nobody passed a flag is the thing this
+            // is for.
+            break;
+    }
+
+    QTextStream(stdout) << "Downloading..." << Qt::endl;
+
+    QString stagedPath;
+    QString problem;
+    QEventLoop download;
+    QObject::connect(&service, &UpdateService::staged, &download, [&](const QString& path) {
+        stagedPath = path;
+        download.quit();
+    });
+    QObject::connect(&service, &UpdateService::failed, &download, [&](const QString& why) {
+        problem = why;
+        download.quit();
+    });
+    service.downloadStagedUpdate();
+    download.exec();
+
+    if (stagedPath.isEmpty()) {
+        return reportError(QStringLiteral("the update could not be downloaded: %1").arg(problem));
+    }
+
+    const InstallKind kind = detectInstallKind();
+    const InstallOutcome outcome =
+        UpdateInstaller::apply(stagedPath, replaceableTarget(kind), kind);
+    if (!outcome.applied) {
+        if (!outcome.handedOver.isEmpty()) {
+            QTextStream(stdout) << outcome.problem << Qt::endl
+                                << "It is at " << outcome.handedOver << Qt::endl;
+            return 3;
+        }
+        return reportError(outcome.problem);
+    }
+
+    QTextStream(stdout) << "Installed. Start Transmit again to run it." << Qt::endl;
+    return 0;
+}
+
 int runProfiles() {
     for (const core::CaptureProfile& profile : core::ProfileService::builtInProfiles()) {
         out() << QStringLiteral("%1  %2").arg(profile.id, -12).arg(profile.displayName) << Qt::endl;
@@ -1367,8 +1476,7 @@ int main(int argc, char** argv) {
     parser.addPositionalArgument(
         QStringLiteral("command"),
         QStringLiteral("export, plan, import, inspect, verify, repair, rollback, apps, "
-                       "profiles, drives or "
-                       "environment"));
+                       "profiles, drives, environment or update"));
     parser.addPositionalArgument(
         QStringLiteral("archive"),
         QStringLiteral("archive path, for import, inspect, verify and repair"));
@@ -1490,7 +1598,10 @@ int main(int argc, char** argv) {
                                           "what was recorded, not only that each block "
                                           "decompresses.")),
         QCommandLineOption(QStringLiteral("json"),
-                           QStringLiteral("For `verify`: write the result as JSON.")),
+                           QStringLiteral("For `verify` and `update`: write the result as JSON.")),
+        QCommandLineOption(QStringLiteral("apply"),
+                           QStringLiteral("For `update`: install what it finds. A release marked "
+                                          "critical is installed with or without this.")),
         QCommandLineOption(QStringLiteral("timings"),
                            QStringLiteral("Print where the time went, stage by stage.")),
         QCommandLineOption(QStringLiteral("from-report"),
@@ -1614,6 +1725,10 @@ int main(int argc, char** argv) {
     }
     if (command == QLatin1String("environment")) {
         return runEnvironment();
+    }
+    if (command == QLatin1String("update")) {
+        return runUpdate(parser.isSet(QStringLiteral("apply")),
+                         parser.isSet(QStringLiteral("json")));
     }
 
     return reportError(QStringLiteral("unknown command '%1'").arg(command));

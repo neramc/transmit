@@ -150,6 +150,31 @@ Item {
                 ]
             }
 
+            // A fix the running version is exposed to. Not dismissible, and
+            // above the page rather than inside it, because it is true
+            // wherever you are in the program and it is being acted on
+            // whether or not this is read.
+            AppInlineMessage {
+                objectName: "criticalUpdateBanner"
+                Layout.fillWidth: true
+                Layout.leftMargin: Spacing.pagePadding
+                Layout.rightMargin: Spacing.pagePadding
+                Layout.topMargin: Spacing.md
+                visible: UpdateController.mandatory
+                tone: "warning"
+                title: UpdateController.installed
+                       ? qsTr("Transmit %1 is installed").arg(UpdateController.availableVersion)
+                       : qsTr("Transmit %1 fixes something serious")
+                             .arg(UpdateController.availableVersion)
+                body: UpdateController.summary
+                actionText: UpdateController.installed ? qsTr("Restart later")
+                          : UpdateController.canInstall ? "" : qsTr("Open the releases page")
+                onActionTriggered: {
+                    if (!UpdateController.installed)
+                        Qt.openUrlExternally(UpdateController.releasesPage)
+                }
+            }
+
             ContentView {
                 id: content
                 objectName: "contentView"

@@ -634,6 +634,78 @@ jobs:
           sha256sum * > SHA256SUMS
           ls -l
 
+      # The feed the updater reads, built from the files that are actually
+      # being uploaded and signed over its own exact bytes.
+      #
+      # Without UPDATE_SIGNING_KEY the feed is still published and still
+      # correct, and every copy of Transmit that reads it will report the new
+      # version and install nothing. That is the safe half of the feature
+      # working on its own, not a broken release: nothing installs code it
+      # cannot authenticate.
+      - name: Build the update feed
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+          VERSION: ${{ needs.version.outputs.version }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          # Older releases stay listed, so somebody several versions behind
+          # still sees a path forward and a critical fix keeps applying to
+          # every version below it. A first release has nothing to carry.
+          previous=""
+          if curl -fsSL -o previous.json \
+                  "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/updates.json"
+          then
+              previous="--previous previous.json"
+              echo "carrying forward the releases in the existing feed"
+          else
+              echo "no earlier feed to carry forward"
+          fi
+
+          key=""
+          if [ -n "${UPDATE_SIGNING_KEY:-}" ]; then
+              # Written where only this job can read it, and removed before the
+              # step ends whether or not the script succeeded.
+              umask 077
+              printf '%s' "$UPDATE_SIGNING_KEY" > signing-key.pem
+              trap 'rm -f signing-key.pem' EXIT
+              key="--sign-key signing-key.pem"
+          else
+              echo "::warning::no UPDATE_SIGNING_KEY, so this feed is unsigned and no copy of"
+              echo "::warning::Transmit will install from it - see CONTRIBUTING.md"
+          fi
+
+          tag="${TAG:-v$VERSION}"
+          # shellcheck disable=SC2086
+          python3 scripts/make-update-feed.py \
+              --version "$VERSION" \
+              --directory release \
+              --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}" \
+              --out release/updates.json \
+              $previous $key
+
+          # Read back and checked here rather than discovered by somebody's
+          # machine: a feed that does not parse stops every future update.
+          python3 -c "
+          import json, sys
+          feed = json.load(open('release/updates.json'))
+          assert feed['schema'] == 1, feed['schema']
+          assert feed['releases'], 'no releases'
+          for release in feed['releases']:
+              assert release['artifacts'], release['version']
+              for artifact in release['artifacts']:
+                  assert len(artifact['blake2b']) == 64, artifact
+                  assert artifact['url'].startswith('https://'), artifact
+          print('the feed lists', len(feed['releases']), 'releases')
+          "
+
+          # The checksums were written before the feed existed, so they are
+          # written again with it in. The old file is removed first so it does
+          # not end up listed inside its own replacement.
+          ( cd release && rm -f SHA256SUMS && sha256sum -- * > SHA256SUMS )
+          ls -l release
+
       - name: Write the notes
         run: |
           version=${{ needs.version.outputs.version }}

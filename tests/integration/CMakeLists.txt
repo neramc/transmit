@@ -37,3 +37,8 @@ if(TRANSMIT_OPENSSL_ENABLED)
 else()
     target_compile_definitions(transmit_Update_test PRIVATE TRANSMIT_UPDATE_TEST_HAS_OPENSSL="0")
 endif()
+
+# The feed round trip runs the publishing script and reads what it wrote, so
+# the test needs to find the tree it is testing.
+target_compile_definitions(transmit_Update_test PRIVATE
+    TRANSMIT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

@@ -1,0 +1,20 @@
+{
+  "_comment": [
+    "How badly the next release wants to be installed, set before the tag is",
+    "pushed. The version is named so the setting cannot outlive the release it",
+    "was written for: a hotfix left here would otherwise make the next",
+    "ordinary release install itself on every machine without asking.",
+    "",
+    "severity is one of:",
+    "  normal     - features and ordinary fixes. Offered.",
+    "  important  - worth going out of your way for. Offered, and said louder.",
+    "  critical   - loses data or lets somebody in. Installed without asking,",
+    "               on copies that can replace themselves and only when the",
+    "               feed's signature checks out.",
+    "",
+    "unsafeBelow narrows a critical release to the versions actually exposed.",
+    "Leave it out and every version below this one is treated as exposed."
+  ],
+  "version": "0.0.0",
+  "severity": "normal"
+}

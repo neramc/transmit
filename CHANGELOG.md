@@ -7,6 +7,23 @@ notes say so.
 
 ## Unreleased
 
+### Added
+
+- Transmit can update itself. It asks a signed feed what has been published,
+  checks what it downloads against the digest in that feed, and replaces the
+  running copy through two renames so there is never a half-written program on
+  disk. `transmit-cli update` does the same from a terminal, and the settings
+  page holds the choice between being told, being updated, and being left
+  alone.
+- A release can be marked **critical**, and one is installed without waiting to
+  be asked — the setting covers features and ordinary fixes, not a hole
+  somebody could be walking through. It still only happens when the feed's
+  signature checks out against a key the build was compiled to trust, and never
+  to a copy a package manager owns.
+- A build given no signing key gets an updater that reports a new version and
+  installs nothing. That is the safe half working on its own: nothing is ever
+  installed that could not be authenticated.
+
 ### Fixed
 
 - The Linux AppImage aborted on start on a Wayland desktop. The bundle was

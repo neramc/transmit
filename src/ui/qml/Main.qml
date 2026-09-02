@@ -30,6 +30,11 @@ ApplicationWindow {
     Component.onCompleted: {
         ThemeState.mode = AppController.themeMode
         Motion.reduced = AppController.reduceMotion
+
+        // Asked once a day at most, and not at all when the preference says
+        // so. A critical fix found here installs itself; everything else
+        // waits in the settings page until somebody looks.
+        UpdateController.checkQuietly()
     }
 
     Connections {

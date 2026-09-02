@@ -11,7 +11,9 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QProcess>
 #include <QSignalSpy>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -209,6 +211,9 @@ private slots:
     void downloadsAndVerifiesAnUpdate();
     void refusesADownloadThatDoesNotMatchTheFeed();
     void refusesToDownloadWhatItWasNotAllowedToInstall();
+
+    // The release side and this side agreeing
+    void signsAFeedThisBuildAccepts();
 
     // Putting it in place
     void replacesAFileAndKeepsTheOldOne();
@@ -717,6 +722,116 @@ void UpdateTest::refusesToDownloadWhatItWasNotAllowedToInstall() {
     service.downloadStagedUpdate();
     QCOMPARE(staged.count(), 0);
     QCOMPARE(failed.count(), 1);
+}
+
+// ------------------------------------------------- the two sides agreeing ---
+
+void UpdateTest::signsAFeedThisBuildAccepts() {
+    // The one integration that cannot be reasoned about: the script that
+    // publishes a feed and the code that reads one have to agree byte for
+    // byte, and they are written in different languages by different hands.
+    // Everything else in this file tests one side of that.
+    if (!QByteArray(TRANSMIT_UPDATE_TEST_HAS_OPENSSL).startsWith("1")) {
+        QSKIP("this build has no OpenSSL");
+    }
+    if (QStandardPaths::findExecutable(QStringLiteral("openssl")).isEmpty()) {
+        QSKIP("openssl is not on the path");
+    }
+    const QString python = QStandardPaths::findExecutable(QStringLiteral("python3"));
+    if (python.isEmpty()) {
+        QSKIP("python3 is not on the path");
+    }
+
+    QTemporaryDir area;
+    QVERIFY(area.isValid());
+    const QString keyPath = area.filePath(QStringLiteral("key.pem"));
+    const QString releaseDir = area.filePath(QStringLiteral("release"));
+    QVERIFY(QDir().mkpath(releaseDir));
+
+    const auto run = [](const QString& program, const QStringList& arguments,
+                        QByteArray* output = nullptr) {
+        QProcess process;
+        process.start(program, arguments);
+        if (!process.waitForFinished(30000)) {
+            return false;
+        }
+        if (output != nullptr) {
+            *output = process.readAllStandardOutput();
+        }
+        return process.exitCode() == 0;
+    };
+
+    QVERIFY(run(QStringLiteral("openssl"),
+                {QStringLiteral("genpkey"), QStringLiteral("-algorithm"), QStringLiteral("ED25519"),
+                 QStringLiteral("-out"), keyPath}));
+
+    QByteArray publicDer;
+    QVERIFY(run(QStringLiteral("openssl"),
+                {QStringLiteral("pkey"), QStringLiteral("-in"), keyPath, QStringLiteral("-pubout"),
+                 QStringLiteral("-outform"), QStringLiteral("DER")},
+                &publicDer));
+    QCOMPARE(publicDer.size(), 44);
+    const QByteArray publicKey = publicDer.right(32);
+
+    // A file of the shape the release publishes, so the script recognises it.
+    const QString artifact =
+        QDir(releaseDir).filePath(QStringLiteral("Transmit-0.2.0-linux-x86_64.AppImage"));
+    const QByteArray body = QByteArray(
+        "\x7f"
+        "ELF and then some contents",
+        27);
+    {
+        QFile file(artifact);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(body);
+    }
+
+    const QString feedPath = area.filePath(QStringLiteral("updates.json"));
+    QVERIFY(
+        run(python,
+            {QStringLiteral(TRANSMIT_SOURCE_DIR "/scripts/make-update-feed.py"),
+             QStringLiteral("--version"), QStringLiteral("0.2.0"), QStringLiteral("--directory"),
+             releaseDir, QStringLiteral("--base-url"),
+             QStringLiteral("https://github.com/neramc/transmit/releases/download/v0.2.0"),
+             QStringLiteral("--out"), feedPath, QStringLiteral("--changelog"),
+             QStringLiteral(TRANSMIT_SOURCE_DIR "/CHANGELOG.md"), QStringLiteral("--declaration"),
+             QStringLiteral(TRANSMIT_SOURCE_DIR "/packaging/release.json"),
+             QStringLiteral("--sign-key"), keyPath}));
+
+    QFile feedFile(feedPath);
+    QVERIFY(feedFile.open(QIODevice::ReadOnly));
+    const QByteArray feed = feedFile.readAll();
+    feedFile.close();
+
+    QFile signatureFile(feedPath + QStringLiteral(".sig"));
+    QVERIFY(signatureFile.open(QIODevice::ReadOnly));
+    const QByteArray signature = signatureFile.readAll();
+    signatureFile.close();
+
+    // The signature the release makes is one this build accepts.
+    const SignatureCheck check = verifyDetachedSignature(
+        feed, readDetachedSignature(signature).value_or(QByteArray{}), {publicKey});
+    QVERIFY2(check.verified, qPrintable(check.problem));
+
+    // The feed the release makes is one this build reads, and the digest it
+    // wrote is the digest of the file it was given.
+    const UpdateManifestReading reading = readUpdateManifest(feed);
+    QVERIFY2(reading.ok(), qPrintable(reading.problem));
+    QCOMPARE(reading.manifest->releases.size(), 1);
+    const auto found = reading.manifest->releases.first().artifactFor(
+        QStringLiteral("linux"), QStringLiteral("x86_64"), QStringLiteral("appimage"));
+    QVERIFY(found.has_value());
+    QCOMPARE(found->blake2b, digestOf(body));
+    QCOMPARE(found->size, static_cast<quint64>(body.size()));
+
+    // And one byte changed anywhere in the feed breaks it, which is what makes
+    // the digest above worth anything.
+    QByteArray tampered = feed;
+    const qsizetype middle = tampered.size() / 2;
+    tampered[middle] = static_cast<char>(tampered[middle] ^ 0x01);
+    QVERIFY(!verifyDetachedSignature(
+                 tampered, readDetachedSignature(signature).value_or(QByteArray{}), {publicKey})
+                 .verified);
 }
 
 // -------------------------------------------------------------- installer ---

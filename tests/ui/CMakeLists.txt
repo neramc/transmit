@@ -9,9 +9,12 @@ foreach(suite UiSmoke LayoutConformance RestoreUndo AppSelection CarryOn FolderS
     add_executable(transmit_${suite}_test ${suite}Test.cpp)
     set_target_properties(transmit_${suite}_test PROPERTIES AUTOMOC ON)
     add_test(NAME ${suite} COMMAND transmit_${suite}_test)
+    # No update check from a test: it would reach somebody else's server on
+    # every run, and a suite that needs the internet to pass is a suite that
+    # fails for reasons that have nothing to do with the change.
     set_tests_properties(${suite} PROPERTIES
         LABELS integration
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;TRANSMIT_NO_UPDATE_CHECK=1")
 endforeach()
 
 foreach(suite RestoreUndo AppSelection CarryOn FolderSelection)

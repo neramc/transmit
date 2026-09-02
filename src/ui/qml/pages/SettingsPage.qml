@@ -64,6 +64,105 @@ AppScrollView {
 
         AppCard {
             Layout.fillWidth: true
+            implicitHeight: updates.implicitHeight + Spacing.xl * 2
+
+            ColumnLayout {
+                id: updates
+                anchors.fill: parent
+                anchors.margins: Spacing.xl
+                spacing: Spacing.md
+
+                Text {
+                    text: qsTr("Updates")
+                    color: Colors.textPrimary
+                    font.family: Typography.family
+                    font.pixelSize: Typography.heading
+                    font.weight: Typography.semiBold
+                }
+
+                AppLabelledField {
+                    Layout.fillWidth: true
+                    label: qsTr("When there is a new version")
+                    helperText: qsTr("A fix for something that loses your files or lets somebody "
+                                   + "else read them is installed whatever this says. Everything "
+                                   + "else waits for you.")
+
+                    AppComboBox {
+                        model: [
+                            { value: "notify",    label: qsTr("Tell me about it") },
+                            { value: "automatic", label: qsTr("Install it") },
+                            { value: "manual",    label: qsTr("Only when I ask") }
+                        ]
+                        textRole: "label"
+                        valueRole: "value"
+                        currentIndex: UpdateController.preference === "automatic" ? 1
+                                    : UpdateController.preference === "manual" ? 2 : 0
+                        onActivated: UpdateController.preference = currentValue
+                        Accessible.name: qsTr("When there is a new version")
+                    }
+                }
+
+                AppKeyValue {
+                    label: qsTr("This copy")
+                    value: UpdateController.installKind
+                }
+
+                AppKeyValue {
+                    visible: UpdateController.lastChecked.length > 0
+                    label: qsTr("Last looked")
+                    value: UpdateController.lastChecked
+                }
+
+                AppInlineMessage {
+                    objectName: "updateMessage"
+                    Layout.fillWidth: true
+                    visible: UpdateController.summary.length > 0
+                    tone: UpdateController.mandatory ? "warning" : "info"
+                    title: UpdateController.updateAvailable
+                           ? qsTr("Transmit %1").arg(UpdateController.availableVersion)
+                           : qsTr("Updates")
+                    body: UpdateController.summary
+                }
+
+                AppProgressBar {
+                    Layout.fillWidth: true
+                    visible: UpdateController.downloading
+                    value: UpdateController.progressPercent / 100
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Spacing.md
+
+                    AppButton {
+                        objectName: "checkForUpdates"
+                        text: UpdateController.checking ? qsTr("Looking...") : qsTr("Check now")
+                        enabled: !UpdateController.checking && !UpdateController.downloading
+                        onClicked: UpdateController.checkNow()
+                    }
+
+                    AppButton {
+                        objectName: "installUpdate"
+                        text: qsTr("Install %1").arg(UpdateController.availableVersion)
+                        variant: "primary"
+                        visible: UpdateController.canInstall && !UpdateController.installed
+                        enabled: !UpdateController.downloading
+                        onClicked: UpdateController.installNow()
+                    }
+
+                    AppButton {
+                        text: qsTr("Open the releases page")
+                        visible: UpdateController.updateAvailable && !UpdateController.canInstall
+                        onClicked: Qt.openUrlExternally(UpdateController.releasesPage)
+                    }
+
+                    Item { Layout.fillWidth: true }
+                }
+            }
+        }
+
+        AppCard {
+            Layout.fillWidth: true
             implicitHeight: about.implicitHeight + Spacing.xl * 2
 
             ColumnLayout {
