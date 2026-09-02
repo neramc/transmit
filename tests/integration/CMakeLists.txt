@@ -4,7 +4,7 @@
 
 foreach(suite ContinuityRoundTrip PathRewrite SecretStore Catalog SelectionCodec
               VerifyService StageTimer ResumeCapture ResumeRestore Eject
-              FormatCompatibility)
+              FormatCompatibility Update)
     add_executable(transmit_${suite}_test ${suite}Test.cpp)
     target_link_libraries(transmit_${suite}_test
         PRIVATE Transmit::Core Transmit::Warnings Qt6::Test SQLite::SQLite3)
@@ -28,3 +28,12 @@ qt_add_resources(transmit_Catalog_test "catalog_fixtures"
 # compiled into it.
 target_compile_definitions(transmit_FormatCompatibility_test
     PRIVATE TRANSMIT_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../fixtures")
+
+# The signature tests need to know whether this build can check a signature at
+# all, so that a build without OpenSSL skips them loudly rather than passing
+# because nothing verified.
+if(TRANSMIT_OPENSSL_ENABLED)
+    target_compile_definitions(transmit_Update_test PRIVATE TRANSMIT_UPDATE_TEST_HAS_OPENSSL="1")
+else()
+    target_compile_definitions(transmit_Update_test PRIVATE TRANSMIT_UPDATE_TEST_HAS_OPENSSL="0")
+endif()

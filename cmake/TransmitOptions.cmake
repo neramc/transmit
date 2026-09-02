@@ -25,6 +25,25 @@ option(TRANSMIT_WITH_OPENSSL  "Enable archive encryption and secrets"  ON)
 option(TRANSMIT_WITH_LIBSECRET "Read the Linux login keyring directly"  ON)
 option(TRANSMIT_WERROR        "Treat compiler warnings as errors"      OFF)
 
+# The updater.
+#
+# TRANSMIT_UPDATE_KEYS is the whole trust model in one string: a semicolon
+# separated list of base64 Ed25519 public keys, and a build given none of them
+# will tell people a new version exists and will refuse to download or install
+# anything. That is the safe default rather than a limitation - an updater
+# that installs what it cannot authenticate is a way to run somebody else's
+# code on every machine that has this program.
+#
+# Several keys are allowed so a key can be rotated: publish feeds signed with
+# the new one while builds that only know the old still accept theirs.
+option(TRANSMIT_WITH_UPDATER   "Check for and install updates"           ON)
+set(TRANSMIT_UPDATE_KEYS "" CACHE STRING
+    "Base64 Ed25519 public keys that may sign the update feed, separated by ';'")
+set(TRANSMIT_UPDATE_FEED "https://github.com/neramc/transmit/releases/latest/download/updates.json"
+    CACHE STRING "Where the signed update feed is published")
+set(TRANSMIT_RELEASES_PAGE "https://github.com/neramc/transmit/releases"
+    CACHE STRING "Where people are sent to fetch a release by hand")
+
 # Needs clang and its sanitiser runtime. Off by default so an ordinary
 # build still produces the replay binaries, which is what keeps a crasher
 # fixed on a machine that cannot fuzz.
