@@ -326,6 +326,11 @@ jobs:
       - name: Check the design tokens are used
         run: scripts/check-design-tokens.sh
 
+      # A packaging file left on the old version is only ever discovered by
+      # whoever builds that package, which is usually not us.
+      - name: Check every version in the tree agrees
+        run: scripts/version.py --check
+
       - name: Check the palette is readable
         run: python3 scripts/check-contrast.py
 

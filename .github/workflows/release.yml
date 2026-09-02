@@ -123,11 +123,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          declared=$(sed -n 's/^ *VERSION \([0-9][0-9.]*\)$/\1/p' CMakeLists.txt | head -1)
-          if [ -z "$declared" ]; then
-              echo "::error::could not read the version out of CMakeLists.txt"
-              exit 1
-          fi
+          declared=$(scripts/version.py --print)
 
           # Empty for a manual run, which builds without publishing.
           if [ "${GITHUB_EVENT_NAME}" = release ]; then
@@ -138,16 +134,32 @@ jobs:
               tag=""
           fi
 
-          # A download that reports a different version than the tag it came
-          # from is a support question nobody can answer.
-          if [ -n "$tag" ] && [ "${tag#v}" != "$declared" ]; then
-              echo "::error::tag $tag does not match the $declared in CMakeLists.txt"
-              exit 1
+          # The tag decides. This used to fail the release when the tag and
+          # CMakeLists.txt disagreed, which is a true statement made at the
+          # worst possible moment: it tells somebody at the end of a release
+          # that they should have edited eight files at the beginning of one.
+          #
+          # Every build job rewrites the tree to this version before it
+          # compiles anything, so the installer, the disk image, the packaging
+          # recipes and the binary cannot report different versions from each
+          # other or from the tag they came from.
+          version="$declared"
+          if [ -n "$tag" ]; then
+              version="${tag#v}"
+              if [ "$version" != "$declared" ]; then
+                  echo "::notice::tag $tag overrides the $declared in the tree"
+              fi
           fi
 
-          echo "version=$declared" >> "$GITHUB_OUTPUT"
+          # Said rather than enforced. A release with nothing written about
+          # it is worth a word, and is not worth refusing to publish over.
+          if [ -n "$tag" ] && ! grep -q "^## ${version}\\b" CHANGELOG.md; then
+              echo "::warning::CHANGELOG.md has no '## $version' section"
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "building $declared${tag:+ for $tag}"
+          echo "building $version${tag:+ for $tag}"
 
   linux:
     name: Linux (AppImage)
@@ -155,6 +167,23 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+
+      # The tag decides the version, so the tree is rewritten to match it
+      # before anything is compiled or packaged. Without this the binary, the
+      # installer, the disk image and the packaging recipes each report
+      # whatever was last committed, and only one of them is ever right.
+      #
+      # A manual run has no tag, so this rewrites the tree to what it already
+      # says and prints nothing.
+      - name: Write the version the tag asks for
+        shell: bash
+        env:
+          WANTED: ${{ needs.version.outputs.version }}
+        run: |
+          python=python3
+          command -v "$python" >/dev/null 2>&1 || python=python
+          "$python" scripts/version.py --set "$WANTED"
+          git --no-pager diff --stat
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -336,6 +365,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The tag decides the version, so the tree is rewritten to match it
+      # before anything is compiled or packaged. Without this the binary, the
+      # installer, the disk image and the packaging recipes each report
+      # whatever was last committed, and only one of them is ever right.
+      #
+      # A manual run has no tag, so this rewrites the tree to what it already
+      # says and prints nothing.
+      - name: Write the version the tag asks for
+        shell: bash
+        env:
+          WANTED: ${{ needs.version.outputs.version }}
+        run: |
+          python=python3
+          command -v "$python" >/dev/null 2>&1 || python=python
+          "$python" scripts/version.py --set "$WANTED"
+          git --no-pager diff --stat
+
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
@@ -435,6 +481,23 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      # The tag decides the version, so the tree is rewritten to match it
+      # before anything is compiled or packaged. Without this the binary, the
+      # installer, the disk image and the packaging recipes each report
+      # whatever was last committed, and only one of them is ever right.
+      #
+      # A manual run has no tag, so this rewrites the tree to what it already
+      # says and prints nothing.
+      - name: Write the version the tag asks for
+        shell: bash
+        env:
+          WANTED: ${{ needs.version.outputs.version }}
+        run: |
+          python=python3
+          command -v "$python" >/dev/null 2>&1 || python=python
+          "$python" scripts/version.py --set "$WANTED"
+          git --no-pager diff --stat
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4

@@ -201,17 +201,38 @@ Anything touching `src/core/secrets/`, `src/platform/*SecretStore*` or
 
 ## Releasing
 
-Bump `VERSION` in `CMakeLists.txt`, note the changes in `CHANGELOG.md`, then
-tag the commit `v0.1.0` for version `0.1.0` — either way round works:
+The tag decides the version. Note the changes in `CHANGELOG.md` and tag the
+commit:
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0     # the workflow writes the release
+git tag v0.2.0 && git push origin v0.2.0     # the workflow writes the release
 ```
 
 or fill in the form under **Releases → Draft a new release**, naming the same
 tag; the workflow uploads into what you wrote.
 
-Either way it refuses a tag that disagrees with `CMakeLists.txt`, builds all
-three platforms, tests them before packaging, and attaches the installers with
-their checksums. **Actions → release → Run workflow** builds the same things
-without publishing anything, for checking a change to the packaging itself.
+Every build job rewrites the tree to the tag's version before it compiles
+anything, so the binary, the installer, the disk image and the seven packaging
+recipes cannot report different versions from each other or from the tag. It
+used to refuse a tag that disagreed with `CMakeLists.txt`, which is a true
+statement made at the worst possible moment - at the end of a release, about
+files that should have been edited at the beginning of one.
+
+Between releases the direction is reversed: `CMakeLists.txt` is what the rest
+of the tree has to agree with, and CI says so.
+
+```bash
+scripts/version.py --print        # what the tree declares
+scripts/version.py --check        # every file agrees, or exactly where not
+scripts/version.py --set 0.2.0    # rewrite all nine of them
+```
+
+Add a place to `PLACES` in that script when a new file starts carrying the
+version. It insists each pattern still matches, so a file that changes shape
+fails the check rather than quietly dropping out of it.
+
+The release builds all three platforms, tests them before packaging, starts
+each packaged bundle to be sure it opens a window, and attaches the installers
+with their checksums. **Actions → release → Run workflow** builds the same
+things without publishing anything, for checking a change to the packaging
+itself.
