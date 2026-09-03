@@ -24,7 +24,10 @@ constexpr int kQuietCheckHours = 24;
 }  // namespace
 
 UpdateController::UpdateController(QObject* parent)
-    : QObject(parent), service_(std::make_unique<UpdateService>()) {
+    : UpdateController(std::make_unique<UpdateService>(), parent) {}
+
+UpdateController::UpdateController(std::unique_ptr<UpdateService> service, QObject* parent)
+    : QObject(parent), service_(std::move(service)) {
     connect(service_.get(), &UpdateService::checked, this,
             [this](const UpdateDecision& decision) { handleDecision(decision); });
     connect(service_.get(), &UpdateService::progress, this, [this](qint64 received, qint64 total) {

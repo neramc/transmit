@@ -35,6 +35,7 @@ add_library(transmit_core STATIC
     update/InstallKind.cpp
     update/UpdateDecision.cpp
     update/UpdateService.cpp
+    update/UpdateFetch.cpp
     update/UpdateInstaller.cpp)
 
 add_library(Transmit::Core ALIAS transmit_core)

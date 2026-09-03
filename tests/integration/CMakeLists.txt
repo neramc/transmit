@@ -42,3 +42,10 @@ endif()
 # the test needs to find the tree it is testing.
 target_compile_definitions(transmit_Update_test PRIVATE
     TRANSMIT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+# The update suite drives the interface's controller as well as the service
+# beneath it, so it needs the application layer and the directory its headers
+# are named from.
+target_link_libraries(transmit_Update_test PRIVATE transmit_backendplugin Qt6::Qml)
+target_include_directories(transmit_Update_test PRIVATE "${CMAKE_SOURCE_DIR}/src/app")
+qt_import_qml_plugins(transmit_Update_test)

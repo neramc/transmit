@@ -12,6 +12,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QSettings>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -25,6 +26,8 @@
 #include "core/update/UpdateSignature.h"
 #include "core/update/Version.h"
 #include "format/hash/Blake2b.h"
+
+#include "UpdateController.h"
 
 using namespace transmit::core;
 
@@ -260,6 +263,34 @@ private slots:
     void refusesADownloadThatDoesNotMatchTheFeed();
     void refusesToDownloadWhatItWasNotAllowedToInstall();
 
+    // The words each answer is given in
+    void namesEveryPreference();
+    void namesEverySeverity();
+    void namesEveryAction();
+    void namesEveryShapeOfInstall();
+    void saysWhichInstallsMayReplaceThemselves();
+    void findsNoArtifactForAMachineTheReleaseDoesNotBuildFor();
+    void reportsWhatThisBuildTrusts();
+    void readsItsOwnVersion();
+
+    // Remembered between runs
+    void remembersWhatItInstalledSoAFailedInstallIsNotRepeated();
+    void keepsThePreferenceItWasGiven();
+
+    // The shapes of install it cannot replace on its own
+    void handsOverAPortableCopyRatherThanReplacingIt();
+
+    void noticesASandbox();
+    void describesTheMachineItIsRunningOn();
+    void handsAWindowsUpdateToTheInstaller();
+
+    // The interface's side of it
+    void tellsTheInterfaceWhatItFound();
+    void doesNotLookAgainStraightAway();
+    void saysWhenItCannotInstallWhatItFound();
+    void reportsADownloadThatCouldNotBeInstalled();
+    void installsACriticalFixTheMomentItFindsOne();
+
     // The release side and this side agreeing
     void signsAFeedThisBuildAccepts();
 
@@ -276,6 +307,22 @@ private:
 
 void UpdateTest::initTestCase() {
     QVERIFY(work_.isValid());
+
+    // Some of this writes a preference and reads it back. Test mode moves
+    // QSettings into a directory of its own, so running the suite does not
+    // change what the developer's own copy of Transmit does next time they
+    // start it.
+    QStandardPaths::setTestModeEnabled(true);
+    QCoreApplication::setOrganizationName(QStringLiteral("TransmitTests"));
+    QCoreApplication::setApplicationName(QStringLiteral("UpdateTest"));
+
+    // And emptied, so a second run starts where the first one did. Without
+    // this the version remembered by the run before is still there, and the
+    // test that says "this has not been installed yet" is answered by
+    // yesterday.
+    QSettings settings;
+    settings.clear();
+    settings.sync();
 }
 
 // ---------------------------------------------------------------- version ---
@@ -773,6 +820,76 @@ void UpdateTest::refusesToDownloadWhatItWasNotAllowedToInstall() {
     QCOMPARE(failed.count(), 1);
 }
 
+void UpdateTest::reportsADownloadThatCouldNotBeInstalled() {
+    // The interface has to say what happened rather than sitting on a
+    // spinner: this copy is a build tree, so the download succeeds and the
+    // install refuses, and the person is told which.
+    auto service = std::make_unique<StubbedService>();
+    StubbedService* const stub = service.get();
+    stub->staging = work_.filePath(QStringLiteral("controller4"));
+    stub->payload = QByteArray("a release nobody here can install");
+    stub->feed = simpleFeed(QStringLiteral("0.2.0"), QStringLiteral("normal"), stub->payload);
+    stub->signature = QByteArray(64, 'x').toBase64();
+    stub->overrideSituation(linuxAppImageOn("0.1.0"));
+
+    transmit::app::UpdateController controller(std::move(service), nullptr);
+    controller.checkNow();
+    QVERIFY(controller.canInstall());
+
+    controller.installNow();
+    QVERIFY(!controller.downloading());
+    QVERIFY(!controller.installed());
+    QVERIFY(!controller.summary().isEmpty());
+    QCOMPARE(controller.progressPercent(), 0);
+
+    // And a download that fails outright leaves it in the same shape.
+    auto broken = std::make_unique<StubbedService>();
+    StubbedService* const brokenStub = broken.get();
+    brokenStub->staging = work_.filePath(QStringLiteral("controller5"));
+    brokenStub->payload = QByteArray("published");
+    brokenStub->feed =
+        simpleFeed(QStringLiteral("0.2.0"), QStringLiteral("normal"), brokenStub->payload);
+    brokenStub->signature = QByteArray(64, 'x').toBase64();
+    // The same length, so the size cap passes and the digest is what refuses
+    // it - the case a size check on its own would wave through.
+    brokenStub->payloadOverride = QByteArray("publisheD");
+    brokenStub->overrideSituation(linuxAppImageOn("0.1.0"));
+
+    transmit::app::UpdateController second(std::move(broken), nullptr);
+    second.checkNow();
+    second.installNow();
+    QVERIFY(!second.downloading());
+    QVERIFY(!second.installed());
+    QVERIFY2(second.summary().contains(QStringLiteral("signed feed")),
+             qPrintable(second.summary()));
+}
+
+void UpdateTest::installsACriticalFixTheMomentItFindsOne() {
+    // The check itself starts the install, without anything being pressed.
+    // That is the whole point of the severity, and this is the only place it
+    // can be watched happening.
+    auto service = std::make_unique<StubbedService>();
+    StubbedService* const stub = service.get();
+    stub->staging = work_.filePath(QStringLiteral("controller6"));
+    stub->payload = QByteArray("the fix");
+    stub->feed = simpleFeed(QStringLiteral("0.2.0"), QStringLiteral("critical"), stub->payload);
+    stub->signature = QByteArray(64, 'x').toBase64();
+
+    UpdateSituation situation = linuxAppImageOn("0.1.0");
+    situation.preference = UpdatePreference::Manual;  // ignored, deliberately
+    stub->overrideSituation(situation);
+
+    transmit::app::UpdateController controller(std::move(service), nullptr);
+    QSignalSpy restart(&controller, &transmit::app::UpdateController::restartNeeded);
+    controller.checkNow();
+
+    QVERIFY(controller.mandatory());
+    // It went as far as it could without being asked. Installing fails here
+    // because this is a build tree, which is exactly what should stop it.
+    QVERIFY(!controller.summary().isEmpty());
+    QCOMPARE(restart.count(), 0);
+}
+
 // ------------------------------------------------- the two sides agreeing ---
 
 void UpdateTest::signsAFeedThisBuildAccepts() {
@@ -1058,6 +1175,356 @@ void UpdateTest::refusesAStagedFileThatChangedAfterItWasChecked() {
     const InstallOutcome allowed =
         UpdateInstaller::apply(stagedPath, target, InstallKind::AppImage, digestOf(swapped));
     QVERIFY2(allowed.applied, qPrintable(allowed.problem));
+}
+
+// --------------------------------------------------- what things are called ---
+
+void UpdateTest::namesEveryPreference() {
+    // Every value round trips through the name it is stored under, because the
+    // preference is written to disk as text and read back by a later version.
+    for (const UpdatePreference preference :
+         {UpdatePreference::Manual, UpdatePreference::Notify, UpdatePreference::Automatic}) {
+        const QString stored = toString(preference);
+        QVERIFY(!stored.isEmpty());
+        // QVERIFY rather than QCOMPARE: QtTest prints a mismatched value with
+        // its own toString, finds ours by argument-dependent lookup, and does
+        // not compile because ours returns a QString.
+        QVERIFY(preferenceFromString(stored).value_or(UpdatePreference::Automatic) == preference);
+        QVERIFY(!describe(preference).isEmpty());
+    }
+    QVERIFY(!preferenceFromString(QStringLiteral("whenever")).has_value());
+    QVERIFY(!preferenceFromString(QString()).has_value());
+}
+
+void UpdateTest::namesEverySeverity() {
+    for (const UpdateSeverity severity :
+         {UpdateSeverity::Normal, UpdateSeverity::Important, UpdateSeverity::Critical}) {
+        const QString name = describe(severity);
+        QVERIFY(!name.isEmpty());
+        QCOMPARE(severityFromString(name).value_or(UpdateSeverity::Normal), severity);
+    }
+    QVERIFY(!severityFromString(QStringLiteral("emergency")).has_value());
+}
+
+void UpdateTest::namesEveryAction() {
+    for (const UpdateAction action :
+         {UpdateAction::NothingToDo, UpdateAction::CannotCheck, UpdateAction::TellThemOnly,
+          UpdateAction::Offer, UpdateAction::InstallNow}) {
+        QVERIFY(!describe(action).isEmpty());
+    }
+}
+
+void UpdateTest::namesEveryShapeOfInstall() {
+    // Every one of these ends up in a sentence somebody reads when Transmit
+    // declines to update itself, so none of them may be empty.
+    for (const InstallKind kind :
+         {InstallKind::Unknown, InstallKind::AppImage, InstallKind::WindowsInstaller,
+          InstallKind::WindowsPortable, InstallKind::MacBundle, InstallKind::PackageManaged,
+          InstallKind::Development}) {
+        QVERIFY2(!describe(kind).isEmpty(), qPrintable(QString::number(static_cast<int>(kind))));
+    }
+}
+
+void UpdateTest::saysWhichInstallsMayReplaceThemselves() {
+    QVERIFY(canReplaceItself(InstallKind::AppImage));
+    QVERIFY(canReplaceItself(InstallKind::WindowsInstaller));
+    QVERIFY(canReplaceItself(InstallKind::WindowsPortable));
+    QVERIFY(canReplaceItself(InstallKind::MacBundle));
+
+    // The three that must never be replaced from inside: one a package
+    // manager owns, one nobody could identify, and a build tree.
+    QVERIFY(!canReplaceItself(InstallKind::PackageManaged));
+    QVERIFY(!canReplaceItself(InstallKind::Unknown));
+    QVERIFY(!canReplaceItself(InstallKind::Development));
+
+    // And nothing that cannot replace itself names something to replace.
+    for (const InstallKind kind :
+         {InstallKind::PackageManaged, InstallKind::Unknown, InstallKind::Development}) {
+        QVERIFY(replaceableTarget(kind).isEmpty());
+    }
+
+    // This test runs from a build tree, and Transmit should say so rather
+    // than mistaking it for an installation.
+    QCOMPARE(detectInstallKind(), InstallKind::Development);
+}
+
+void UpdateTest::findsNoArtifactForAMachineTheReleaseDoesNotBuildFor() {
+    const UpdateManifest manifest =
+        parsed(simpleFeed(QStringLiteral("0.2.0"), QStringLiteral("normal"), "b"));
+    const UpdateRelease& release = manifest.releases.first();
+
+    QVERIFY(release
+                .artifactFor(QStringLiteral("linux"), QStringLiteral("x86_64"),
+                             QStringLiteral("appimage"))
+                .has_value());
+    QVERIFY(!release
+                 .artifactFor(QStringLiteral("linux"), QStringLiteral("arm64"),
+                              QStringLiteral("appimage"))
+                 .has_value());
+    QVERIFY(!release
+                 .artifactFor(QStringLiteral("windows"), QStringLiteral("x86_64"),
+                              QStringLiteral("appimage"))
+                 .has_value());
+    QVERIFY(
+        !release
+             .artifactFor(QStringLiteral("linux"), QStringLiteral("x86_64"), QStringLiteral("deb"))
+             .has_value());
+}
+
+void UpdateTest::reportsWhatThisBuildTrusts() {
+    // This build is given no keys, so it can check nothing - and says so
+    // rather than quietly accepting.
+    QCOMPARE(canVerifyUpdates(), !trustedUpdateKeys().isEmpty());
+
+    const SignatureCheck check =
+        verifyUpdateSignature(QByteArray("a feed"), QByteArray(64, 'x').toBase64());
+    QVERIFY(!check.verified);
+    QVERIFY(!check.problem.isEmpty());
+
+    // A signature file that is not one is refused before any key is consulted.
+    const SignatureCheck malformed = verifyUpdateSignature(QByteArray("a feed"), QByteArray("no"));
+    QVERIFY(!malformed.verified);
+    QVERIFY(malformed.problem.contains(QStringLiteral("base64")));
+}
+
+void UpdateTest::readsItsOwnVersion() {
+    const auto running = runningVersion();
+    QVERIFY(running.has_value());
+    QCOMPARE(QString::fromStdString(running->toString()), QString::fromLatin1(TRANSMIT_VERSION));
+    QVERIFY(!running->isZero());
+    QVERIFY(Version{}.isZero());
+}
+
+// ------------------------------------------------------------- remembered ---
+
+void UpdateTest::remembersWhatItInstalledSoAFailedInstallIsNotRepeated() {
+    QVERIFY(!UpdateService::wouldRepeatAFailedInstall(QStringLiteral("9.9.9")));
+    QVERIFY(!UpdateService::wouldRepeatAFailedInstall(QString()));
+
+    UpdateService::rememberInstalled(QStringLiteral("9.9.9"));
+    QCOMPARE(UpdateService::lastInstalledVersion(), QStringLiteral("9.9.9"));
+    QVERIFY(UpdateService::lastInstalledAt().isValid());
+
+    // The same version again, straight afterwards, is an install that did not
+    // take rather than one worth trying.
+    QVERIFY(UpdateService::wouldRepeatAFailedInstall(QStringLiteral("9.9.9")));
+    QVERIFY(!UpdateService::wouldRepeatAFailedInstall(QStringLiteral("9.9.10")));
+}
+
+void UpdateTest::keepsThePreferenceItWasGiven() {
+    const UpdatePreference original = UpdateService::preference();
+    UpdateService::setPreference(UpdatePreference::Automatic);
+    QVERIFY(UpdateService::preference() == UpdatePreference::Automatic);
+    UpdateService::setPreference(UpdatePreference::Manual);
+    QVERIFY(UpdateService::preference() == UpdatePreference::Manual);
+    UpdateService::setPreference(original);
+
+    // The two addresses are compiled in and have to be usable as they stand.
+    QVERIFY(UpdateService::feedUrl().isValid());
+    QCOMPARE(UpdateService::feedUrl().scheme(), QStringLiteral("https"));
+    QVERIFY(UpdateService::releasesPage().isValid());
+    QCOMPARE(UpdateService::releasesPage().scheme(), QStringLiteral("https"));
+
+    // Running from a build tree, nothing may be installed whatever else is true.
+    QVERIFY(!UpdateService::canInstallUpdates());
+}
+
+// ------------------------------------------ what it cannot replace itself ---
+
+void UpdateTest::handsOverAPortableCopyRatherThanReplacingIt() {
+    // A portable copy and a bundle are directories somebody unpacked or
+    // dragged. Replacing either from inside the program that lives in it is
+    // how half-copied installs happen, so the download is checked and left
+    // where they can find it.
+    const QString stagedPath = work_.filePath(QStringLiteral("handed-over"));
+    QFile fresh(stagedPath);
+    QVERIFY(fresh.open(QIODevice::WriteOnly));
+    fresh.write(
+        "\x7f"
+        "ELF a whole release");
+    fresh.close();
+
+    for (const InstallKind kind : {InstallKind::WindowsPortable, InstallKind::MacBundle}) {
+        const InstallOutcome outcome =
+            UpdateInstaller::apply(stagedPath, work_.filePath(QStringLiteral("somewhere")), kind);
+        QVERIFY(!outcome.applied);
+        QCOMPARE(outcome.handedOver, stagedPath);
+        QVERIFY(!outcome.problem.isEmpty());
+        QVERIFY(QFile::exists(stagedPath));
+    }
+
+    // And undo has nothing to put back when nothing was moved.
+    InstallOutcome nothing;
+    QVERIFY(UpdateInstaller::undo(nothing, work_.filePath(QStringLiteral("somewhere"))));
+}
+
+void UpdateTest::noticesASandbox() {
+    // A sandbox is recognised before anything else, because every guess below
+    // it would be wrong: a Flatpak has no network, no writable program
+    // directory, and something else that updates it.
+    qputenv("FLATPAK_ID", "io.github.neramc.Transmit");
+    QCOMPARE(detectInstallKind(), InstallKind::PackageManaged);
+    QVERIFY(replaceableTarget(detectInstallKind()).isEmpty());
+    qunsetenv("FLATPAK_ID");
+
+    qputenv("SNAP", "/snap/transmit/current");
+    QCOMPARE(detectInstallKind(), InstallKind::PackageManaged);
+    qunsetenv("SNAP");
+
+    // And with neither, this is a build tree again.
+    QCOMPARE(detectInstallKind(), InstallKind::Development);
+}
+
+void UpdateTest::describesTheMachineItIsRunningOn() {
+    const UpdateSituation situation = situationForThisBuild();
+
+    QVERIFY(!situation.platform.isEmpty());
+    QVERIFY(!situation.arch.isEmpty());
+    QVERIFY(situation.now.isValid());
+    QVERIFY(!situation.current.isZero());
+    QVERIFY(!situation.feedVerified);  // nothing has been checked yet
+
+    // Running from a build tree there is no artifact kind to look for, which
+    // is what stops the decision offering something to install.
+    QCOMPARE(situation.installKind, InstallKind::Development);
+    QVERIFY(situation.artifactKind.isEmpty());
+
+#ifdef TRANSMIT_UPDATER_ENABLED
+    QVERIFY(situation.updaterEnabled);
+#else
+    QVERIFY(!situation.updaterEnabled);
+#endif
+}
+
+void UpdateTest::handsAWindowsUpdateToTheInstaller() {
+    // On Windows the update is an installer this program starts and then gets
+    // out of the way of, rather than a file it overwrites itself with. The
+    // branch is compiled everywhere, so it can be taken here: what is checked
+    // is that a staged file that is not a program is refused before anything
+    // is started.
+    const QString stagedPath = work_.filePath(QStringLiteral("setup-that-is-not"));
+    QFile notAProgram(stagedPath);
+    QVERIFY(notAProgram.open(QIODevice::WriteOnly));
+    notAProgram.write("this is not an executable");
+    notAProgram.close();
+
+    const InstallOutcome refused = UpdateInstaller::apply(
+        stagedPath, work_.filePath(QStringLiteral("installed")), InstallKind::WindowsInstaller);
+    QVERIFY(!refused.applied);
+    QVERIFY(refused.problem.contains(QStringLiteral("not a program")));
+
+    // And the same guard on the AppImage path.
+    const InstallOutcome alsoRefused = UpdateInstaller::apply(
+        stagedPath, work_.filePath(QStringLiteral("installed")), InstallKind::AppImage);
+    QVERIFY(!alsoRefused.applied);
+
+    // A staged file that is the running program is refused rather than moved
+    // over itself.
+    const InstallOutcome itself =
+        UpdateInstaller::apply(stagedPath, stagedPath, InstallKind::AppImage);
+    QVERIFY(!itself.applied);
+    QVERIFY(itself.problem.contains(QStringLiteral("running program")));
+
+    // And nothing to replace is not something to guess at.
+    const InstallOutcome nowhere =
+        UpdateInstaller::apply(stagedPath, QString(), InstallKind::AppImage);
+    QVERIFY(!nowhere.applied);
+}
+
+// ---------------------------------------------------------- the interface ---
+
+void UpdateTest::tellsTheInterfaceWhatItFound() {
+    auto service = std::make_unique<StubbedService>();
+    StubbedService* const stub = service.get();
+    stub->staging = work_.filePath(QStringLiteral("controller1"));
+    stub->payload = QByteArray("a release for the interface");
+    stub->feed = simpleFeed(QStringLiteral("0.2.0"), QStringLiteral("normal"), stub->payload);
+    stub->signature = QByteArray(64, 'x').toBase64();
+    stub->overrideSituation(linuxAppImageOn("0.1.0"));
+
+    transmit::app::UpdateController controller(std::move(service), nullptr);
+    QSignalSpy changed(&controller, &transmit::app::UpdateController::stateChanged);
+
+    QVERIFY(!controller.updateAvailable());
+    controller.checkNow();
+
+    QVERIFY(changed.count() >= 2);  // looking, then the answer
+    QVERIFY(!controller.checking());
+    QVERIFY(controller.updateAvailable());
+    QVERIFY(controller.canInstall());
+    QVERIFY(!controller.mandatory());
+    QCOMPARE(controller.availableVersion(), QStringLiteral("0.2.0"));
+    QCOMPARE(controller.severity(), QStringLiteral("normal"));
+    QVERIFY(!controller.summary().isEmpty());
+    QVERIFY(!controller.notes().isEmpty());
+    QVERIFY(!controller.releasesPage().isEmpty());
+    QVERIFY(!controller.installKind().isEmpty());
+    QVERIFY(!controller.lastChecked().isEmpty());
+    QVERIFY(!controller.installed());
+
+    // And the preference goes through it to the service and back.
+    controller.setPreference(QStringLiteral("automatic"));
+    QCOMPARE(controller.preference(), QStringLiteral("automatic"));
+    controller.setPreference(QStringLiteral("nonsense"));
+    QCOMPARE(controller.preference(), QStringLiteral("automatic"));
+    controller.setPreference(QStringLiteral("notify"));
+}
+
+void UpdateTest::doesNotLookAgainStraightAway() {
+    // A background check is a request to somebody else's server on every
+    // start otherwise, and the answer does not change that fast.
+    auto service = std::make_unique<StubbedService>();
+    StubbedService* const stub = service.get();
+    stub->staging = work_.filePath(QStringLiteral("controller2"));
+    stub->payload = QByteArray("body");
+    stub->feed = simpleFeed(QStringLiteral("0.2.0"), QStringLiteral("normal"), stub->payload);
+    stub->signature = QByteArray(64, 'x').toBase64();
+    stub->overrideSituation(linuxAppImageOn("0.1.0"));
+
+    transmit::app::UpdateController controller(std::move(service), nullptr);
+    controller.checkNow();
+    QVERIFY(controller.updateAvailable());
+
+    // Just checked, so a quiet check finds nothing to do and leaves the
+    // answer alone.
+    const QString before = controller.summary();
+    controller.checkQuietly();
+    QCOMPARE(controller.summary(), before);
+
+    // And the environment says not to at all, which is what keeps the tests
+    // and the startup measurement off the network.
+    qputenv("TRANSMIT_NO_UPDATE_CHECK", "1");
+    controller.checkQuietly();
+    QCOMPARE(controller.summary(), before);
+    qunsetenv("TRANSMIT_NO_UPDATE_CHECK");
+}
+
+void UpdateTest::saysWhenItCannotInstallWhatItFound() {
+    auto service = std::make_unique<StubbedService>();
+    StubbedService* const stub = service.get();
+    stub->staging = work_.filePath(QStringLiteral("controller3"));
+    stub->payload = QByteArray("body");
+    stub->feed = simpleFeed(QStringLiteral("0.2.0"), QStringLiteral("critical"), stub->payload);
+    stub->signature = QByteArray(64, 'x').toBase64();
+    stub->signatureGood = false;
+
+    UpdateSituation packaged = linuxAppImageOn("0.1.0");
+    packaged.installKind = InstallKind::PackageManaged;
+    stub->overrideSituation(packaged);
+
+    transmit::app::UpdateController controller(std::move(service), nullptr);
+    controller.checkNow();
+
+    // Loud about needing it, and unable to do anything about it.
+    QVERIFY(controller.updateAvailable());
+    QVERIFY(controller.mandatory());
+    QVERIFY(!controller.canInstall());
+    QVERIFY(!controller.installingUnasked());
+
+    // Asking anyway changes nothing.
+    controller.installNow();
+    QVERIFY(!controller.downloading());
+    QVERIFY(!controller.installed());
 }
 
 QTEST_MAIN(UpdateTest)

@@ -35,7 +35,14 @@ set(cases
 #
 # The Linux build job runs all four, uninstrumented, which is where the
 # question these ask actually belongs.
-if(CMAKE_CXX_FLAGS MATCHES "-fsanitize")
+#
+# The same for a coverage build, for the same reason with a different cause:
+# it is a clang build against whatever Qt the machine has, and Qt 6.4's Wayland
+# client dereferences a null pointer on a compositor that offers no text-input
+# protocol. Measuring how much of Transmit the tests reach does not need a
+# window on a compositor, and a crash in somebody else's client library
+# measures nothing.
+if(CMAKE_CXX_FLAGS MATCHES "-fsanitize" OR CMAKE_CXX_FLAGS MATCHES "-fprofile-instr-generate")
     set(cases "offscreen")
 endif()
 

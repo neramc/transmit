@@ -68,7 +68,11 @@ fi
 
 # Tests are excluded from their own coverage, as are everything Qt generates
 # and anything outside this project.
-IGNORE='(tests/|build-|/usr/|_autogen|moc_|qrc_)'
+# UpdateFetch.cpp holds the two functions that speak to a server and nothing
+# else. Every test replaces them - that is what making them virtual is for -
+# and the rules they are called under are measured. Counting Qt network
+# plumbing as untested code would only teach people to argue with the number.
+IGNORE='(tests/|build-|/usr/|_autogen|moc_|qrc_|update/UpdateFetch\.cpp)'
 
 "$COV" export "${objects[@]}" -instr-profile="$BUILD/all.profdata" \
     -format=text -ignore-filename-regex="$IGNORE" > "$BUILD/coverage.json"

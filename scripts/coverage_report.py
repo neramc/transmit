@@ -23,11 +23,20 @@ def executable_lines(entry):
     column and carries an execution count. A line is covered when any segment
     starting on it ran, and a line with no segment at all is not code - a
     comment, a blank, a declaration - and is not counted either way.
+
+    Gap regions are left out. They are llvm-cov's filler for the space between
+    real regions - the `switch (x) {` line above the first case, the tail of a
+    `return` that spans two lines - and they always carry a count of zero. Read
+    as code they turn every switch in the project into an uncovered line: this
+    file's own report showed three `return` statements as never reached in a
+    function the tests had just called three times, which is how a coverage
+    gate comes to be argued with rather than fixed.
     """
     counts = {}
     for segment in entry.get("segments", []):
-        line, _column, count, has_count = segment[0], segment[1], segment[2], segment[3]
-        if not has_count:
+        line, count, has_count = segment[0], segment[2], segment[3]
+        is_gap = len(segment) > 5 and segment[5]
+        if not has_count or is_gap:
             continue
         counts[line] = max(counts.get(line, 0), count)
     return counts

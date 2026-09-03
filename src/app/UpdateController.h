@@ -46,6 +46,13 @@ class UpdateController : public QObject {
 
 public:
     explicit UpdateController(QObject* parent = nullptr);
+
+    /// Takes the service rather than making one, so a test can hand it one
+    /// that answers its own requests. Everything this class does is a
+    /// reaction to that service, and a reaction that has never been tried is
+    /// a guess.
+    UpdateController(std::unique_ptr<core::UpdateService> service, QObject* parent);
+
     ~UpdateController() override;
 
     [[nodiscard]] bool checking() const { return checking_; }
