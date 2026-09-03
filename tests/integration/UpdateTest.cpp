@@ -103,6 +103,54 @@ UpdateManifest parsed(const QByteArray& json) {
     return reading.manifest.value_or(UpdateManifest{});
 }
 
+/// The first OpenSSL on this machine that can make a one-shot Ed25519
+/// signature, or nothing. LibreSSL - which macOS installs as `openssl` - has
+/// no `pkeyutl -rawin`, so the answer is not simply "the one on the path".
+QString workingOpenssl() {
+    QStringList candidates{QStandardPaths::findExecutable(QStringLiteral("openssl"))};
+    for (const QString& extra : {QStringLiteral("/opt/homebrew/opt/openssl@3/bin/openssl"),
+                                 QStringLiteral("/usr/local/opt/openssl@3/bin/openssl")}) {
+        if (QFile::exists(extra)) {
+            candidates.append(extra);
+        }
+    }
+
+    QTemporaryDir area;
+    if (!area.isValid()) {
+        return {};
+    }
+    const QString key = area.filePath(QStringLiteral("probe.pem"));
+    const QString message = area.filePath(QStringLiteral("probe.bin"));
+    {
+        QFile file(message);
+        if (!file.open(QIODevice::WriteOnly)) {
+            return {};
+        }
+        file.write("probe");
+    }
+
+    for (const QString& candidate : candidates) {
+        if (candidate.isEmpty()) {
+            continue;
+        }
+        QProcess generate;
+        generate.start(candidate, {QStringLiteral("genpkey"), QStringLiteral("-algorithm"),
+                                   QStringLiteral("ED25519"), QStringLiteral("-out"), key});
+        if (!generate.waitForFinished(15000) || generate.exitCode() != 0) {
+            continue;
+        }
+        QProcess sign;
+        sign.start(candidate,
+                   {QStringLiteral("pkeyutl"), QStringLiteral("-sign"), QStringLiteral("-inkey"),
+                    key, QStringLiteral("-rawin"), QStringLiteral("-in"), message});
+        if (sign.waitForFinished(15000) && sign.exitCode() == 0 &&
+            sign.readAllStandardOutput().size() == 64) {
+            return candidate;
+        }
+    }
+    return {};
+}
+
 /// An UpdateService that answers its own requests, so the orchestration can be
 /// driven without a network or a signing key.
 class StubbedService : public UpdateService {
@@ -735,8 +783,13 @@ void UpdateTest::signsAFeedThisBuildAccepts() {
     if (!QByteArray(TRANSMIT_UPDATE_TEST_HAS_OPENSSL).startsWith("1")) {
         QSKIP("this build has no OpenSSL");
     }
-    if (QStandardPaths::findExecutable(QStringLiteral("openssl")).isEmpty()) {
-        QSKIP("openssl is not on the path");
+    // macOS ships LibreSSL as `openssl`, and LibreSSL's pkeyutl has no -rawin,
+    // which is the only way to make a one-shot Ed25519 signature. Homebrew's
+    // OpenSSL 3 is usually beside it. Look for one that can do the job rather
+    // than failing on the one that is first on the path.
+    const QString openssl = workingOpenssl();
+    if (openssl.isEmpty()) {
+        QSKIP("no OpenSSL on this machine can make an Ed25519 signature");
     }
     const QString python = QStandardPaths::findExecutable(QStringLiteral("python3"));
     if (python.isEmpty()) {
@@ -749,17 +802,30 @@ void UpdateTest::signsAFeedThisBuildAccepts() {
     const QString releaseDir = area.filePath(QStringLiteral("release"));
     QVERIFY(QDir().mkpath(releaseDir));
 
-    const auto run = [](const QString& program, const QStringList& arguments,
-                        QByteArray* output = nullptr) {
+    // Says what went wrong. A helper that answers only true or false turns
+    // "openssl on this machine cannot do that" into "the test failed", and
+    // somebody then spends an afternoon finding out which of five commands it
+    // was.
+    QString trouble;
+    const auto run = [&trouble](const QString& program, const QStringList& arguments,
+                                QByteArray* output = nullptr) {
         QProcess process;
         process.start(program, arguments);
         if (!process.waitForFinished(30000)) {
+            trouble = QStringLiteral("%1 did not finish").arg(program);
             return false;
         }
         if (output != nullptr) {
             *output = process.readAllStandardOutput();
         }
-        return process.exitCode() == 0;
+        if (process.exitCode() != 0) {
+            trouble = QStringLiteral("%1 %2 exited %3: %4")
+                          .arg(program, arguments.join(u' '))
+                          .arg(process.exitCode())
+                          .arg(QString::fromUtf8(process.readAllStandardError()).trimmed());
+            return false;
+        }
+        return true;
     };
 
     QVERIFY(run(QStringLiteral("openssl"),
@@ -767,10 +833,11 @@ void UpdateTest::signsAFeedThisBuildAccepts() {
                  QStringLiteral("-out"), keyPath}));
 
     QByteArray publicDer;
-    QVERIFY(run(QStringLiteral("openssl"),
-                {QStringLiteral("pkey"), QStringLiteral("-in"), keyPath, QStringLiteral("-pubout"),
-                 QStringLiteral("-outform"), QStringLiteral("DER")},
-                &publicDer));
+    QVERIFY2(run(openssl,
+                 {QStringLiteral("pkey"), QStringLiteral("-in"), keyPath, QStringLiteral("-pubout"),
+                  QStringLiteral("-outform"), QStringLiteral("DER")},
+                 &publicDer),
+             qPrintable(trouble));
     QCOMPARE(publicDer.size(), 44);
     const QByteArray publicKey = publicDer.right(32);
 
@@ -788,7 +855,13 @@ void UpdateTest::signsAFeedThisBuildAccepts() {
     }
 
     const QString feedPath = area.filePath(QStringLiteral("updates.json"));
-    QVERIFY(
+
+    // The script signs with $OPENSSL, so it uses the one this test satisfied
+    // itself can make an Ed25519 signature rather than whatever is first on
+    // the path.
+    qputenv("OPENSSL", openssl.toLocal8Bit());
+
+    QVERIFY2(
         run(python,
             {QStringLiteral(TRANSMIT_SOURCE_DIR "/scripts/make-update-feed.py"),
              QStringLiteral("--version"), QStringLiteral("0.2.0"), QStringLiteral("--directory"),
@@ -797,7 +870,8 @@ void UpdateTest::signsAFeedThisBuildAccepts() {
              QStringLiteral("--out"), feedPath, QStringLiteral("--changelog"),
              QStringLiteral(TRANSMIT_SOURCE_DIR "/CHANGELOG.md"), QStringLiteral("--declaration"),
              QStringLiteral(TRANSMIT_SOURCE_DIR "/packaging/release.json"),
-             QStringLiteral("--sign-key"), keyPath}));
+             QStringLiteral("--sign-key"), keyPath}),
+        qPrintable(trouble));
 
     QFile feedFile(feedPath);
     QVERIFY(feedFile.open(QIODevice::ReadOnly));

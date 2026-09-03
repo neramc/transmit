@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -124,8 +125,11 @@ def sign(document: Path, key: Path, out: Path) -> None:
     Signing the file that was written is also the stricter thing to do: it is
     the bytes people will download that get signed, not a second copy of them.
     """
+    # $OPENSSL rather than whatever is first on the path: macOS installs
+    # LibreSSL under that name, and LibreSSL's pkeyutl has no -rawin.
+    openssl = os.environ.get("OPENSSL", "openssl")
     signature = subprocess.run(
-        ["openssl", "pkeyutl", "-sign", "-inkey", str(key), "-rawin", "-in", str(document)],
+        [openssl, "pkeyutl", "-sign", "-inkey", str(key), "-rawin", "-in", str(document)],
         capture_output=True, check=False)
     if signature.returncode != 0:
         raise SystemExit("make-update-feed: openssl could not sign the feed:\n"

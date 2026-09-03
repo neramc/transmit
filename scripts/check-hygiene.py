@@ -46,6 +46,39 @@ def is_text(path: Path) -> bool:
     return path.suffix in TEXT_SUFFIXES or path.name in TEXT_NAMES
 
 
+def reportable_job_names(workflow: Path) -> set[str]:
+    """Every name a job in this workflow can report to GitHub.
+
+    A job whose name mentions a matrix value reports one name per entry, so the
+    matrix is expanded rather than the name compared literally. Without that,
+    "Sanitisers (asan-ubsan)" looks missing while it is running.
+    """
+    try:
+        import yaml
+    except ImportError:
+        return set()
+
+    try:
+        parsed = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+    except Exception:  # a workflow that will not parse is another check's problem
+        return set()
+
+    names: set[str] = set()
+    for key, job in (parsed.get("jobs") or {}).items():
+        template = str(job.get("name", key))
+        placeholders = re.findall(r"\$\{\{\s*matrix\.(\w+)\s*\}\}", template)
+        if not placeholders:
+            names.add(template)
+            continue
+        for entry in ((job.get("strategy") or {}).get("matrix") or {}).get("include", []):
+            filled = template
+            for placeholder in placeholders:
+                filled = re.sub(r"\$\{\{\s*matrix\." + placeholder + r"\s*\}\}",
+                                str(entry.get(placeholder, "")), filled)
+            names.add(filled)
+    return names
+
+
 def declared_version() -> str:
     """What CMakeLists.txt says, without importing the version script."""
     text = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
@@ -147,6 +180,20 @@ def main() -> int:
             if not (document.parent / target).exists():
                 problems.append(f"{document.relative_to(ROOT)}: links to {target}, "
                                 f"which is not there")
+
+    # The release refuses to publish unless a named set of jobs passed. A job
+    # renamed or, as happened once, deleted by an edit to the file above it,
+    # takes the release with it and nothing says so until somebody tags.
+    ci = ROOT / ".github" / "workflows" / "ci.yml"
+    release = ROOT / ".github" / "workflows" / "release.yml"
+    if ci.is_file() and release.is_file():
+        gate = re.search(r"^\s*required=\((.*?)\)\s*$",
+                         release.read_text(encoding="utf-8"), re.MULTILINE | re.DOTALL)
+        if gate:
+            wanted = set(re.findall(r'"([^"]+)"', gate.group(1)))
+            for job in sorted(wanted - reportable_job_names(ci)):
+                problems.append(f".github/workflows/ci.yml: has no job named '{job}', "
+                                f"which release.yml refuses to publish without")
 
     # packaging/release.json decides whether the next release installs itself
     # on every machine without being asked. It is small, and it is read by a

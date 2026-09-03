@@ -186,6 +186,196 @@ jobs:
           path: ci-results/
           if-no-files-found: warn
 
+  quality:
+    name: Formatting and static analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Every check writes its result here and returns 0. The report at the end
+      # reads the pile, prints the cause of everything that failed, and fails
+      # the job once - so one run says everything that is wrong rather than the
+      # first thing that is wrong.
+      TRANSMIT_CI_RESULTS: ci-results
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          modules: 'qtimageformats'
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang-tidy-18 clang-format-18 \
+                                  libzstd-dev liblzma-dev libssl-dev libsqlite3-dev \
+                                  libsecret-1-dev libgl1-mesa-dev \
+                                  shellcheck cppcheck
+
+      - name: Fetch actionlint
+        run: |
+          curl -fsSL -o actionlint.tar.gz \
+              "https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz"
+          tar -xzf actionlint.tar.gz actionlint
+          chmod +x actionlint
+
+      # From here to the report, every step runs whatever the one before it
+      # did. `if: always()` on each is what makes that true even for a step
+      # that dies rather than returning.
+      - name: Formatting
+        if: always()
+        run: scripts/ci-check.sh "Formatting" scripts/format.sh --check
+
+      - name: QML modules
+        if: always()
+        run: scripts/ci-check.sh "Every QML file is registered" scripts/check-qml-modules.sh
+
+      # docs/design.md is the source of truth for the interface, and neither of
+      # these can be enforced by review: a hard-coded 13 in one page looks like
+      # nothing, and a colour pair that is a shade too close is invisible to
+      # anyone who is not measuring it.
+      - name: Design tokens
+        if: always()
+        run: scripts/ci-check.sh "Design tokens are used" scripts/check-design-tokens.sh
+
+      - name: Palette contrast
+        if: always()
+        run: scripts/ci-check.sh "The palette is readable" python3 scripts/check-contrast.py
+
+      # A packaging file left on the old version is only ever discovered by
+      # whoever builds that package, which is usually not us.
+      - name: Versions agree
+        if: always()
+        run: scripts/ci-check.sh "Every version in the tree agrees" scripts/version.py --check
+
+      - name: Tidiness
+        if: always()
+        run: scripts/ci-check.sh "Whitespace, newlines, registered tests" scripts/check-hygiene.py
+
+      - name: Shell scripts
+        if: always()
+        run: |
+          scripts/ci-check.sh "Shell scripts" bash -c '
+            files=$(git ls-files "*.sh")
+            [ -n "$files" ] || { echo "no shell scripts found - has the glob rotted?"; exit 1; }
+            echo "$files" | tr "\n" " "
+            # shellcheck disable=SC2086
+            shellcheck --severity=warning $files'
+
+      - name: Workflows
+        if: always()
+        run: |
+          scripts/ci-check.sh "Workflow files" bash -c \
+            './actionlint -color .github/workflows/*.yml'
+
+      - name: Python
+        if: always()
+        run: |
+          scripts/ci-check.sh "Python scripts compile" bash -c '
+            files=$(git ls-files "*.py")
+            [ -n "$files" ] || { echo "no python found - has the glob rotted?"; exit 1; }
+            # shellcheck disable=SC2086
+            python3 -m py_compile $files && echo "compiled $(echo "$files" | wc -l) files"'
+
+      - name: JSON
+        if: always()
+        run: |
+          scripts/ci-check.sh "Every JSON file parses" bash -c '
+            failed=0
+            for file in $(git ls-files "*.json"); do
+                python3 -m json.tool "$file" > /dev/null || { echo "  $file"; failed=1; }
+            done
+            exit $failed'
+
+      # The full build rather than cli-only: clang-tidy reads a compile
+      # database, and the application layer is only in one when the interface
+      # is built. That layer holds the controllers, which is where the
+      # threading is.
+      - name: Configure
+        if: always()
+        run: scripts/ci-check.sh "Configure" cmake --preset default
+
+      - name: Build
+        if: always()
+        run: scripts/ci-check.sh "Build" cmake --build --preset default
+
+      - name: Static analysis
+        if: always()
+        run: |
+          scripts/ci-check.sh "clang-tidy" bash -c '
+            # Everything this machine can compile. Windows and macOS sources
+            # are not in a Linux compile database at all, so they are excluded
+            # here and covered by the three-platform build job instead.
+            files=$(git ls-files src/ | grep -E "\.cpp$" | grep -vE "^src/platform/(windows|macos)/")
+            count=$(printf "%s\n" "$files" | wc -l)
+            echo "analysing $count files"
+
+            # A pathspec that stops matching is silent - the step would pass
+            # having analysed nothing at all. This is the tripwire for that.
+            if [ "$count" -lt 50 ]; then
+                echo "only $count files matched; the file list has stopped working"
+                exit 1
+            fi
+
+            # shellcheck disable=SC2086
+            run-clang-tidy-18 -p build -j "$(nproc)" -quiet $files'
+
+      # A second opinion. cppcheck reads the code rather than the compile
+      # database, so it reaches the Windows and macOS sources clang-tidy above
+      # cannot see from a Linux runner.
+      - name: cppcheck
+        if: always()
+        run: |
+          scripts/ci-check.sh "cppcheck" bash -c '
+            # Not the performance category: on this codebase every one of
+            # its findings so far has been a misreading of a string_view
+            # built from a pointer and a length, and a check that cries wolf
+            # is one people learn to skip. unknownMacro is Qt: cppcheck does
+            # not know Q_PROPERTY without moc, and that is not a defect.
+            cppcheck --quiet --error-exitcode=1 --inline-suppr \
+                     --enable=warning,portability \
+                     --suppress=missingIncludeSystem \
+                     --suppress=unknownMacro \
+                     --std=c++20 --language=c++ \
+                     -I src src/'
+
+      - name: QML linting
+        if: always()
+        run: |
+          scripts/ci-check.sh "qmllint" bash -c '
+            lint=$(find "$QT_ROOT_DIR/bin" -name "qmllint" | head -1)
+            if [ -z "$lint" ]; then
+                echo "qmllint is not in this Qt build"
+                exit 1
+            fi
+
+            # unqualified, unresolved-type and import are turned down to
+            # notes rather than off. The first two are style this project has
+            # not finished paying off; the third is qmllint not being able to
+            # see a statically linked QML module the way the build can. What
+            # is left failing is the part that is a defect: a size set on an
+            # item a layout is arranging, a property that does not exist, a
+            # type error.
+            # shellcheck disable=SC2046
+            "$lint" -I build/qml -I "$QT_ROOT_DIR/qml" \
+                    --unqualified info --unresolved-type info --import info \
+                    $(git ls-files "src/ui/qml/*.qml")'
+
+      # The only step that decides anything. Everything above recorded what
+      # happened and carried on.
+      - name: What went wrong
+        if: always()
+        run: scripts/ci-report.py --title "Formatting and static analysis"
+
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-results
+          path: ci-results/
+          if-no-files-found: warn
+
   # The sanitisers the asan preset was written for and CI never ran.
   #
   # Address and undefined behaviour over everything.
