@@ -11,29 +11,36 @@
 namespace transmit::core {
 namespace {
 
-/// The first bytes of an executable this platform would actually run. A staged
-/// file that is not one has come from somewhere the digest check should have
-/// caught, and is refused rather than moved over a working program.
-bool looksExecutable(const QString& path) {
+/// Whether the staged file starts like the kind of program it claims to be.
+///
+/// Asks what the file is supposed to be, not what machine this is. The first
+/// version asked the host, and on macOS its answer was `head.size() == 4` -
+/// true of every file with four bytes in it, so on that platform the check
+/// was not a check. What is being guarded against is a staged file that is
+/// not the published one; the kind of install says what its first bytes have
+/// to be, and that answer is the same wherever the question is asked from.
+bool looksLikeProgramFor(InstallKind kind, const QString& path) {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
         return false;
     }
     const QByteArray head = file.read(4);
-    if (head.size() < 2) {
-        return false;
+
+    switch (kind) {
+        case InstallKind::AppImage:
+            // An AppImage is an ELF with a filesystem bolted onto the end.
+            return head.startsWith(
+                "\x7f"
+                "ELF");
+        case InstallKind::WindowsInstaller:
+            // Every Windows executable still starts with the two letters Mark
+            // Zbikowski put there in 1983.
+            return head.startsWith("MZ");
+        default:
+            // Nothing else is started as a program: a disk image and an
+            // unpacked directory are handed over rather than run.
+            return true;
     }
-#if defined(Q_OS_WIN)
-    return head.startsWith("MZ");
-#elif defined(Q_OS_MACOS)
-    // Mach-O in either byte order, a universal binary, or a disk image, which
-    // is not an executable and is checked for separately by the caller.
-    return head.size() == 4;
-#else
-    return head.startsWith(
-        "\x7f"
-        "ELF");
-#endif
 }
 
 bool makeExecutable(const QString& path) {
@@ -152,7 +159,7 @@ InstallOutcome UpdateInstaller::apply(const QString& staged, const QString& targ
 
     switch (kind) {
         case InstallKind::AppImage: {
-            if (!looksExecutable(staged)) {
+            if (!looksLikeProgramFor(kind, staged)) {
                 return refuse(QStringLiteral("the staged file is not a program"));
             }
             const QFileInfo targetInfo(target);
@@ -172,7 +179,7 @@ InstallOutcome UpdateInstaller::apply(const QString& staged, const QString& targ
         }
 
         case InstallKind::WindowsInstaller: {
-            if (!looksExecutable(staged)) {
+            if (!looksLikeProgramFor(kind, staged)) {
                 return refuse(QStringLiteral("the staged file is not a program"));
             }
             // The installer replaces the installed copy; this program is asked
