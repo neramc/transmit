@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QByteArray>
 #include <QString>
 
 #include "core/update/InstallKind.h"
@@ -37,8 +38,15 @@ class UpdateInstaller {
 public:
     /// Replaces `target` with `staged`. `target` is what replaceableTarget()
     /// returned: the AppImage, the installed directory, the .app.
+    ///
+    /// `expected` is the BLAKE2b-256 from the signed feed. The download was
+    /// already checked against it; it is checked again here because the file
+    /// has been sitting on disk in a directory anything running as this user
+    /// could write to, and the moment before it becomes the program is the
+    /// last moment the check is worth anything. Pass an empty value only where
+    /// there is genuinely nothing to compare against.
     [[nodiscard]] static InstallOutcome apply(const QString& staged, const QString& target,
-                                              InstallKind kind);
+                                              InstallKind kind, const QByteArray& expected = {});
 
     /// Puts back what apply() moved aside. Safe to call when there is nothing
     /// to put back.

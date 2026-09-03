@@ -199,6 +199,68 @@ Credential handling has rules that are not negotiable: see `SECURITY.md`.
 Anything touching `src/core/secrets/`, `src/platform/*SecretStore*` or
 `src/format/crypto/` should be read with them in hand.
 
+## Updates
+
+Transmit can replace itself, which makes the update path the most dangerous
+code in the project: everything else can lose a copy of somebody's files, and
+this can run somebody else's program on their machine. Three rules hold it
+down, and none of them is a preference.
+
+**Nothing is installed that cannot be authenticated.** The feed is signed with
+an Ed25519 key and the public half is compiled into the build. A build given no
+key still checks, still says a new version exists, and downloads nothing. That
+is the default, and a project that has not set up signing gets exactly half the
+feature working rather than a broken one.
+
+**Nothing replaces a copy something else owns.** A Flatpak, a Snap, anything
+under `/usr`, a Homebrew cask - the updater says there is a new version and
+stops. The packaging recipes also build with `-DTRANSMIT_WITH_UPDATER=OFF`, so
+in those builds the code that could replace a program is not there at all.
+
+**What is downloaded is checked twice.** Once when it arrives, against the
+BLAKE2b digest in the signed feed, read back off the disk rather than hashed on
+the way past. Again at the moment it is used, because between those two moments
+it is a file in a cache directory that anything running as that user could
+write to.
+
+Setting it up:
+
+```bash
+scripts/make-update-key.sh transmit-update-key.pem
+```
+
+Put the private key in the repository's `UPDATE_SIGNING_KEY` secret and build
+with the printed public key in `TRANSMIT_UPDATE_KEYS`. Several keys separated
+by `;` are allowed, which is how a key is rotated: ship a build that trusts
+both, then start signing with the new one.
+
+### Hotfixes
+
+A release marked **critical** is installed without waiting to be asked. Use it
+for something that loses data or lets somebody in, and not for anything else -
+the setting a person chose covers features and ordinary fixes, and spending it
+on a convenience is how people turn updates off.
+
+Before tagging, put the version in `packaging/release.json`:
+
+```json
+{
+  "version": "0.2.1",
+  "severity": "critical",
+  "unsafeBelow": "0.2.1"
+}
+```
+
+The version is named there so the setting cannot outlive the release it was
+written for: the next ordinary release finds a version that is not its own and
+publishes as normal. `unsafeBelow` narrows it to the versions actually exposed,
+so somebody already past the problem is offered the update rather than given
+it. Leave it out and everything below the release is treated as exposed.
+
+Then tag as usual. Copies that can replace themselves take it on their next
+check; copies that cannot say so loudly and link to the release page. It still
+goes nowhere without the signature.
+
 ## Releasing
 
 The tag decides the version. Note the changes in `CHANGELOG.md` and tag the

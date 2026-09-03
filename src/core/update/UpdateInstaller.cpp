@@ -6,6 +6,7 @@
 #include <QProcess>
 
 #include "core/utils/Logging.h"
+#include "format/hash/Blake2b.h"
 
 namespace transmit::core {
 namespace {
@@ -44,6 +45,26 @@ bool makeExecutable(const QString& path) {
                                            QFile::ReadGroup | QFile::ExeGroup | QFile::ReadOther |
                                            QFile::ExeOther);
 #endif
+}
+
+/// BLAKE2b-256 of a file on disk, read back rather than remembered.
+QByteArray digestOf(const QString& path) {
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+    format::Blake2b digest(32);
+    while (!file.atEnd()) {
+        const QByteArray chunk = file.read(1 << 20);
+        if (chunk.isEmpty()) {
+            break;
+        }
+        digest.update({reinterpret_cast<const format::Byte*>(chunk.constData()),
+                       static_cast<std::size_t>(chunk.size())});
+    }
+    const auto computed = digest.finish256();
+    return {reinterpret_cast<const char*>(computed.data()),
+            static_cast<qsizetype>(computed.size())};
 }
 
 InstallOutcome refuse(const QString& problem) {
@@ -103,10 +124,20 @@ InstallOutcome replaceFile(const QString& staged, const QString& target) {
 }  // namespace
 
 InstallOutcome UpdateInstaller::apply(const QString& staged, const QString& target,
-                                      InstallKind kind) {
+                                      InstallKind kind, const QByteArray& expected) {
     const QFileInfo stagedInfo(staged);
     if (!stagedInfo.isFile() || stagedInfo.size() == 0) {
         return refuse(QStringLiteral("there is no staged update at %1").arg(staged));
+    }
+    if (!expected.isEmpty() && digestOf(staged) != expected) {
+        // Between the download being checked and this moment the file has been
+        // sitting in a directory anything running as this user could write to.
+        // A file that has changed since is not the one that was published,
+        // whatever it was when it arrived.
+        QFile::remove(staged);
+        return refuse(
+            QStringLiteral("the staged update is not the file that was downloaded, "
+                           "so it has been thrown away rather than installed"));
     }
     if (!canReplaceItself(kind)) {
         return refuse(

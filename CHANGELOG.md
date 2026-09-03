@@ -24,6 +24,16 @@ notes say so.
   installs nothing. That is the safe half working on its own: nothing is ever
   installed that could not be authenticated.
 
+### Changed
+
+- Every packaging recipe — Flatpak, Arch, Alpine, RPM, Void, Gentoo, Nix —
+  builds with `-DTRANSMIT_WITH_UPDATER=OFF`. Those copies belong to a package
+  manager, and the code that could replace a program is left out of the builds
+  that must never replace one.
+- The release takes its version from the tag and rewrites the tree to match
+  before compiling anything, instead of refusing a tag that disagreed with
+  `CMakeLists.txt`. Nine files carry a version; one of them is the tag.
+
 ### Fixed
 
 - The Linux AppImage aborted on start on a Wayland desktop. The bundle was

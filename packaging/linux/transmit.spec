@@ -38,7 +38,7 @@ dropped.
 %autosetup
 
 %build
-%cmake -GNinja -DTRANSMIT_BUILD_TESTS=ON
+%cmake -GNinja -DTRANSMIT_BUILD_TESTS=ON -DTRANSMIT_WITH_UPDATER=OFF
 %cmake_build
 
 %check

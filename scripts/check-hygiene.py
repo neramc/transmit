@@ -46,6 +46,13 @@ def is_text(path: Path) -> bool:
     return path.suffix in TEXT_SUFFIXES or path.name in TEXT_NAMES
 
 
+def declared_version() -> str:
+    """What CMakeLists.txt says, without importing the version script."""
+    text = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    found = re.search(r"^ {4}VERSION (\S+)$", text, re.MULTILINE)
+    return found.group(1) if found else ""
+
+
 def main() -> int:
     problems: list[str] = []
 
@@ -140,6 +147,33 @@ def main() -> int:
             if not (document.parent / target).exists():
                 problems.append(f"{document.relative_to(ROOT)}: links to {target}, "
                                 f"which is not there")
+
+    # packaging/release.json decides whether the next release installs itself
+    # on every machine without being asked. It is small, and it is read by a
+    # script at the one moment nobody is watching, so it is checked here.
+    declaration = ROOT / "packaging" / "release.json"
+    if declaration.is_file():
+        import json
+        try:
+            stated = json.loads(declaration.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as failure:
+            problems.append(f"packaging/release.json: is not JSON ({failure})")
+        else:
+            version = str(stated.get("version", ""))
+            if not re.match(r"^\d+\.\d+\.\d+$", version):
+                problems.append(f"packaging/release.json: version '{version}' is not a "
+                                f"three-part version")
+            severity = stated.get("severity")
+            if severity not in {"normal", "important", "critical"}:
+                problems.append(f"packaging/release.json: '{severity}' is not a severity")
+            floor = stated.get("unsafeBelow")
+            if floor is not None and not re.match(r"^\d+\.\d+\.\d+$", str(floor)):
+                problems.append(f"packaging/release.json: unsafeBelow '{floor}' is not a version")
+            if severity == "critical" and version == declared_version():
+                # Not a fault, but the one setting worth saying out loud: this
+                # release will install itself on every machine that can take it.
+                print(f"packaging/release.json marks {version} critical: it will install "
+                      f"itself without asking.")
 
     if problems:
         print(f"{len(problems)} things to tidy:\n", file=sys.stderr)

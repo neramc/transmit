@@ -41,8 +41,46 @@ with scrypt key derivation, and the manifest is encrypted too — a file list is
 not a small thing to leak. A wrong passphrase is rejected on the header rather
 than after a failed decryption.
 
-**The Flatpak manifest grants no network access.** Transmit has no reason to
-talk to anything.
+**Transmit reaches the network for exactly one thing.** Nothing it captures or
+restores goes anywhere: every byte it reads ends up on the drive you chose. The
+one exception is the updater, which asks a published feed whether there is a
+newer version. It is the only outbound request in the program, it fetches only
+that feed and the release file it names, and it can be built out entirely with
+`-DTRANSMIT_WITH_UPDATER=OFF`.
+
+**The Flatpak manifest grants no network access.** So the Flatpak has no
+updater either — it is built without one, and Flathub does that job.
+
+**An update that cannot be authenticated is not installed.** The feed carries a
+detached Ed25519 signature, checked against public keys compiled into the
+build. A build given no key reports that a new version exists and downloads
+nothing. There is no configuration, no environment variable and no interface
+control that turns this off: an updater that installs what it cannot
+authenticate is a way to run arbitrary code on every machine that has this
+program.
+
+**A download is checked against the signed feed, twice.** Once when it arrives,
+by reading it back off the disk rather than hashing it on the way past — so a
+file that arrived intact and failed to land intact is caught. Again at the
+moment it replaces the running program, because in between it is a file in a
+cache directory that anything running as that user could write to.
+
+**A critical release installs itself, and only a critical release does.**
+Severity comes from the signed feed, so it cannot be set by anything that
+cannot sign. It overrides the update preference and nothing else: it still
+requires the signature, still refuses a copy a package manager owns, and still
+verifies the download. A version that is already past the stated exposure is
+offered the update rather than given it.
+
+**Nothing replaces a copy something else owns.** Flatpak, Snap, anything under
+a system prefix, a Homebrew cask: the updater says there is a new version and
+stops. Self-updating those would leave the package manager describing files
+that are no longer there.
+
+**A release file is only ever fetched over HTTPS, from a known host.**
+Redirects are followed — a release download is one — but only onto the hosts
+the release is published on, and never down to plain HTTP. A feed that names an
+address anywhere else is refused before anything is requested.
 
 **MD5 confirms a transfer and decides nothing.** Every file also carries an MD5,
 and the `.md5` file beside an archive lets somebody check a drive with a tool

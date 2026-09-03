@@ -14,7 +14,9 @@ source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
 build() {
+    # The package manager owns this copy, so the updater is left out of it.
     cmake -S "$pkgname-$pkgver" -B build -GNinja \
+        -DTRANSMIT_WITH_UPDATER=OFF \
         -DCMAKE_BUILD_TYPE=RelWithDebInfo \
         -DCMAKE_INSTALL_PREFIX=/usr \
         -DTRANSMIT_BUILD_TESTS=ON

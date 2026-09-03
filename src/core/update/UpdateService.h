@@ -40,6 +40,22 @@ public:
     /// When the last check happened, so a background check can be rare.
     [[nodiscard]] static QDateTime lastChecked();
 
+    /// The version this copy last put in place, and when.
+    ///
+    /// Remembered so an install that does not take cannot be tried forever. If
+    /// the program is still reporting the old version after installing the new
+    /// one - a read-only directory, an installer that failed silently, a
+    /// bundle somebody copied back - then repeating it every time the program
+    /// starts turns a failed update into a machine that downloads the same
+    /// file all day.
+    [[nodiscard]] static QString lastInstalledVersion();
+    [[nodiscard]] static QDateTime lastInstalledAt();
+    static void rememberInstalled(const QString& version);
+
+    /// Whether installing `version` now would be repeating an install that has
+    /// already been tried recently and has not taken.
+    [[nodiscard]] static bool wouldRepeatAFailedInstall(const QString& version);
+
     /// Whether this build could install anything at all, before asking the
     /// network. Used to keep the interface honest about what it is offering.
     [[nodiscard]] static bool canInstallUpdates();

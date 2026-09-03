@@ -31,6 +31,7 @@ src_configure() {
         -DTRANSMIT_WITH_OPENSSL=$(usex crypto)
         -DTRANSMIT_WITH_LZMA=$(usex lzma)
         -DTRANSMIT_BUILD_TESTS=$(usex test)
+        -DTRANSMIT_WITH_UPDATER=OFF
     )
     cmake_src_configure
 }

@@ -36,6 +36,10 @@ constexpr int kTransferTimeoutMs = 60 * 1000;
 /// because applying it writes a second copy before removing the first.
 constexpr double kSpaceHeadroom = 2.2;
 
+/// How long an install of a particular version is remembered as having been
+/// tried. Six hours.
+constexpr qint64 kRepeatInstallGuardSeconds = 6 * 60 * 60;
+
 QString settingsKey(const char* leaf) {
     return QStringLiteral("updates/") + QString::fromLatin1(leaf);
 }
@@ -108,6 +112,37 @@ void UpdateService::setPreference(UpdatePreference preference) {
 QDateTime UpdateService::lastChecked() {
     QSettings settings;
     return settings.value(settingsKey("lastChecked")).toDateTime();
+}
+
+QString UpdateService::lastInstalledVersion() {
+    QSettings settings;
+    return settings.value(settingsKey("lastInstalledVersion")).toString();
+}
+
+QDateTime UpdateService::lastInstalledAt() {
+    QSettings settings;
+    return settings.value(settingsKey("lastInstalledAt")).toDateTime();
+}
+
+void UpdateService::rememberInstalled(const QString& version) {
+    QSettings settings;
+    settings.setValue(settingsKey("lastInstalledVersion"), version);
+    settings.setValue(settingsKey("lastInstalledAt"), QDateTime::currentDateTimeUtc());
+    settings.sync();
+}
+
+bool UpdateService::wouldRepeatAFailedInstall(const QString& version) {
+    if (version.isEmpty() || lastInstalledVersion() != version) {
+        return false;
+    }
+    const QDateTime when = lastInstalledAt();
+    if (!when.isValid()) {
+        return false;
+    }
+    // Long enough that a genuine second attempt after a restart is allowed,
+    // short enough that a person who has fixed whatever stopped it does not
+    // have to wait a day.
+    return when.secsTo(QDateTime::currentDateTimeUtc()) < kRepeatInstallGuardSeconds;
 }
 
 bool UpdateService::canInstallUpdates() {
@@ -237,6 +272,17 @@ void UpdateService::downloadStagedUpdate() {
     if (decision_.action != UpdateAction::Offer && decision_.action != UpdateAction::InstallNow) {
         emit failed(QStringLiteral("this copy is not allowed to install an update: %1")
                         .arg(decision_.reason));
+        return;
+    }
+
+    const QString offered = decision_.release
+                                ? QString::fromStdString(decision_.release->version.toString())
+                                : QString();
+    if (wouldRepeatAFailedInstall(offered)) {
+        emit failed(QStringLiteral("%1 was installed here recently and this copy is still "
+                                   "reporting %2, so it is not being downloaded again - "
+                                   "something is putting the old version back")
+                        .arg(offered, QLatin1String(TRANSMIT_VERSION)));
         return;
     }
 

@@ -166,8 +166,9 @@ void UpdateController::installNow() {
 
 void UpdateController::applyStaged(const QString& path) {
     const InstallKind kind = core::detectInstallKind();
+    const QByteArray expected = decision_.artifact ? decision_.artifact->blake2b : QByteArray();
     const core::InstallOutcome outcome =
-        core::UpdateInstaller::apply(path, core::replaceableTarget(kind), kind);
+        core::UpdateInstaller::apply(path, core::replaceableTarget(kind), kind, expected);
 
     downloading_ = false;
     installingUnasked_ = false;
@@ -182,6 +183,7 @@ void UpdateController::applyStaged(const QString& path) {
     }
 
     installed_ = true;
+    UpdateService::rememberInstalled(availableVersion());
     summary_ =
         QStringLiteral("%1 is installed. Start Transmit again to run it.").arg(availableVersion());
     emit stateChanged();

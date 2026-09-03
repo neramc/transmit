@@ -220,6 +220,7 @@ private slots:
     void putsTheOldOneBack();
     void refusesToInstallOverAPackageManagedCopy();
     void refusesAStagedFileThatIsNotThere();
+    void refusesAStagedFileThatChangedAfterItWasChecked();
 
 private:
     QTemporaryDir work_;
@@ -929,6 +930,60 @@ void UpdateTest::refusesAStagedFileThatIsNotThere() {
                                                           target, InstallKind::AppImage);
     QVERIFY(!outcome.applied);
     QVERIFY(!QFile::exists(target));
+}
+
+void UpdateTest::refusesAStagedFileThatChangedAfterItWasChecked() {
+    // Between the download being checked and the moment it is used, the file
+    // sits in a cache directory anything running as this user could write to.
+    // The digest from the signed feed is checked again there, because that is
+    // the last moment it is worth anything.
+    const QString target = work_.filePath(QStringLiteral("Swapped.AppImage"));
+    const QString stagedPath = work_.filePath(QStringLiteral("swapped-staged.AppImage"));
+
+    QFile old(target);
+    QVERIFY(old.open(QIODevice::WriteOnly));
+    old.write(
+        "\x7f"
+        "ELF the one that works");
+    old.close();
+
+    const QByteArray downloaded(
+        "\x7f"
+        "ELF what was published",
+        23);
+    const QByteArray swapped(
+        "\x7f"
+        "ELF what turned up now",
+        23);
+    QCOMPARE(downloaded.size(), swapped.size());
+
+    QFile fresh(stagedPath);
+    QVERIFY(fresh.open(QIODevice::WriteOnly));
+    fresh.write(swapped);
+    fresh.close();
+
+    const InstallOutcome outcome =
+        UpdateInstaller::apply(stagedPath, target, InstallKind::AppImage, digestOf(downloaded));
+    QVERIFY(!outcome.applied);
+    QVERIFY(outcome.problem.contains(QStringLiteral("not the file that was downloaded")));
+
+    // The running program is untouched, and the file that was not what it
+    // claimed is gone rather than left for something else to pick up.
+    QFile installed(target);
+    QVERIFY(installed.open(QIODevice::ReadOnly));
+    QCOMPARE(installed.readAll(), QByteArray("\x7f"
+                                             "ELF the one that works",
+                                             23));
+    QVERIFY(!QFile::exists(stagedPath));
+
+    // And the same file with the digest it actually has goes on.
+    QFile again(stagedPath);
+    QVERIFY(again.open(QIODevice::WriteOnly));
+    again.write(swapped);
+    again.close();
+    const InstallOutcome allowed =
+        UpdateInstaller::apply(stagedPath, target, InstallKind::AppImage, digestOf(swapped));
+    QVERIFY2(allowed.applied, qPrintable(allowed.problem));
 }
 
 QTEST_MAIN(UpdateTest)

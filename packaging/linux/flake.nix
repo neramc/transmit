@@ -22,7 +22,7 @@
             zstd xz openssl sqlite libsecret
           ];
 
-          cmakeFlags = [ "-DTRANSMIT_BUILD_TESTS=ON" ];
+          cmakeFlags = [ "-DTRANSMIT_BUILD_TESTS=ON" "-DTRANSMIT_WITH_UPDATER=OFF" ];
 
           doCheck = true;
           checkPhase = "ctest --output-on-failure";

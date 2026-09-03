@@ -31,6 +31,10 @@ modules:
     config-opts:
       - -DCMAKE_BUILD_TYPE=RelWithDebInfo
       - -DTRANSMIT_BUILD_TESTS=OFF
+      # Flathub updates this, and the sandbox has no network to update from.
+      # Built out rather than refused at runtime: the code that could replace
+      # a program is not in the build that must never replace one.
+      - -DTRANSMIT_WITH_UPDATER=OFF
     sources:
       - type: git
         url: https://github.com/neramc/transmit.git

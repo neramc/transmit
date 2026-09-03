@@ -3,7 +3,7 @@ pkgname=transmit
 version=0.1.0
 revision=1
 build_style=cmake
-configure_args="-DTRANSMIT_BUILD_TESTS=ON"
+configure_args="-DTRANSMIT_BUILD_TESTS=ON -DTRANSMIT_WITH_UPDATER=OFF"
 hostmakedepends="pkg-config qt6-base-devel qt6-declarative-devel"
 makedepends="qt6-base-devel qt6-declarative-devel libzstd-devel liblzma-devel
              openssl-devel sqlite-devel libsecret-devel"

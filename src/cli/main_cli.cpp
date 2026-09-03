@@ -1367,8 +1367,9 @@ int runUpdate(bool apply, bool asJson) {
     }
 
     const InstallKind kind = detectInstallKind();
+    const QByteArray expected = decision.artifact ? decision.artifact->blake2b : QByteArray();
     const InstallOutcome outcome =
-        UpdateInstaller::apply(stagedPath, replaceableTarget(kind), kind);
+        UpdateInstaller::apply(stagedPath, replaceableTarget(kind), kind, expected);
     if (!outcome.applied) {
         if (!outcome.handedOver.isEmpty()) {
             QTextStream(stdout) << outcome.problem << Qt::endl
@@ -1378,6 +1379,7 @@ int runUpdate(bool apply, bool asJson) {
         return reportError(outcome.problem);
     }
 
+    UpdateService::rememberInstalled(offered);
     QTextStream(stdout) << "Installed. Start Transmit again to run it." << Qt::endl;
     return 0;
 }
