@@ -11,36 +11,33 @@
 namespace transmit::core {
 namespace {
 
-/// Whether the staged file starts like the kind of program it claims to be.
+/// The first bytes of a program of a given kind, so a staged file that is not
+/// one can be refused before it is put where a working program used to be.
 ///
-/// Asks what the file is supposed to be, not what machine this is. The first
-/// version asked the host, and on macOS its answer was `head.size() == 4` -
-/// true of every file with four bytes in it, so on that platform the check
-/// was not a check. What is being guarded against is a staged file that is
-/// not the published one; the kind of install says what its first bytes have
-/// to be, and that answer is the same wherever the question is asked from.
-bool looksLikeProgramFor(InstallKind kind, const QString& path) {
+/// An AppImage is an ELF with a filesystem bolted onto the end; every Windows
+/// executable still starts with the two letters Mark Zbikowski put there in
+/// 1983. Nothing else here is started as a program, so nothing else has bytes
+/// to name.
+constexpr char kElfMagic[] =
+    "\x7f"
+    "ELF";
+constexpr char kDosMagic[] = "MZ";
+
+/// Whether the staged file begins the way the published one would.
+///
+/// The caller says what the file is supposed to be; this does not ask the
+/// machine. The version before it did, and its macOS answer was
+/// `head.size() == 4` - true of every file with four bytes in it - so on that
+/// platform the guard was not a guard. What has to be refused is a staged
+/// file that is not the published program, and that does not change with the
+/// host doing the asking.
+bool startsWith(const QString& path, const char* magic) {
+    const auto length = static_cast<qsizetype>(qstrlen(magic));
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
         return false;
     }
-    const QByteArray head = file.read(4);
-
-    switch (kind) {
-        case InstallKind::AppImage:
-            // An AppImage is an ELF with a filesystem bolted onto the end.
-            return head.startsWith(
-                "\x7f"
-                "ELF");
-        case InstallKind::WindowsInstaller:
-            // Every Windows executable still starts with the two letters Mark
-            // Zbikowski put there in 1983.
-            return head.startsWith("MZ");
-        default:
-            // Nothing else is started as a program: a disk image and an
-            // unpacked directory are handed over rather than run.
-            return true;
-    }
+    return file.read(length) == QByteArray(magic, length);
 }
 
 bool makeExecutable(const QString& path) {
@@ -159,7 +156,7 @@ InstallOutcome UpdateInstaller::apply(const QString& staged, const QString& targ
 
     switch (kind) {
         case InstallKind::AppImage: {
-            if (!looksLikeProgramFor(kind, staged)) {
+            if (!startsWith(staged, kElfMagic)) {
                 return refuse(QStringLiteral("the staged file is not a program"));
             }
             const QFileInfo targetInfo(target);
@@ -179,7 +176,7 @@ InstallOutcome UpdateInstaller::apply(const QString& staged, const QString& targ
         }
 
         case InstallKind::WindowsInstaller: {
-            if (!looksLikeProgramFor(kind, staged)) {
+            if (!startsWith(staged, kDosMagic)) {
                 return refuse(QStringLiteral("the staged file is not a program"));
             }
             // The installer replaces the installed copy; this program is asked
