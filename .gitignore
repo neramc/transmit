@@ -64,3 +64,7 @@ compile_commands.json
 started.log
 ci-results/
 *-report.txt
+
+# Python leaves these behind whenever a script here is imported or compiled.
+__pycache__/
+*.pyc
