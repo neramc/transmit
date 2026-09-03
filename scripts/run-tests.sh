@@ -14,7 +14,14 @@ set -uo pipefail
 
 build="${1:-build}"
 
-ctest --test-dir "$build" --output-on-failure && exit 0
+# Kept so the names of the failures can be repeated at the very end. A long
+# suite's summary sits in the middle of thousands of lines, and the middle is
+# exactly what any excerpt of a log drops.
+log="$(mktemp)"
+trap 'rm -f "$log"' EXIT
+
+ctest --test-dir "$build" --output-on-failure 2>&1 | tee "$log"
+[ "${PIPESTATUS[0]}" -eq 0 ] && exit 0
 
 echo "::group::Re-running the failures verbosely"
 ctest --test-dir "$build" --rerun-failed --output-on-failure --verbose || true
@@ -39,5 +46,14 @@ for suite in UiSmoke RestoreUndo ContinuityRoundTrip PathRewrite SecretStore Upd
     done
 done
 echo "::endgroup::"
+
+# Last, and outside every group, so it is the final thing anything reading
+# this sees: which tests failed, by name. Everything above is the evidence;
+# this is the answer.
+echo
+echo "The tests that failed:"
+if ! sed -n '/The following tests FAILED:/,$p' "$log" | grep -v '^Errors while running CTest$'; then
+    echo "  (ctest named none - the suite itself did not finish; look above)"
+fi
 
 exit 1

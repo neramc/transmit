@@ -25,6 +25,33 @@ HEAD_LINES = 60
 TAIL_LINES = 120
 
 
+# What a line says when it is the one that matters. A long check's output is
+# excerpted, and the middle - which is what gets dropped - is exactly where a
+# test suite puts its summary. These are pulled out of the whole output so the
+# excerpt cannot be the reason nobody knows what failed.
+TELLS = (
+    "FAIL!",
+    "FAILED",
+    "***",
+    "error:",
+    "ERROR:",
+    "Assertion",
+    "Segmentation fault",
+    "Traceback",
+    "fatal error",
+    # How ctest names each failure under "The following tests FAILED:" - the
+    # one line per failure that says which test it was.
+    "(Failed)",
+    "(Timeout)",
+    "(SEGFAULT)",
+    "(Subprocess aborted)",
+    "(Child aborted)",
+    "(Exception)",
+    "(Not Run)",
+)
+MOST_TELLING = 40
+
+
 def interesting(output: str) -> str:
     """The part of the output worth reading, with the middle dropped."""
     lines = output.splitlines()
@@ -38,6 +65,27 @@ def interesting(output: str) -> str:
         "",
         *lines[-TAIL_LINES:],
     ])
+
+
+def elided(output: str) -> bool:
+    return len(output.splitlines()) > HEAD_LINES + TAIL_LINES
+
+
+def telling(output: str) -> list[str]:
+    """Every line in the whole output that reads like a cause, deduplicated."""
+    found: list[str] = []
+    seen: set[str] = set()
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped in seen:
+            continue
+        if any(tell in line for tell in TELLS):
+            seen.add(stripped)
+            found.append(stripped)
+            if len(found) >= MOST_TELLING:
+                found.append("... and more above ...")
+                break
+    return found
 
 
 def readable_everywhere(stream) -> None:
@@ -167,6 +215,15 @@ def main() -> int:
             lines.append(interesting(record["output"]) or "(it printed nothing)")
             lines.append("```")
             lines.append("")
+            causes = telling(record["output"]) if elided(record["output"]) else []
+            if causes:
+                lines.append("The lines that read like the cause, from the whole of it "
+                             "rather than the part shown above:")
+                lines.append("")
+                lines.append("```")
+                lines.extend(causes)
+                lines.append("```")
+                lines.append("")
 
     report = "\n".join(lines)
     say(report)
