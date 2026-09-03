@@ -46,6 +46,27 @@ if(CMAKE_CXX_FLAGS MATCHES "-fsanitize" OR CMAKE_CXX_FLAGS MATCHES "-fprofile-in
     set(cases "offscreen")
 endif()
 
+# Qt's own Wayland client dies on a compositor like this one before 6.5.
+#
+# QWaylandInputDevice::textInput() hands back a null pointer when the
+# compositor offers no text-input protocol, and QQuickTextInputPrivate::init()
+# follows it while the interface's first TextField is being built. Headless
+# weston offers no text-input protocol, so the process is gone inside
+# libQt6WaylandClient before Transmit gets anywhere near a frame. Measured
+# rather than assumed: the same binary segfaults there against Qt 6.4.2 and
+# paints a frame against 6.8.1 on the same machine, same compositor.
+#
+# There is nothing here to fix - the interface cannot stop using text fields -
+# and a case that fails for somebody else's reason is a case that stops being
+# read. So the Wayland pair is registered only against a Qt that survives it.
+# The build job these questions are actually asked in uses 6.8, and it checks
+# that all four are still registered, so nothing is quietly lost by this.
+if(Qt6_VERSION AND Qt6_VERSION VERSION_LESS 6.5)
+    list(REMOVE_ITEM cases "wayland" "wayland-no-buffers")
+    message(STATUS
+        "Launch tests: the Wayland cases need Qt 6.5 or newer, and this is ${Qt6_VERSION}")
+endif()
+
 foreach(case ${cases})
     set(arguments --binary "$<TARGET_FILE:transmit>")
     if(case STREQUAL "wayland-no-buffers")

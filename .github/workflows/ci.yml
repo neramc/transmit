@@ -141,6 +141,25 @@ jobs:
           scripts/ci-check.sh "The interface starts on a real display" \
               ctest --test-dir build -L launch --output-on-failure
 
+      # Two of the four cases are only registered against a Qt new enough not
+      # to crash in its own Wayland client, which is a door for coverage to
+      # leave through without anybody noticing: an older Qt here would mean a
+      # shorter list and a green job. So the count is the check.
+      - name: All four ways of launching have to be registered
+        if: always() && runner.os == 'Linux'
+        run: |
+          # shellcheck disable=SC2016
+          scripts/ci-check.sh "All four ways of launching are registered" \
+              bash -c 'registered=$(ctest --test-dir build -L launch -N \
+                                    | grep -cE "^ +Test +#[0-9]+: Launch\.")
+                       echo "$registered of 4 launch cases registered:"
+                       ctest --test-dir build -L launch -N | grep -E "Launch\." || true
+                       if [ "$registered" -ne 4 ]; then
+                           echo "expected all four - offscreen, xcb, wayland," \
+                                "wayland-no-buffers - and this Qt registered $registered"
+                           exit 1
+                       fi'
+
       # The same question on the two platforms with no headless session to
       # drive: start the interface on whatever the runner has and require a
       # painted frame. TRANSMIT_STARTUP_BENCHMARK quits once the window has
