@@ -46,7 +46,7 @@ def is_text(path: Path) -> bool:
     return path.suffix in TEXT_SUFFIXES or path.name in TEXT_NAMES
 
 
-def reportable_job_names(workflow: Path) -> set[str]:
+def reportable_job_names(workflow: Path) -> set[str] | None:
     """Every name a job in this workflow can report to GitHub.
 
     A job whose name mentions a matrix value reports one name per entry, so the
@@ -56,12 +56,16 @@ def reportable_job_names(workflow: Path) -> set[str]:
     try:
         import yaml
     except ImportError:
-        return set()
+        # Nothing rather than an empty set: the caller subtracts this from the
+        # names the release insists on, so "I could not read the file" and
+        # "the file names no jobs" must not look the same. Returning an empty
+        # set once reported all seven required jobs as missing.
+        return None
 
     try:
         parsed = yaml.safe_load(workflow.read_text(encoding="utf-8"))
     except Exception:  # a workflow that will not parse is another check's problem
-        return set()
+        return None
 
     names: set[str] = set()
     for key, job in (parsed.get("jobs") or {}).items():
@@ -191,9 +195,14 @@ def main() -> int:
                          release.read_text(encoding="utf-8"), re.MULTILINE | re.DOTALL)
         if gate:
             wanted = set(re.findall(r'"([^"]+)"', gate.group(1)))
-            for job in sorted(wanted - reportable_job_names(ci)):
-                problems.append(f".github/workflows/ci.yml: has no job named '{job}', "
-                                f"which release.yml refuses to publish without")
+            declared = reportable_job_names(ci)
+            if declared is None:
+                print("PyYAML is not installed, so the jobs the release insists on were not "
+                      "checked against the ones ci.yml defines.")
+            else:
+                for job in sorted(wanted - declared):
+                    problems.append(f".github/workflows/ci.yml: has no job named '{job}', "
+                                    f"which release.yml refuses to publish without")
 
     # packaging/release.json decides whether the next release installs itself
     # on every machine without being asked. It is small, and it is read by a

@@ -278,7 +278,16 @@ jobs:
       - name: Check what the bundle carries
         run: |
           chmod +x artifacts/*.AppImage
-          ./artifacts/*.AppImage --appimage-extract >/dev/null
+
+          # Named rather than globbed into the command position: a glob that
+          # matched two files would run one and pass the other as an argument,
+          # and a glob that matched none would run the pattern.
+          image=$(find artifacts -name '*.AppImage' -type f | head -1)
+          if [ -z "$image" ]; then
+              echo "::error::no AppImage was produced"
+              exit 1
+          fi
+          "$image" --appimage-extract >/dev/null
 
           if [ ! -x squashfs-root/usr/bin/transmit-cli ]; then
               echo "::error::the command line tool is missing from the bundle"
@@ -631,7 +640,7 @@ jobs:
           mkdir -p release
           find downloads -type f -exec mv {} release/ \;
           cd release
-          sha256sum * > SHA256SUMS
+          sha256sum -- * > SHA256SUMS
           ls -l
 
       # The feed the updater reads, built from the files that are actually

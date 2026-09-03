@@ -213,6 +213,13 @@ jobs:
                                   libsecret-1-dev libgl1-mesa-dev \
                                   shellcheck cppcheck
 
+      # The tidiness check reads the workflows to be sure the jobs the release
+      # insists on still exist. Without PyYAML it says it could not and moves
+      # on, which is honest and useless - so it is installed here, where that
+      # check matters most.
+      - name: Install PyYAML
+        run: python3 -m pip install --quiet pyyaml
+
       - name: Fetch actionlint
         run: |
           curl -fsSL -o actionlint.tar.gz \
@@ -256,6 +263,9 @@ jobs:
       - name: Shell scripts
         if: always()
         run: |
+          # The script below is handed to bash -c and the expansions in it
+          # belong to that shell, so the single quotes are the point.
+          # shellcheck disable=SC2016
           scripts/ci-check.sh "Shell scripts" bash -c '
             files=$(git ls-files "*.sh")
             [ -n "$files" ] || { echo "no shell scripts found - has the glob rotted?"; exit 1; }
@@ -272,6 +282,9 @@ jobs:
       - name: Python
         if: always()
         run: |
+          # The script below is handed to bash -c and the expansions in it
+          # belong to that shell, so the single quotes are the point.
+          # shellcheck disable=SC2016
           scripts/ci-check.sh "Python scripts compile" bash -c '
             files=$(git ls-files "*.py")
             [ -n "$files" ] || { echo "no python found - has the glob rotted?"; exit 1; }
@@ -281,6 +294,9 @@ jobs:
       - name: JSON
         if: always()
         run: |
+          # The script below is handed to bash -c and the expansions in it
+          # belong to that shell, so the single quotes are the point.
+          # shellcheck disable=SC2016
           scripts/ci-check.sh "Every JSON file parses" bash -c '
             failed=0
             for file in $(git ls-files "*.json"); do
@@ -303,6 +319,9 @@ jobs:
       - name: Static analysis
         if: always()
         run: |
+          # The script below is handed to bash -c and the expansions in it
+          # belong to that shell, so the single quotes are the point.
+          # shellcheck disable=SC2016
           scripts/ci-check.sh "clang-tidy" bash -c '
             # Everything this machine can compile. Windows and macOS sources
             # are not in a Linux compile database at all, so they are excluded
@@ -343,6 +362,9 @@ jobs:
       - name: QML linting
         if: always()
         run: |
+          # The script below is handed to bash -c and the expansions in it
+          # belong to that shell, so the single quotes are the point.
+          # shellcheck disable=SC2016
           scripts/ci-check.sh "qmllint" bash -c '
             lint=$(find "$QT_ROOT_DIR/bin" -name "qmllint" | head -1)
             if [ -z "$lint" ]; then
