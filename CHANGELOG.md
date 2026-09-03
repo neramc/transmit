@@ -5,7 +5,7 @@ versioning](https://semver.org): while the major version is 0 the archive
 format may still change between minor versions, and when it does, the release
 notes say so.
 
-## Unreleased
+## 0.1.1 - 2026-09-03
 
 ### Added
 
@@ -54,7 +54,7 @@ notes say so.
   graphics context — which is why a build that could not start on Wayland
   passed everything. The packaged bundles on all three systems are started too.
 
-## 0.1.0
+## 0.1.0 - 2026-08-30
 
 First release. Everything below is new.
 

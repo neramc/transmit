@@ -81,11 +81,17 @@ def artifacts(directory: Path, base_url: str) -> list[dict]:
 
 
 def notes_for(version: str, changelog: Path) -> str:
-    """The changelog section for this version, if it has one."""
+    """The changelog section for this version, if it has one.
+
+    The rest of the heading line is skipped rather than captured, because a
+    heading is allowed to say more than the version - "## 0.1.1 - 2026-09-03"
+    is an ordinary way to write one, and taking the date into the body puts it
+    at the top of the release notes as though it were the first change.
+    """
     if not changelog.is_file():
         return ""
     text = changelog.read_text(encoding="utf-8")
-    match = re.search(rf"^## {re.escape(version)}\b(.*?)(?=^## |\Z)", text,
+    match = re.search(rf"^## {re.escape(version)}\b[^\n]*\n(.*?)(?=^## |\Z)", text,
                       re.MULTILINE | re.DOTALL)
     return match.group(1).strip() if match else ""
 
