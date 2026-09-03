@@ -28,8 +28,8 @@ RowLayout {
             readonly property bool active: stepRow.index === stepper.currentStep
 
             Rectangle {
-                width: 22
-                height: 22
+                implicitWidth: 22
+                implicitHeight: 22
                 radius: width / 2
                 color: stepRow.done ? Colors.accent
                      : stepRow.active ? Colors.accentSubtle : "transparent"
@@ -79,7 +79,7 @@ RowLayout {
                 Layout.fillWidth: true
                 Layout.preferredWidth: Spacing.s16
                 Layout.minimumWidth: Spacing.s8
-                height: Elevation.borderWidth
+                Layout.preferredHeight: Elevation.borderWidth
                 color: Colors.border
                 visible: stepRow.index < stepper.steps.length - 1
             }

@@ -14,8 +14,17 @@ void ByteWriter::putVarint(std::uint64_t value) {
 
 void ByteWriter::putSignedVarint(std::int64_t value) {
     // Zig-zag so small negative values stay short.
-    const auto encoded = static_cast<std::uint64_t>((value << 1) ^ (value >> 63));
-    putVarint(encoded);
+    //
+    // Written in unsigned arithmetic rather than as `(value << 1) ^ (value >>
+    // 63)`. That spelling is well defined in C++20 and was not before it, and
+    // a shift of a negative number is the kind of thing a future standard, a
+    // compiler in a hurry or a static analyser will each have an opinion
+    // about. The bytes produced are identical: the low bit carries the sign
+    // and the rest is the magnitude, which is what every reader of this format
+    // already expects.
+    const auto magnitude = static_cast<std::uint64_t>(value);
+    const std::uint64_t sign = value < 0 ? ~std::uint64_t{0} : std::uint64_t{0};
+    putVarint((magnitude << 1U) ^ sign);
 }
 
 void ByteWriter::putFixed32(std::uint32_t value) {

@@ -8,7 +8,7 @@ import QtQuick
 /// belongs on the desktop it is running on rather than importing a typeface
 /// from nowhere.
 QtObject {
-    readonly property string family: Qt.application.font.family
+    readonly property string family: Application.font.family
 
     /// Fixed-width, for paths and other text where alignment carries meaning.
     ///

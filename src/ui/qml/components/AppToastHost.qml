@@ -132,8 +132,13 @@ Item {
                         variant: "ghost"
                         text: toast.actionText
                         onClicked: {
+                            // qmllint disable use-proper-function
+                            // Supplied with each toast rather than declared on
+                            // the component, so it is a var that happens to
+                            // hold a function. Checked before it is called.
                             if (toast.action)
                                 toast.action();
+                            // qmllint enable use-proper-function
                             host.dismiss(toast.key);
                         }
                     }

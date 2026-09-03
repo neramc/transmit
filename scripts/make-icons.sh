@@ -11,7 +11,7 @@
 
 set -eu
 
-root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+root=$(CDPATH="" cd -- "$(dirname -- "$0")/.." && pwd)
 icons="$root/resources/icons"
 master="$icons/transmit-512.png"
 

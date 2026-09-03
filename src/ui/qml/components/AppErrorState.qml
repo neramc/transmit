@@ -93,12 +93,14 @@ ColumnLayout {
     }
 
     // The only way to reach the clipboard from QML without a C++ helper is
-    // through a TextEdit, so there is one, sized to nothing and never shown.
+    // through a TextEdit, so there is one, never shown.
+    //
+    // No width or height: a layout arranges its children, and an item that
+    // also sets its own size is undefined behaviour rather than a smaller
+    // item. Being invisible is enough - a layout leaves those out entirely.
     TextEdit {
         id: clipboard
         visible: false
-        width: 0
-        height: 0
     }
 
     Rectangle {

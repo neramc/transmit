@@ -83,66 +83,43 @@ jobs:
           echo "CMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" >> $env:GITHUB_ENV
         shell: pwsh
 
+      # From here to the report, every step runs whatever the one before it
+      # did, and each records what happened. One run then says everything that
+      # is wrong rather than the first thing that is wrong - which matters most
+      # on the two platforms nobody here can reproduce by hand.
       - name: Configure
-        run: cmake --preset default -DTRANSMIT_WERROR=ON
+        if: always()
+        shell: bash
+        run: scripts/ci-check.sh "Configure" cmake --preset default -DTRANSMIT_WERROR=ON
 
       - name: Build
-        run: cmake --build --preset default
+        if: always()
+        shell: bash
+        run: scripts/ci-check.sh "Build" cmake --build --preset default
 
       - name: Test
+        if: always()
         shell: bash
-        run: |
-          # A second, louder pass over whatever failed. ctest buffers a test's
-          # output and loses it if the process dies rather than reporting, and
-          # a failure nobody can read costs another full run to diagnose.
-          ctest --preset default || {
-              echo "::group::Re-running the failures verbosely"
-              ctest --test-dir build --rerun-failed --output-on-failure --verbose || true
-              echo "::endgroup::"
-
-              # ctest relays what a test wrote to stdout, and on Windows that
-              # has come back empty even under --verbose. QtTest can write its
-              # own report to a file instead, which nothing in between can
-              # swallow.
-              echo "::group::Reports written straight to a file"
-              for suite in UiSmoke RestoreUndo ContinuityRoundTrip PathRewrite SecretStore; do
-                  for binary in "build/tests/ui/transmit_${suite}_test" \
-                                "build/tests/integration/transmit_${suite}_test" \
-                                "build/transmit_${suite}_test"; do
-                      for candidate in "$binary" "$binary.exe"; do
-                          [ -x "$candidate" ] || continue
-                          report="$suite-report.txt"
-                          QT_QPA_PLATFORM=offscreen "$candidate" -o "$report,txt" \
-                              >/dev/null 2>&1 || true
-                          if [ -s "$report" ]; then
-                              echo "----- $suite -----"
-                              cat "$report"
-                          fi
-                          break 2
-                      done
-                  done
-              done
-              echo "::endgroup::"
-              exit 1
-          }
+        run: scripts/ci-check.sh "The suite" scripts/run-tests.sh build
 
       # The credential tests skip themselves when there is no secret service,
       # which on a build machine means they would always skip. Giving them a
       # throwaway keyring is what makes them worth having.
       - name: Test against a real keyring
-        if: runner.os == 'Linux'
+        if: always() && runner.os == 'Linux'
         run: |
-          set -o pipefail
-          dbus-run-session -- scripts/with-keyring.sh \
-              ./build/tests/integration/transmit_SecretStore_test | tee keyring.log
+          scripts/ci-check.sh "Credentials against a real keyring" bash -c '
+            set -o pipefail
+            dbus-run-session -- scripts/with-keyring.sh \
+                ./build/tests/integration/transmit_SecretStore_test | tee keyring.log
 
-          # The suite skips itself when there is no secret service, which is
-          # the right behaviour on a developer's machine and useless here: a
-          # step that always skips reports success and proves nothing.
-          if grep -q "SKIP   : SecretStoreTest::initTestCase" keyring.log; then
-              echo "::error::the credential tests skipped - no keyring was reachable"
-              exit 1
-          fi
+            # The suite skips itself when there is no secret service, which is
+            # the right behaviour on a developer machine and useless here: a
+            # step that always skips reports success and proves nothing.
+            if grep -q "SKIP   : SecretStoreTest::initTestCase" keyring.log; then
+                echo "the credential tests skipped - no keyring was reachable"
+                exit 1
+            fi'
 
       # The interface has to open a window on a real windowing system and draw
       # into it, not merely link and stay alive under the offscreen platform.
@@ -157,10 +134,12 @@ jobs:
       # TRANSMIT_LAUNCH_TESTS_REQUIRED turns a missing Xvfb or weston into a
       # failure. Skipping is right on a developer's machine and useless here.
       - name: The interface has to start on a real display
-        if: runner.os == 'Linux'
+        if: always() && runner.os == 'Linux'
         env:
           TRANSMIT_LAUNCH_TESTS_REQUIRED: 1
-        run: ctest --test-dir build -L launch --output-on-failure
+        run: |
+          scripts/ci-check.sh "The interface starts on a real display" \
+              ctest --test-dir build -L launch --output-on-failure
 
       # The same question on the two platforms with no headless session to
       # drive: start the interface on whatever the runner has and require a
@@ -168,47 +147,15 @@ jobs:
       # drawn, so finishing is the pass and a timeout is the failure - the
       # opposite way round from waiting to see whether it dies.
       - name: The interface has to start (macOS)
-        if: runner.os == 'macOS'
+        if: always() && runner.os == 'macOS'
         env:
           TRANSMIT_STARTUP_BENCHMARK: 1
           QT_LOGGING_RULES: transmit.performance.debug=true
-        run: |
-          # macOS builds the interface as an application bundle, so the
-          # executable is not where it is on the other two systems.
-          interface=./build/transmit.app/Contents/MacOS/transmit
-          [ -x "$interface" ] || interface=./build/transmit
-          echo "starting $interface"
-
-          set +e
-          "$interface" > started.log 2>&1 &
-          pid=$!
-          for _ in $(seq 1 90); do
-              kill -0 "$pid" 2>/dev/null || break
-              sleep 1
-          done
-          if kill -0 "$pid" 2>/dev/null; then
-              kill -9 "$pid"
-              cat started.log
-              echo "::error::the interface never painted a frame"
-              exit 1
-          fi
-          wait "$pid"
-          status=$?
-          set -e
-
-          cat started.log
-          if [ "$status" -ne 0 ]; then
-              echo "::error::the interface exited with $status"
-              exit 1
-          fi
-          grep -q "first frame after" started.log || {
-              echo "::error::the interface finished without drawing anything"
-              exit 1
-          }
+        run: scripts/ci-check.sh "The interface starts" scripts/start-once.sh build
 
       - name: The interface has to start (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
+        if: always() && runner.os == 'Windows'
+        shell: bash
         env:
           TRANSMIT_STARTUP_BENCHMARK: 1
           QT_LOGGING_RULES: transmit.performance.debug=true
@@ -218,149 +165,26 @@ jobs:
           # without this the log it is being read for is written somewhere
           # nothing can read it.
           QT_LOGGING_TO_CONSOLE: 1
-        run: |
-          $process = Start-Process -FilePath build/transmit.exe -PassThru `
-              -RedirectStandardOutput started.log -RedirectStandardError started.err
-          if (-not $process.WaitForExit(90000)) {
-              $process.Kill()
-              Get-Content started.log, started.err -ErrorAction SilentlyContinue
-              throw "the interface never painted a frame"
-          }
-          Get-Content started.log, started.err -ErrorAction SilentlyContinue
-          if ($process.ExitCode -ne 0) {
-              throw "the interface exited with $($process.ExitCode)"
-          }
-          # Both streams, because which one carries the log depends on how Qt
-          # decided to write it.
-          if (-not (Select-String -Path started.log, started.err `
-                        -Pattern "first frame after" -Quiet)) {
-              throw "the interface finished without drawing anything"
-          }
+        run: scripts/ci-check.sh "The interface starts" scripts/start-once.sh build
 
       - name: Round trip through the command line
+        if: always()
         shell: bash
-        run: |
-          set -e
+        run: scripts/ci-check.sh "A round trip through the command line" scripts/cli-round-trip.sh
 
-          # Asked for rather than assumed. Pointing HOME at a sample directory
-          # works on Linux and macOS and does nothing at all on Windows, which
-          # resolves its known folders through the shell - so the file went one
-          # place and the capture looked in another.
-          documents=$(./build/transmit-cli environment \
-                      | awk -F'} ' '/^  \{DOCUMENTS/ {print $2}')
-          if [ -z "$documents" ]; then
-              echo "::error::transmit-cli could not say where documents are kept"
-              exit 1
-          fi
-          echo "documents folder: $documents"
+      # The only step that decides anything.
+      - name: What went wrong
+        if: always()
+        shell: bash
+        run: scripts/ci-report.py --title "${{ matrix.name }}"
 
-          mkdir -p "$documents"
-          echo "hello" > "$documents/transmit-ci-note.txt"
-          printf 'passphrase-for-ci\n' > pw.txt
-
-          # The dry run first, and it must leave nothing behind: `plan` builds
-          # exactly the request `export` builds, so if it writes anything at
-          # all it is writing it during what a person was told was a preview.
-          ./build/transmit-cli plan \
-              --out "$PWD/archive.txa" --profile documents --preset fast \
-              --passphrase-file pw.txt
-          if [ -e "$PWD/archive.txa" ]; then
-              echo "::error::plan wrote an archive"
-              exit 1
-          fi
-
-          ./build/transmit-cli export \
-              --out "$PWD/archive.txa" --profile documents --preset fast \
-              --passphrase-file pw.txt
-          ./build/transmit-cli verify "$PWD/archive.txa" --deep --passphrase-file pw.txt
-
-          # The checksum file next to it is meant to work with the ordinary
-          # tool, so that is what checks it.
-          if command -v md5sum >/dev/null 2>&1; then
-              ( cd "$PWD" && md5sum -c archive.txa.md5 )
-          fi
-
-          # And the repair path on a sound archive, which must recover nothing
-          # and say so rather than inventing work.
-          ./build/transmit-cli repair "$PWD/archive.txa" --passphrase-file pw.txt
-          ./build/transmit-cli import "$PWD/archive.txa" --into "$PWD/restored" \
-              --passphrase-file pw.txt
-          diff "$documents/transmit-ci-note.txt" restored/DOCUMENTS/transmit-ci-note.txt
-
-          # The cross-platform translation is the point of the project, so it is
-          # exercised on every runner rather than only where it is native.
-          for target in windows macos linux; do
-            ./build/transmit-cli import "$PWD/archive.txa" --emulate-os "$target" \
-                --dry-run --passphrase-file pw.txt
-          done
-
-  quality:
-    name: Formatting and static analysis
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: jurplel/install-qt-action@v4
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          version: '6.8.1'
-          cache: true
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build clang-tidy-18 clang-format-18 \
-                                  libzstd-dev liblzma-dev libssl-dev libsqlite3-dev \
-                                  libsecret-1-dev libgl1-mesa-dev
-
-      - name: Check formatting
-        run: scripts/format.sh --check
-
-      - name: Check every QML file is registered
-        run: scripts/check-qml-modules.sh
-
-      # docs/design.md is the source of truth for the interface, and neither of
-      # these can be enforced by review: a hard-coded 13 in one page looks like
-      # nothing, and a colour pair that is a shade too close is invisible to
-      # anyone who is not measuring it.
-      - name: Check the design tokens are used
-        run: scripts/check-design-tokens.sh
-
-      # A packaging file left on the old version is only ever discovered by
-      # whoever builds that package, which is usually not us.
-      - name: Check every version in the tree agrees
-        run: scripts/version.py --check
-
-      - name: Check the palette is readable
-        run: python3 scripts/check-contrast.py
-
-      # The full build rather than cli-only: clang-tidy reads a compile
-      # database, and the application layer is only in one when the interface
-      # is built. That layer holds the controllers, which is where the
-      # threading is.
-      - name: Configure
-        run: cmake --preset default
-
-      - name: Build
-        run: cmake --build --preset default
-
-      - name: Static analysis
-        run: |
-          # Everything this machine can compile. Windows and macOS sources are
-          # not in a Linux compile database at all, so they are excluded here
-          # and covered by the three-platform build job instead.
-          files=$(git ls-files src/ | grep -E '\.cpp$' | grep -vE '^src/platform/(windows|macos)/')
-          count=$(printf '%s\n' "$files" | wc -l)
-          echo "analysing $count files"
-
-          # A pathspec that stops matching is silent - the step would pass
-          # having analysed nothing at all. This is the tripwire for that.
-          if [ "$count" -lt 50 ]; then
-              echo "::error::only $count files matched; the file list has stopped working"
-              exit 1
-          fi
-
-          run-clang-tidy-18 -p build -j "$(nproc)" -quiet $files
+          name: ${{ matrix.name }}-results
+          path: ci-results/
+          if-no-files-found: warn
 
   # The sanitisers the asan preset was written for and CI never ran.
   #

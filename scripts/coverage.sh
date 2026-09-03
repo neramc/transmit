@@ -73,9 +73,12 @@ IGNORE='(tests/|build-|/usr/|_autogen|moc_|qrc_)'
 "$COV" export "${objects[@]}" -instr-profile="$BUILD/all.profdata" \
     -format=text -ignore-filename-regex="$IGNORE" > "$BUILD/coverage.json"
 
+report_only=()
+[ "$REPORT_ONLY" -eq 1 ] && report_only=(--report-only)
+
 python3 scripts/coverage_report.py \
     --coverage "$BUILD/coverage.json" \
     --floor "$FLOOR" \
     --changed-floor "$CHANGED_FLOOR" \
     ${BASE:+--base "$BASE"} \
-    $([ "$REPORT_ONLY" -eq 1 ] && echo --report-only)
+    "${report_only[@]}"

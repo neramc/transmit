@@ -43,8 +43,8 @@ AppCard {
         // A ring rather than a tick: this is a choice, not a checklist.
         Rectangle {
             Layout.alignment: Qt.AlignTop
-            width: 18
-            height: 18
+            implicitWidth: 18
+            implicitHeight: 18
             radius: width / 2
             color: "transparent"
             border.width: Elevation.selectionRingWidth

@@ -55,12 +55,12 @@ echo "Every QML file is registered in its module."
 # There is always another separator. This costs one grep to never spend that
 # afternoon again.
 literals=0
-for file in $(find src/ui/qml -name '*.qml'); do
+while IFS= read -r file; do
     if grep -nE '"[^"]*\\u0000' "$file"; then
         echo "  ^ $file has an escaped NUL in a string literal"
         literals=1
     fi
-done
+done < <(find src/ui/qml -name '*.qml')
 
 if [ "$literals" -ne 0 ]; then
     echo

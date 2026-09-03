@@ -61,3 +61,6 @@ compile_commands.json
 # and quietly kept the whole macOS packaging directory out of the repository.
 /build/
 /build-*/
+started.log
+ci-results/
+*-report.txt

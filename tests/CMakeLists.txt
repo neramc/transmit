@@ -22,4 +22,14 @@ if(Python3_Interpreter_FOUND)
              COMMAND "${Python3_EXECUTABLE}"
                      "${CMAKE_SOURCE_DIR}/scripts/version.py" --check)
     set_tests_properties(Version.consistent PROPERTIES LABELS quality TIMEOUT 60)
+
+    # The same for the small things nobody notices until they are the problem:
+    # a source file in no build, a test that is never run, a link that points
+    # at a renamed file.
+    add_test(NAME Tree.tidy
+             COMMAND "${Python3_EXECUTABLE}"
+                     "${CMAKE_SOURCE_DIR}/scripts/check-hygiene.py")
+    set_tests_properties(Tree.tidy PROPERTIES
+        LABELS quality TIMEOUT 120
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 endif()

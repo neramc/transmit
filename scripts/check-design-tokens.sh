@@ -17,7 +17,7 @@
 
 set -uo pipefail
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 
 qml_files=$(git ls-files 'src/ui/qml/*.qml' | grep -v '^src/ui/qml/theme/')
 if [ -z "$qml_files" ]; then
