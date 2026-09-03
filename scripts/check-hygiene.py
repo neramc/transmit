@@ -26,6 +26,23 @@ def tracked() -> list[Path]:
             for name in listing.stdout.split(b"\0") if name]
 
 
+# The modes git has recorded, which are what everybody else checks out.
+#
+# Asking the working copy instead asks this machine, and Windows has no
+# executable bit to report: the same question answered there says every script
+# in the project is broken. What travels is the mode in the index.
+def recorded_modes() -> dict[str, str]:
+    listing = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-s", "-z"],
+                             capture_output=True, check=True)
+    modes: dict[str, str] = {}
+    for entry in listing.stdout.split(b"\0"):
+        if not entry:
+            continue
+        details, _, name = entry.partition(b"\t")
+        modes[name.decode("utf-8")] = details.split()[0].decode("ascii")
+    return modes
+
+
 TEXT_SUFFIXES = {
     ".c", ".cc", ".cpp", ".h", ".hpp", ".mm", ".qml", ".py", ".sh", ".json",
     ".md", ".yml", ".yaml", ".txt", ".cmake", ".nix", ".spec", ".ebuild",
@@ -168,10 +185,13 @@ def main() -> int:
                 problems.append(f"{source.relative_to(ROOT)}: is in no CMakeLists.txt, "
                                 f"so nothing compiles it")
 
-    # A script a person is told to run has to be runnable.
-    for script in sorted(ROOT.glob("scripts/*")):
-        if script.suffix in {".sh", ".py"} and not script.stat().st_mode & 0o111:
-            problems.append(f"{script.relative_to(ROOT)}: is not executable")
+    # A script a person is told to run has to be runnable - for them, on their
+    # machine, from a fresh clone. That is the mode git recorded, not the one
+    # this filesystem happens to report.
+    for name, mode in sorted(recorded_modes().items()):
+        if name.startswith("scripts/") and name.endswith((".sh", ".py")) and mode != "100755":
+            problems.append(f"{name}: is committed as {mode}, so it arrives without the "
+                            f"executable bit - git update-index --chmod=+x {name}")
 
     # A link in the documentation that points at nothing is a paragraph that
     # tells somebody to go and look at a file that was renamed.
