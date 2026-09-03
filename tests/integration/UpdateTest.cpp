@@ -1165,6 +1165,11 @@ void UpdateTest::refusesAStagedFileThatChangedAfterItWasChecked() {
     QCOMPARE(installed.readAll(), QByteArray("\x7f"
                                              "ELF the one that works",
                                              23));
+    // Closed before the install below, because Windows will not rename a file
+    // somebody still has open and the install is a rename. Leaving it open
+    // made this pass on Linux and fail on Windows for a reason that had
+    // nothing to do with what is being checked.
+    installed.close();
     QVERIFY(!QFile::exists(stagedPath));
 
     // And the same file with the digest it actually has goes on.
