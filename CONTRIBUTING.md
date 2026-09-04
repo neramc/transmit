@@ -273,6 +273,21 @@ git tag v0.2.0 && git push origin v0.2.0     # the workflow writes the release
 or fill in the form under **Releases → Draft a new release**, naming the same
 tag; the workflow uploads into what you wrote.
 
+That form creates a tag only when the name is a new one. Given a name that
+already exists it attaches the release to the tag where it already is and
+ignores what **Target** says - so the workflow that runs is the one at the old
+commit, with the old everything. A tag that has to point somewhere else has to
+be moved, and moving it is itself enough to start the release:
+
+```bash
+git fetch origin
+git tag -f v0.2.0 origin/main
+git push --force origin refs/tags/v0.2.0
+```
+
+The gate reads the checks for the commit the tag ends up on, so push the commit
+and let CI finish before moving the tag onto it.
+
 Every build job rewrites the tree to the tag's version before it compiles
 anything, so the binary, the installer, the disk image and the seven packaging
 recipes cannot report different versions from each other or from the tag. It
