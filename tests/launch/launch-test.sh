@@ -61,6 +61,12 @@ if [ -z "$binary" ] || [ ! -x "$binary" ]; then
     exit 2
 fi
 
+# Absolute, because an AppImage is started from a directory of its own below.
+case "$binary" in
+    /*) ;;
+    *) binary="$PWD/$binary" ;;
+esac
+
 skip() {
     if [ "${TRANSMIT_LAUNCH_TESTS_REQUIRED:-0}" != "0" ]; then
         echo "FAILED: $* - and this machine was told it must run them" >&2
@@ -82,6 +88,18 @@ cleanup() {
 trap cleanup EXIT
 
 log="$work/launch.log"
+
+# What a person downloads on Linux is the .AppImage, not the program inside
+# it, so that is what gets started when one is handed over. Continuous
+# integration machines have no FUSE, so it unpacks itself rather than
+# mounting - into a directory of its own, because it leaves the unpacked copy
+# behind and a checkout is not the place for it.
+case "$binary" in
+    *.AppImage)
+        export APPIMAGE_EXTRACT_AND_RUN=1
+        cd "$work" || exit 2
+        ;;
+esac
 
 # A home of its own. The interface reads settings and writes a log on start,
 # and a test that leaves marks in the real home is a test nobody runs twice.

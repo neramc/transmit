@@ -342,11 +342,22 @@ jobs:
       - name: Check it runs
         env:
           TRANSMIT_LAUNCH_TESTS_REQUIRED: 1
+          # No FUSE on the runners, so the bundle unpacks itself rather than
+          # mounting. Everything above the payload - AppRun, the runtime, the
+          # desktop file it reads - is still exercised.
+          APPIMAGE_EXTRACT_AND_RUN: 1
+          WANTED: ${{ needs.version.outputs.version }}
         run: |
+          # The .AppImage itself, not the program inside it. Unpacking first
+          # and starting squashfs-root/usr/bin/transmit tests the payload and
+          # skips everything that makes it an AppImage, which is the half a
+          # person meets first.
+          image=$(find artifacts -name '*.AppImage' -type f | head -1)
+          image=$(readlink -f "$image")
+
           for mode in offscreen xcb wayland; do
               echo "::group::Launching the bundle: $mode"
-              bash tests/launch/launch-test.sh \
-                  --binary squashfs-root/usr/bin/transmit --mode "$mode"
+              bash tests/launch/launch-test.sh --binary "$image" --mode "$mode"
               echo "::endgroup::"
           done
 
@@ -356,9 +367,27 @@ jobs:
           # aborting, so that a packaging mistake costs speed and not the whole
           # program.
           echo "::group::Launching the bundle: Wayland with no OpenGL"
-          bash tests/launch/launch-test.sh \
-              --binary squashfs-root/usr/bin/transmit --mode wayland \
+          bash tests/launch/launch-test.sh --binary "$image" --mode wayland \
               --without-buffer-integration --expect-software
+          echo "::endgroup::"
+
+          # And the command line tool, which travels in the same bundle and is
+          # what somebody restoring onto a headless machine actually runs.
+          #
+          # It is asked its version, and the answer has to be the tag's. Every
+          # build job rewrites the tree before compiling, and this is the place
+          # that proves the rewrite reached the binary rather than only the
+          # packaging: a download that reports a different version than the tag
+          # it came from is a support question nobody can answer.
+          echo "::group::The command line tool inside the bundle"
+          "$image" --appimage-extract >/dev/null
+          said=$(./squashfs-root/usr/bin/transmit-cli --version)
+          echo "$said"
+          case "$said" in
+              *"$WANTED"*) ;;
+              *) echo "::error::the bundled tool says '$said', not $WANTED"
+                 exit 1 ;;
+          esac
           echo "::endgroup::"
 
       - uses: actions/upload-artifact@v4
@@ -433,16 +462,99 @@ jobs:
               fi
           done
 
-      # Started, not merely produced. A bundle whose frameworks or QML were
-      # deployed incompletely builds, installs and then fails to open a window,
-      # which is the worst way for somebody to find out.
+      # Named before it is checked, so that everything below asks its
+      # questions of the file that is going to be uploaded rather than of a
+      # copy in the build tree.
+      - name: Collect
+        run: |
+          mkdir -p artifacts
+          mv build-release/Transmit.dmg \
+             "artifacts/Transmit-${{ needs.version.outputs.version }}-macos-arm64.dmg"
+
+      # Started, not merely produced, and started from inside the disk image
+      # rather than out of the build tree.
+      #
+      # What a person gets is the .dmg: they open it, drag the bundle across,
+      # and run that copy. Starting build-release/transmit.app instead tests a
+      # bundle sitting next to the Qt it was built against, on the machine that
+      # built it - which is the one place it was always going to work. A disk
+      # image that will not attach, or that carries a bundle the deploy step
+      # left incomplete, passes that check and fails for everybody else.
+      - name: Check the disk image opens and what it carries
+        env:
+          WANTED: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          image=$(find artifacts -name '*.dmg' -type f | head -1)
+          if [ -z "$image" ]; then
+              echo "::error::no disk image was produced"
+              exit 1
+          fi
+
+          mountpoint=$(mktemp -d)
+          hdiutil attach "$image" -nobrowse -readonly -mountpoint "$mountpoint"
+          trap 'hdiutil detach "$mountpoint" -quiet || true' EXIT
+
+          echo "::group::What the disk image contains"
+          ls -la "$mountpoint"
+          echo "::endgroup::"
+
+          # Dragging is how a Mac application is installed, and the shortcut
+          # people drag onto is part of the image rather than something the
+          # system supplies.
+          if [ ! -L "$mountpoint/Applications" ]; then
+              echo "::error::the disk image has no Applications shortcut to drag onto"
+              exit 1
+          fi
+
+          # Copied out and started from where it would actually live, because a
+          # read-only mount is not where anybody runs it from and a bundle can
+          # depend on being writable without anybody meaning it to.
+          installed="$RUNNER_TEMP/Applications"
+          mkdir -p "$installed"
+          cp -R "$mountpoint/transmit.app" "$installed/"
+          hdiutil detach "$mountpoint" -quiet
+          trap - EXIT
+
+          echo "installed=$installed/transmit.app" >> "$GITHUB_ENV"
+
+          for needed in Contents/Frameworks/QtCore.framework \
+                        Contents/Resources/qml \
+                        Contents/Resources/transmit.icns \
+                        Contents/MacOS/transmit \
+                        Contents/MacOS/transmit-cli \
+                        Contents/Info.plist; do
+              if [ ! -e "$installed/transmit.app/$needed" ]; then
+                  echo "::error::the installed bundle is missing $needed"
+                  exit 1
+              fi
+          done
+
+          # The version in Info.plist is what the Finder shows and what an
+          # updater compares against, so it has to be the tag's.
+          said=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" \
+                     "$installed/transmit.app/Contents/Info.plist")
+          echo "Info.plist says $said"
+          if [ "$said" != "$WANTED" ]; then
+              echo "::error::the installed bundle says $said, not $WANTED"
+              exit 1
+          fi
+
+          said=$("$installed/transmit.app/Contents/MacOS/transmit-cli" --version)
+          echo "$said"
+          case "$said" in
+              *"$WANTED"*) ;;
+              *) echo "::error::the bundled tool says '$said', not $WANTED"
+                 exit 1 ;;
+          esac
+
       - name: Check it runs
         env:
           TRANSMIT_STARTUP_BENCHMARK: 1
           QT_LOGGING_RULES: transmit.performance.debug=true
         run: |
           set +e
-          ./build-release/transmit.app/Contents/MacOS/transmit > started.log 2>&1 &
+          "$installed/Contents/MacOS/transmit" > started.log 2>&1 &
           pid=$!
           for _ in $(seq 1 90); do
               kill -0 "$pid" 2>/dev/null || break
@@ -471,12 +583,6 @@ jobs:
               echo "::error::the packaged interface started with QML errors"
               exit 1
           fi
-
-      - name: Collect
-        run: |
-          mkdir -p artifacts
-          mv build-release/Transmit.dmg \
-             "artifacts/Transmit-${{ needs.version.outputs.version }}-macos-arm64.dmg"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -557,8 +663,9 @@ jobs:
           }
 
       # The staged tree is what both the installer and the portable archive are
-      # made of, so it is started here, once, before either is built.
-      - name: Check it runs
+      # made of, so it is started here, once, before either is built. What each
+      # of them becomes is started again further down.
+      - name: Check the staged tree runs
         shell: pwsh
         env:
           TRANSMIT_STARTUP_BENCHMARK: 1
@@ -614,6 +721,104 @@ jobs:
         run: |
           Compress-Archive -Path packaging/windows/staging/* `
               -DestinationPath "artifacts/Transmit-${{ needs.version.outputs.version }}-windows-x64-portable.zip"
+
+      # And then both of the things a person actually downloads are used the
+      # way they would use them: the installer is installed and the program is
+      # started from where it put itself, and the archive is unpacked somewhere
+      # else and started from there.
+      #
+      # The staged tree above is neither of those. It sits in the checkout,
+      # beside the compiler and the Qt it was built against, with the whole
+      # build environment still on PATH. An installer that leaves a file out,
+      # or an archive missing a directory, passes every check before this one.
+      - name: Check the installer installs and runs
+        shell: pwsh
+        env:
+          TRANSMIT_STARTUP_BENCHMARK: 1
+          QT_LOGGING_RULES: transmit.performance.debug=true
+          QT_LOGGING_TO_CONSOLE: 1
+          WANTED: ${{ needs.version.outputs.version }}
+        run: |
+          $setup = Get-ChildItem artifacts -Filter '*setup.exe' | Select-Object -First 1
+          if (-not $setup) { throw "no installer was produced" }
+
+          # /S is the silent switch the NSIS script is built with, /D the
+          # directory - unquoted and last, which is what NSIS requires.
+          $target = Join-Path $env:RUNNER_TEMP 'Installed'
+          Start-Process -FilePath $setup.FullName -ArgumentList "/S", "/D=$target" -Wait
+          if (-not (Test-Path "$target/transmit.exe")) {
+              Get-ChildItem $target -Recurse -ErrorAction SilentlyContinue |
+                  Select-Object -First 40 | Format-Table Name, Length
+              throw "the installer did not put transmit.exe in $target"
+          }
+
+          foreach ($needed in "transmit.exe", "transmit-cli.exe", "Qt6Core.dll",
+                              "Qt6Quick.dll", "platforms/qwindows.dll", "qml") {
+              if (-not (Test-Path (Join-Path $target $needed))) {
+                  throw "the installed copy is missing $needed"
+              }
+          }
+
+          $said = & "$target/transmit-cli.exe" --version
+          Write-Host $said
+          if ($said -notmatch [regex]::Escape($env:WANTED)) {
+              throw "the installed tool says '$said', not $env:WANTED"
+          }
+
+          $process = Start-Process -FilePath "$target/transmit.exe" -PassThru `
+              -RedirectStandardOutput installed.log -RedirectStandardError installed.err
+          if (-not $process.WaitForExit(90000)) {
+              $process.Kill()
+              Get-Content installed.log, installed.err -ErrorAction SilentlyContinue
+              throw "the installed interface never painted a frame"
+          }
+          Get-Content installed.log, installed.err -ErrorAction SilentlyContinue
+          if ($process.ExitCode -ne 0) {
+              throw "the installed interface exited with $($process.ExitCode)"
+          }
+          if (-not (Select-String -Path installed.log, installed.err `
+                        -Pattern "first frame after" -Quiet)) {
+              throw "the installed interface drew nothing"
+          }
+
+      - name: Check the portable archive runs
+        shell: pwsh
+        env:
+          TRANSMIT_STARTUP_BENCHMARK: 1
+          QT_LOGGING_RULES: transmit.performance.debug=true
+          QT_LOGGING_TO_CONSOLE: 1
+          WANTED: ${{ needs.version.outputs.version }}
+        run: |
+          $zip = Get-ChildItem artifacts -Filter '*portable.zip' | Select-Object -First 1
+          if (-not $zip) { throw "no portable archive was produced" }
+
+          $target = Join-Path $env:RUNNER_TEMP 'Portable'
+          Expand-Archive -Path $zip.FullName -DestinationPath $target -Force
+          if (-not (Test-Path "$target/transmit.exe")) {
+              throw "the portable archive has no transmit.exe at its top level"
+          }
+
+          $said = & "$target/transmit-cli.exe" --version
+          Write-Host $said
+          if ($said -notmatch [regex]::Escape($env:WANTED)) {
+              throw "the portable tool says '$said', not $env:WANTED"
+          }
+
+          $process = Start-Process -FilePath "$target/transmit.exe" -PassThru `
+              -RedirectStandardOutput portable.log -RedirectStandardError portable.err
+          if (-not $process.WaitForExit(90000)) {
+              $process.Kill()
+              Get-Content portable.log, portable.err -ErrorAction SilentlyContinue
+              throw "the portable interface never painted a frame"
+          }
+          Get-Content portable.log, portable.err -ErrorAction SilentlyContinue
+          if ($process.ExitCode -ne 0) {
+              throw "the portable interface exited with $($process.ExitCode)"
+          }
+          if (-not (Select-String -Path portable.log, portable.err `
+                        -Pattern "first frame after" -Quiet)) {
+              throw "the portable interface drew nothing"
+          }
 
       - uses: actions/upload-artifact@v4
         with:
