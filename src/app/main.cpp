@@ -12,6 +12,8 @@
 
 #include "core/utils/Logging.h"
 
+#include "i18n/Language.h"
+
 namespace {
 
 #if defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD) || defined(Q_OS_OPENBSD)
@@ -110,6 +112,11 @@ int main(int argc, char** argv) {
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 
     transmit::core::configureLogging(qEnvironmentVariableIsSet("TRANSMIT_VERBOSE"));
+
+    // Before the engine, because a translator installed after a string has
+    // been read changes nothing that is already on the screen. The first
+    // window is built from whatever is loaded at this point.
+    transmit::app::Language::instance().applyStored();
 
     chooseGraphicsBackend();
 

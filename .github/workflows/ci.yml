@@ -310,6 +310,30 @@ jobs:
             # shellcheck disable=SC2086
             python3 -m py_compile $files && echo "compiled $(echo "$files" | wc -l) files"'
 
+      # lupdate is what keeps the catalogues and the source together, and
+      # nothing runs it on its own. A sentence reworded here and not there
+      # keeps its old translation, and the English comes through in the middle
+      # of a translated page with nothing having failed.
+      - name: The translations match the source
+        if: always()
+        run: |
+          # The script below is handed to bash -c and the expansions in it
+          # belong to that shell, so the single quotes are the point.
+          # shellcheck disable=SC2016
+          scripts/ci-check.sh "The translations match the source" bash -c '
+            "$QT_ROOT_DIR/bin/lupdate" -locations none -no-obsolete -recursive src \
+                -ts translations/transmit_ko.ts
+            if ! git diff --quiet -- translations; then
+                echo "lupdate rewrote the catalogues, so they are behind the source:"
+                git --no-pager diff --stat -- translations
+                echo
+                echo "Run this and commit the result:"
+                echo "  lupdate -locations none -no-obsolete -recursive src \\"
+                echo "      -ts translations/transmit_ko.ts"
+                exit 1
+            fi
+            echo "the catalogues are up to date"'
+
       - name: JSON
         if: always()
         run: |
@@ -538,7 +562,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build rpm \
-                                  qt6-base-dev qt6-declarative-dev \
+                                  qt6-base-dev qt6-declarative-dev qt6-tools-dev \
                                   qml6-module-qtquick-controls \
                                   qml6-module-qtquick-layouts \
                                   qml6-module-qtquick-dialogs \

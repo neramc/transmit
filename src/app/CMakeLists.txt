@@ -18,6 +18,7 @@ qt_add_qml_module(transmit_backend
         models/DriveListModel.h models/DriveListModel.cpp
         models/ProfileListModel.h models/ProfileListModel.cpp
         models/ContinuityReportModel.h models/ContinuityReportModel.cpp
+        i18n/Language.h i18n/Language.cpp
     RESOURCE_PREFIX /qt/qml)
 
 target_link_libraries(transmit_backend
@@ -28,11 +29,34 @@ target_link_libraries(transmit_backend
 # holding the registered types have to be on the include path.
 target_include_directories(transmit_backend PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/models")
+    "${CMAKE_CURRENT_SOURCE_DIR}/models"
+    "${CMAKE_CURRENT_SOURCE_DIR}/i18n")
 
 add_subdirectory("${CMAKE_SOURCE_DIR}/src/ui/qml" "${CMAKE_BINARY_DIR}/src/ui/qml")
 
 qt_add_executable(transmit main.cpp)
+
+target_include_directories(transmit PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+
+# The translations, built into the binary rather than shipped beside it.
+#
+# A .qm file next to the executable is a file that gets left behind by a
+# packaging step, and the language then silently falls back to English on
+# exactly the machines nobody tested. Carried in the resource, it cannot.
+#
+# Named one by one rather than by directory: the shorter TS_FILE_BASE form
+# needs Qt 6.7 and this project builds against 6.4. The names matter - the
+# language list is read back out of the resource as "transmit_<code>.qm".
+if(TRANSMIT_WITH_TRANSLATIONS)
+    qt_add_translations(transmit
+        # English is the language the strings are written in, so there is no
+        # catalogue for it: one would be six hundred lines each translating a
+        # sentence into itself, and every reword would have to be made twice.
+        TS_FILES
+            "${CMAKE_SOURCE_DIR}/translations/transmit_ko.ts"
+        RESOURCE_PREFIX "/i18n"
+        LUPDATE_OPTIONS -locations none -no-obsolete)
+endif()
 
 # Every size the window icon offers. A window manager asks for one of these
 # and gets pixels drawn for it, rather than a single large image squeezed down

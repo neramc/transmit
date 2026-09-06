@@ -121,6 +121,19 @@ set(TRANSMIT_SQLITE_SOURCE "system ${SQLite3_VERSION}")
 if(TRANSMIT_BUILD_APP OR TRANSMIT_BUILD_CLI)
     if(TRANSMIT_BUILD_APP)
         find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Concurrent Sql Network)
+        if(TRANSMIT_WITH_TRANSLATIONS)
+            # lupdate and lrelease. Asked for by name so that a machine without
+            # them says which package is missing, rather than failing later on
+            # an unknown command.
+            find_package(Qt6 6.4 QUIET COMPONENTS LinguistTools)
+            if(NOT Qt6LinguistTools_FOUND)
+                message(FATAL_ERROR
+                    "Qt's Linguist tools are needed to build the translations. Install them "
+                    "(qt6-tools-dev on Debian and Ubuntu, qt6-tools on Fedora and Arch) or "
+                    "configure with -DTRANSMIT_WITH_TRANSLATIONS=OFF to build an "
+                    "English-only interface.")
+            endif()
+        endif()
     else()
         find_package(Qt6 6.4 REQUIRED COMPONENTS Core Concurrent Sql Network)
     endif()

@@ -9,6 +9,13 @@ notes say so.
 
 ### Added
 
+- The interface can be in another language. Translations are built into the
+  binary rather than shipped beside it, the language follows the machine unless
+  a setting says otherwise, and changing it takes effect immediately rather
+  than on the next start. Qt's own strings — the buttons in a dialog, the names
+  of the standard folders — are loaded too, so a window is not half translated.
+  Korean is complete for the shell, the home page and settings; the rest falls
+  back to English rather than being guessed at.
 - A `.deb` and a `.rpm`, built by CPack from the same install rules as
   everything else, published beside the AppImage. Both are built against the
   distribution's Qt rather than carrying one, and both leave the updater out:
@@ -36,6 +43,12 @@ notes say so.
   the flags. Those flags are now asked for explicitly instead of inherited from
   whichever distribution happened to build it.
 - Nothing that looks like a credential can be committed.
+- Every string a person reads has to go through a translation, and every
+  translation has to carry the same placeholders as its source — `"%1 of %2"`
+  translated as `"%2 of %1"` reports the opposite of what happened and nothing
+  else would catch it. The catalogues are also checked against the source on
+  every commit, because `lupdate` is what keeps them together and nothing runs
+  it on its own.
 - Every release check now starts what people actually download. Linux runs the
   `.AppImage` itself rather than the program unpacked out of it; macOS attaches
   the disk image, copies the bundle out and starts that; Windows installs the

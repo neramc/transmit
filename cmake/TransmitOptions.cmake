@@ -25,6 +25,11 @@ option(TRANSMIT_WITH_OPENSSL  "Enable archive encryption and secrets"  ON)
 option(TRANSMIT_WITH_LIBSECRET "Read the Linux login keyring directly"  ON)
 option(TRANSMIT_WERROR        "Treat compiler warnings as errors"      OFF)
 
+# On by default, because a build that quietly produces an English-only binary
+# is one nobody notices until somebody who does not read English runs it. Turn
+# it off deliberately if Qt's Linguist tools are not available.
+option(TRANSMIT_WITH_TRANSLATIONS "Build the interface translations"       ON)
+
 # The updater.
 #
 # TRANSMIT_UPDATE_KEYS is the whole trust model in one string: a semicolon

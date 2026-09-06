@@ -34,6 +34,29 @@ AppScrollView {
             }
         }
 
+        AppLabelledField {
+            Layout.fillWidth: true
+            label: qsTr("Language")
+            helperText: qsTr("Takes effect straight away. Anything not translated yet "
+                           + "stays in English rather than being guessed at.")
+
+            AppComboBox {
+                id: languageChoice
+
+                // Built from what the program actually carries, so a language
+                // that was added to the build appears here without anybody
+                // remembering to add it twice.
+                model: Language.available.map(function (code) {
+                    return { value: code, label: Language.nameOf(code) };
+                })
+                textRole: "label"
+                valueRole: "value"
+                currentIndex: Math.max(0, Language.available.indexOf(Language.current))
+                onActivated: Language.use(currentValue)
+                Accessible.name: qsTr("Language")
+            }
+        }
+
         AppCard {
             Layout.fillWidth: true
             implicitHeight: accessibility.implicitHeight + Spacing.xl * 2

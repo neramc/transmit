@@ -27,6 +27,23 @@ if(Python3_Interpreter_FOUND)
     # The same for the small things nobody notices until they are the problem:
     # a source file in no build, a test that is never run, a link that points
     # at a renamed file.
+    # A translation whose placeholders do not match its source is a sentence
+    # that will say something the code never meant, and nothing about the file
+    # looks wrong.
+    add_test(NAME Translations.consistent
+             COMMAND "${Python3_EXECUTABLE}"
+                     "${CMAKE_SOURCE_DIR}/scripts/check-translations.py")
+    set_tests_properties(Translations.consistent PROPERTIES LABELS quality TIMEOUT 60)
+
+    # And every string a person reads has to be able to have a translation in
+    # the first place.
+    add_test(NAME Translations.reachable
+             COMMAND "${Python3_EXECUTABLE}"
+                     "${CMAKE_SOURCE_DIR}/scripts/check-translatable.py")
+    set_tests_properties(Translations.reachable PROPERTIES
+        LABELS quality TIMEOUT 60
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+
     add_test(NAME Tree.tidy
              COMMAND "${Python3_EXECUTABLE}"
                      "${CMAKE_SOURCE_DIR}/scripts/check-hygiene.py")

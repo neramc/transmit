@@ -248,7 +248,9 @@ splits for automatically.
 
 ## Building
 
-Needs a C++20 compiler, CMake 3.21, Qt 6.4 or later, zstd, zlib and SQLite3.
+Needs a C++20 compiler, CMake 3.21, Qt 6.4 or later including its Linguist
+tools, zstd, zlib and SQLite3. Build with `-DTRANSMIT_WITH_TRANSLATIONS=OFF`
+for an English-only interface without them.
 liblzma, OpenSSL and libsecret are optional. Without OpenSSL the build cannot
 read or write encrypted archives, and says so rather than falling back to
 plaintext. Without libsecret it can write to the Linux login keyring but not
