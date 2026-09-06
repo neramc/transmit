@@ -129,6 +129,28 @@ std::string TokenizedPath::toDisplayString() const {
     return text;
 }
 
+bool isAbsolutePath(std::string_view path, OsFamily family) {
+    if (path.empty()) {
+        return false;
+    }
+    if (path.front() == '/') {
+        return true;
+    }
+    // A backslash roots a path only where a backslash is a separator. On a
+    // POSIX target it is an ordinary character in a filename, and reading
+    // "\\server\\share" there as rooted would let a name decide where it
+    // goes.
+    if (path.front() == '\\' && usesWindowsPathStyle(family)) {
+        return true;
+    }
+    // "C:/x". Only on a Windows target: a file called "C:foo" is an ordinary
+    // name everywhere else, and treating it as rooted would be inventing a
+    // drive out of somebody's filename.
+    return usesWindowsPathStyle(family) && path.size() >= 3 && path[1] == ':' &&
+           (path[2] == '/' || path[2] == '\\') &&
+           ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z'));
+}
+
 std::string normalizePath(std::string_view path, OsFamily family) {
     if (path.empty()) {
         return {};
@@ -218,9 +240,11 @@ std::string toNativePath(std::string_view path, OsFamily family) {
 PathTokenMap::PathTokenMap(OsFamily family) : family_(family) {}
 
 void PathTokenMap::setBase(PathTokenId token, std::string absolutePath) {
-    if (token == PathTokenId::Absolute) {
-        return;
-    }
+    // {ABS} may be given somewhere to be, and that is the whole of how a
+    // restore into a chosen folder keeps the files an archive gave absolute
+    // paths for. This used to return here, which meant the caller could ask
+    // and be ignored: the one token that could name any path on the machine
+    // was also the one that could not be pointed anywhere.
     std::string normalized = normalizePath(absolutePath, family_);
     if (normalized.empty()) {
         bases_.erase(token);
@@ -267,8 +291,6 @@ TokenizedPath PathTokenMap::tokenize(std::string_view absolutePath) const {
     return TokenizedPath{bestToken, std::move(relative)};
 }
 
-namespace {
-
 /// Whether `candidate` is `base` or sits under it. Both are expected to be
 /// normalised already.
 ///
@@ -296,17 +318,36 @@ bool isWithin(std::string_view base, std::string_view candidate, OsFamily family
     return right.size() == left.size() || left.back() == '/' || right[left.size()] == '/';
 }
 
-}  // namespace
-
 Result<std::string> PathTokenMap::resolve(const TokenizedPath& path) const {
-    if (path.token == PathTokenId::Absolute) {
+    const auto it = bases_.find(path.token);
+
+    // {ABS} with somewhere to be put is treated like any other token, and goes
+    // through the containment check below with everything else.
+    //
+    // It used to be answered here, before the bases were consulted, which made
+    // it the one thing a restore into a chosen folder could not keep inside
+    // that folder: every other token was rooted at the destination and this one
+    // was handed back whatever the archive said. An archive is a file, and a
+    // file can say anything.
+    if (path.token == PathTokenId::Absolute && it == bases_.end()) {
         if (path.relative.empty()) {
             return makeError(ErrorCode::InvalidArgument, "empty absolute path");
         }
-        return normalizePath(path.relative, family_);
+        std::string resolved = normalizePath(path.relative, family_);
+
+        // An absolute entry whose path is not absolute says nothing about
+        // where it was meant to go, and a path with no root is written
+        // wherever the program happened to be started from - a different
+        // folder for every way of launching it. Refused, and reported, rather
+        // than written somewhere nobody chose.
+        if (!isAbsolutePath(resolved, family_)) {
+            return makeError(ErrorCode::InvalidArgument, "\"", path.relative,
+                             "\" is not an absolute path, so there is nothing saying where it "
+                             "belongs");
+        }
+        return resolved;
     }
 
-    const auto it = bases_.find(path.token);
     if (it == bases_.end()) {
         return makeError(ErrorCode::NotFound, "this machine has no location for {",
                          std::string(tokenName(path.token)), "}");

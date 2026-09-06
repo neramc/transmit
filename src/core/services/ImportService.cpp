@@ -258,10 +258,12 @@ format::PathTokenMap ImportService::targetTokens(const ImportRequest& request) c
     if (!request.destinationOverride.isEmpty()) {
         const QString root = QDir::cleanPath(request.destinationOverride);
         format::PathTokenMap map(target);
+        // Every token, {ABS} included. It used to be skipped, and the comment
+        // above still claimed the table kept every path inside the
+        // destination - which was true of every path except the ones an
+        // archive had given an absolute location for, and those are exactly
+        // the ones that can name anywhere on the machine.
         for (const format::PathTokenId token : format::allTokens()) {
-            if (token == format::PathTokenId::Absolute) {
-                continue;
-            }
             map.setBase(token,
                         format::joinPath(toUtf8(root), std::string(format::tokenName(token))));
         }

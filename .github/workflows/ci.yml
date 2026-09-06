@@ -601,6 +601,82 @@ jobs:
             build-package/*.rpm
           if-no-files-found: warn
 
+  # The properties SECURITY.md states, checked rather than read.
+  #
+  # That file is a list of things this program will not do. A claim nothing
+  # tests is a claim that survives the change which breaks it, so the ones that
+  # can be expressed as a check are checked here, on every commit.
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libzstd-dev liblzma-dev libssl-dev \
+                                  libsqlite3-dev libsecret-1-dev binutils
+
+      - name: Build
+        if: always()
+        run: |
+          scripts/ci-check.sh "Build" bash -c '
+            cmake --preset default -DTRANSMIT_WERROR=ON
+            cmake --build --preset default'
+
+      # A restore writes files somewhere, and an archive is a file that can say
+      # anything about where. These are the paths a crafted one would use.
+      - name: Nothing an archive says escapes the folder it was pointed at
+        if: always()
+        run: |
+          scripts/ci-check.sh "A restore stays inside the folder it was given" \
+              ctest --test-dir build -L security --output-on-failure
+
+      # Asked for in cmake/Hardening.cmake; whether the compiler did it, the
+      # linker kept it, and a later change left it alone are other questions.
+      - name: The binaries carry the mitigations the build asks for
+        if: always()
+        run: |
+          scripts/ci-check.sh "The build is hardened" \
+              scripts/check-hardening.sh build
+
+      # A key or a token committed once is committed forever: rewriting history
+      # does not reach the clones. Cheap to check, and the only moment it can
+      # still be undone is before it is pushed.
+      - name: Nothing that looks like a credential is in the tree
+        if: always()
+        run: |
+          scripts/ci-check.sh "No credentials are committed" scripts/check-no-secrets.py
+
+      # The updater is the one thing here that runs code from elsewhere, so
+      # every refusal it is supposed to make is exercised: an unsigned feed, a
+      # signature that does not check out, a download whose digest changed
+      # after it was verified, a host that is not the one the release is on.
+      - name: The updater refuses everything it is supposed to refuse
+        if: always()
+        run: |
+          scripts/ci-check.sh "The updater refuses what it should" \
+              ctest --test-dir build -R '^Update$' --output-on-failure
+
+      - name: What went wrong
+        if: always()
+        run: python3 scripts/ci-report.py --title "Security"
+
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-results
+          path: ci-results/
+          if-no-files-found: warn
+
   fault-injection:
     name: Fault injection
     runs-on: ubuntu-latest

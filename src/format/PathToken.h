@@ -81,6 +81,19 @@ std::string joinPath(std::string_view base, std::string_view relative);
 /// Converts an internal '/' path to the separators the given OS expects.
 std::string toNativePath(std::string_view path, OsFamily family);
 
+/// Whether the path names a root: a leading separator, or a drive letter on a
+/// Windows target. What a path with no root means depends on where the program
+/// was started, which is not something an archive gets to decide.
+[[nodiscard]] bool isAbsolutePath(std::string_view path, OsFamily family);
+
+/// Whether `candidate` is `base` or sits under it, both already normalised.
+///
+/// The one place the question "is this inside that?" is answered, so that the
+/// guard on a restore and the checks that hold it to its word cannot disagree
+/// about what inside means. Whole components are compared: "/home/bob2" is not
+/// inside "/home/bob", which a plain prefix test would allow.
+[[nodiscard]] bool isWithin(std::string_view base, std::string_view candidate, OsFamily family);
+
 /// The known-folder table for one machine. The Qt layer fills it from
 /// QStandardPaths; tests fill it by hand, which is why this type carries no Qt
 /// dependency.

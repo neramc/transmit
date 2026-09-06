@@ -93,6 +93,16 @@ It is implemented in this repository rather than called through OpenSSL because
 a FIPS-mode build refuses MD5, and a check that quietly becomes optional
 depending on how the runtime was configured is not a check.
 
+**A restore stays inside the folder it was given.** An archive can claim any
+path it likes, and one that was not written by this program will. Every path an
+entry names is sanitised and then resolved against the folder its token points
+at, and the result has to be inside that folder or it is refused and reported.
+When a destination is chosen, every token is rooted there — including the one
+for files that had no known folder when they were captured, which used to be
+the exception and is the only kind that can name an arbitrary place on the
+machine. A path with no root is refused rather than written relative to
+wherever the program was started.
+
 **A repair archive cannot change what an archive holds.** `name.txa.repair`
 supplies bytes for files the drive damaged, and every reader picks it up
 without being asked. It may only supply bytes that hash to what the archive's

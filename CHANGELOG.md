@@ -14,8 +14,28 @@ notes say so.
   distribution's Qt rather than carrying one, and both leave the updater out:
   a copy `dpkg` or `rpm` owns is theirs to replace.
 
+### Fixed
+
+- Restoring into a chosen folder now keeps everything inside it. Files an
+  archive gave an absolute path for were the exception: the folder table was
+  built with every location rooted at the destination except that one, and the
+  code that resolved it answered before it ever looked at the table. A restore
+  could therefore write outside the folder somebody pointed at, on the word of
+  the archive. Such a path was also written relative to wherever the program
+  had been started, so where a file landed depended on how it was launched.
+
 ### Testing
 
+- A security suite, checking the properties SECURITY.md states rather than
+  leaving them as prose: every shape of path an archive could use to get out of
+  the folder it was pointed at, on both path styles, and the refusals the
+  updater is supposed to make.
+- The binaries are checked for the mitigations the build asks for — position
+  independence, read-only relocations, a non-executable stack, stack guards,
+  fortified calls — read back off the finished files rather than assumed from
+  the flags. Those flags are now asked for explicitly instead of inherited from
+  whichever distribution happened to build it.
+- Nothing that looks like a credential can be committed.
 - Every release check now starts what people actually download. Linux runs the
   `.AppImage` itself rather than the program unpacked out of it; macOS attaches
   the disk image, copies the bundle out and starts that; Windows installs the

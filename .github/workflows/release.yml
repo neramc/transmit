@@ -86,6 +86,7 @@ jobs:
           required=(
             "Linux" "Windows" "macOS"
             "Linux packages"
+            "Security"
             "Formatting and static analysis"
             "Sanitisers (asan-ubsan)" "Sanitisers (tsan)"
             "Application catalog"
