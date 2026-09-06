@@ -519,6 +519,88 @@ jobs:
   # that stores something shorter than it was given, and single-bit damage
   # everywhere in a finished archive. The gate is that no fault ever produces
   # data that reads back clean and wrong.
+  # The two packages a Linux user is handed by name, built, installed, and
+  # started from where the package manager put them.
+  #
+  # An AppImage carries its own Qt; a .deb and a .rpm do not, and depend on the
+  # distribution's instead. That is a different program in every way that
+  # matters at start-up - a different Qt, different QML modules, resolved by
+  # the package manager rather than by a bundle - so building one and calling
+  # it done proves nothing about whether it opens.
+  packages:
+    name: Linux packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build rpm \
+                                  qt6-base-dev qt6-declarative-dev \
+                                  qml6-module-qtquick-controls \
+                                  qml6-module-qtquick-layouts \
+                                  qml6-module-qtquick-dialogs \
+                                  qml6-module-qtqml-workerscript \
+                                  libzstd-dev liblzma-dev libssl-dev \
+                                  libsqlite3-dev libsecret-1-dev \
+                                  libgl1-mesa-dev libgl1-mesa-dri \
+                                  libxkbcommon-x11-0 libxcb-cursor0 xvfb weston
+
+      # Built the way a distribution builds it: against the system Qt, into
+      # /usr, with the updater left out. A copy a package manager owns must not
+      # be able to replace itself, and every packaging recipe here already says
+      # so; this is the same decision made where the packages are produced.
+      - name: Build
+        if: always()
+        run: |
+          scripts/ci-check.sh "Configure for packaging" \
+              cmake -S . -B build-package -G Ninja \
+                  -DCMAKE_BUILD_TYPE=Release \
+                  -DCMAKE_INSTALL_PREFIX=/usr \
+                  -DTRANSMIT_WITH_UPDATER=OFF \
+                  -DTRANSMIT_BUILD_TESTS=OFF
+          scripts/ci-check.sh "Compile for packaging" cmake --build build-package
+
+      - name: Make the packages
+        if: always()
+        run: |
+          # The script below is handed to bash -c and the expansions in it
+          # belong to that shell, so the single quotes are the point.
+          # shellcheck disable=SC2016
+          scripts/ci-check.sh "cpack builds a .deb and a .rpm" bash -c '
+            cd build-package
+            cpack -G DEB
+            cpack -G RPM
+            ls -l ./*.deb ./*.rpm'
+
+      # Installed and started, not merely built. Everything this checks is in
+      # one script so that it can be run by hand on the machine that is about
+      # to be packaged for.
+      - name: Install them and start what they installed
+        if: always()
+        env:
+          TRANSMIT_LAUNCH_TESTS_REQUIRED: 1
+          TRANSMIT_PACKAGE_TESTS_REQUIRED: 1
+        run: |
+          scripts/ci-check.sh "The packages install and the program starts" \
+              scripts/check-linux-packages.sh build-package
+
+      - name: What went wrong
+        if: always()
+        run: python3 scripts/ci-report.py --title "Linux packages"
+
+      - name: Keep the packages
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            build-package/*.deb
+            build-package/*.rpm
+          if-no-files-found: warn
+
   fault-injection:
     name: Fault injection
     runs-on: ubuntu-latest

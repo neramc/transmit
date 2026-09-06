@@ -85,6 +85,7 @@ jobs:
           # is how a gate stops being taken seriously.
           required=(
             "Linux" "Windows" "macOS"
+            "Linux packages"
             "Formatting and static analysis"
             "Sanitisers (asan-ubsan)" "Sanitisers (tsan)"
             "Application catalog"
@@ -393,6 +394,82 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: linux
+          path: artifacts/*
+          if-no-files-found: error
+
+  # A .deb and a .rpm, for the people who would rather their package manager
+  # knew about this than have a file in their downloads folder.
+  #
+  # Built against the distribution's Qt rather than carrying one, and with the
+  # updater left out: a copy dpkg or rpm owns is theirs to replace, not ours.
+  linux-packages:
+    name: Linux (deb and rpm)
+    needs: [version, checks]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write the version the tag asks for
+        env:
+          WANTED: ${{ needs.version.outputs.version }}
+        run: |
+          python=python3
+          command -v "$python" >/dev/null 2>&1 || python=python
+          "$python" scripts/version.py --set "$WANTED"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build rpm \
+                                  qt6-base-dev qt6-declarative-dev \
+                                  qml6-module-qtquick-controls \
+                                  qml6-module-qtquick-layouts \
+                                  qml6-module-qtquick-dialogs \
+                                  qml6-module-qtqml-workerscript \
+                                  libzstd-dev liblzma-dev libssl-dev \
+                                  libsqlite3-dev libsecret-1-dev \
+                                  libgl1-mesa-dev libgl1-mesa-dri \
+                                  libxkbcommon-x11-0 libxcb-cursor0 xvfb weston
+
+      - name: Build
+        run: |
+          cmake -S . -B build-package -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=/usr \
+              -DTRANSMIT_WITH_UPDATER=OFF \
+              -DTRANSMIT_BUILD_TESTS=OFF
+          cmake --build build-package
+
+      - name: Make the packages
+        run: |
+          cd build-package
+          cpack -G DEB
+          cpack -G RPM
+          ls -l ./*.deb ./*.rpm
+
+      # The same script continuous integration runs, so a package is never
+      # published having been checked less than one that was only tested.
+      - name: Install them and start what they installed
+        env:
+          TRANSMIT_LAUNCH_TESTS_REQUIRED: 1
+          TRANSMIT_PACKAGE_TESTS_REQUIRED: 1
+        run: scripts/check-linux-packages.sh build-package
+
+      - name: Collect
+        env:
+          WANTED: ${{ needs.version.outputs.version }}
+        run: |
+          mkdir -p artifacts
+          for package in build-package/*.deb build-package/*.rpm; do
+              extension="${package##*.}"
+              mv "$package" "artifacts/Transmit-${WANTED}-linux-x86_64.${extension}"
+          done
+          ls -l artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
           path: artifacts/*
           if-no-files-found: error
 
@@ -828,7 +905,7 @@ jobs:
 
   publish:
     name: Publish the release
-    needs: [version, checks, linux, macos, windows]
+    needs: [version, checks, linux, linux-packages, macos, windows]
     if: needs.version.outputs.tag != ''
     runs-on: ubuntu-latest
     permissions:

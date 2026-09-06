@@ -48,4 +48,5 @@ if(TRANSMIT_BUILD_BENCH AND NOT TRANSMIT_BUILD_TESTS)
     add_subdirectory(tests/bench)
 endif()
 
+include(Packaging)
 include(TransmitSummary)

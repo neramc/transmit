@@ -5,6 +5,26 @@ versioning](https://semver.org): while the major version is 0 the archive
 format may still change between minor versions, and when it does, the release
 notes say so.
 
+## Unreleased
+
+### Added
+
+- A `.deb` and a `.rpm`, built by CPack from the same install rules as
+  everything else, published beside the AppImage. Both are built against the
+  distribution's Qt rather than carrying one, and both leave the updater out:
+  a copy `dpkg` or `rpm` owns is theirs to replace.
+
+### Testing
+
+- Every release check now starts what people actually download. Linux runs the
+  `.AppImage` itself rather than the program unpacked out of it; macOS attaches
+  the disk image, copies the bundle out and starts that; Windows installs the
+  installer and starts the program from where it put itself, then unpacks the
+  portable archive and starts that too. Each also asks the packaged command
+  line tool its version and fails if it is not the tag's.
+- The two Linux packages are built, installed and started on every commit, not
+  only at release: the `.deb` on the runner, the `.rpm` in a Fedora container.
+
 ## 0.1.1 - 2026-09-03
 
 ### Added

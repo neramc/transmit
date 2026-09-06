@@ -27,6 +27,8 @@ Built for each release on the [releases page](https://github.com/neramc/transmit
 | File | For |
 | --- | --- |
 | `Transmit-*-linux-x86_64.AppImage` | Any modern Linux. `chmod +x` it and run it. |
+| `Transmit-*-linux-x86_64.deb` | Debian 13, Ubuntu 24.04 and later. |
+| `Transmit-*-linux-x86_64.rpm` | Fedora 40 and later, and anything else using rpm. |
 | `Transmit-*-macos-arm64.dmg` | macOS 14 and later, Apple silicon. |
 | `Transmit-*-windows-x64-setup.exe` | Windows 10 1809 and later. |
 | `Transmit-*-windows-x64-portable.zip` | Windows, without installing anything. |
@@ -34,6 +36,12 @@ Built for each release on the [releases page](https://github.com/neramc/transmit
 Each one carries both programs: the window, and `transmit-cli` for machines
 with no display. Check what you downloaded against `SHA256SUMS` on the same
 page.
+
+The AppImage brings its own Qt and runs anywhere; the `.deb` and `.rpm` use
+the one your distribution ships, which is why they name a version of it. On
+an older system, take the AppImage. Neither package can update itself —
+`dpkg` and `rpm` own that copy, and the code that could replace a program is
+left out of the builds where replacing one would be theirs to do.
 
 The macOS and Windows builds are **not signed** — signing needs credentials a
 public build has no business holding. macOS will refuse the first launch:
