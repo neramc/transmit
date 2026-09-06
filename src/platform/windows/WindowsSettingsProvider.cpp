@@ -152,6 +152,10 @@ QList<SettingValue> WindowsSettingsProvider::readAll() const {
         "http\\UserChoice",
         QStringLiteral("ProgId"));
     record(SettingKey::DefaultBrowser, browser);
+    // And the machine's own, from resources/system-map.json: the same
+    // walk on every system, so it is done once rather than three times.
+    values.append(readSystemSettings());
+
     return values;
 }
 
@@ -161,6 +165,16 @@ ApplyResult WindowsSettingsProvider::apply(const SettingValue& value) const {
     }
 
     switch (value.key) {
+        // The machine's own settings. Read from the table, and written into
+        // the script rather than applied: none of these can be set without
+        // rights this program does not ask for.
+        case SettingKey::SystemHostname:
+        case SettingKey::SystemHostsEntries:
+        case SettingKey::SystemTimeServer:
+        case SettingKey::SystemFirewallEnabled:
+        case SettingKey::SystemRemoteLogin:
+            return applySystemSetting(value);
+
         case SettingKey::AppearanceTheme: {
             const quint32 light = value.value == QLatin1String("dark") ? 0u : 1u;
             const bool apps =

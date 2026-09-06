@@ -270,6 +270,10 @@ QList<SettingValue> LinuxSettingsProvider::readAll() const {
     record(SettingKey::DefaultMailClient,
            run(QStringLiteral("xdg-mime"), {QStringLiteral("query"), QStringLiteral("default"),
                                             QStringLiteral("x-scheme-handler/mailto")}));
+    // And the machine's own, from resources/system-map.json: the same
+    // walk on every system, so it is done once rather than three times.
+    values.append(readSystemSettings());
+
     return values;
 }
 
@@ -284,6 +288,16 @@ ApplyResult LinuxSettingsProvider::apply(const SettingValue& value) const {
     };
 
     switch (value.key) {
+        // The machine's own settings. Read from the table, and written into
+        // the script rather than applied: none of these can be set without
+        // rights this program does not ask for.
+        case SettingKey::SystemHostname:
+        case SettingKey::SystemHostsEntries:
+        case SettingKey::SystemTimeServer:
+        case SettingKey::SystemFirewallEnabled:
+        case SettingKey::SystemRemoteLogin:
+            return applySystemSetting(value);
+
         case SettingKey::AppearanceTheme: {
             if (desktop_ == Desktop::Kde) {
                 const QString scheme = value.value == QLatin1String("dark")

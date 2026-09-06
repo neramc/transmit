@@ -31,6 +31,19 @@ needs one gets it on standard input. A passphrase in `argv` is readable by
 every other user on the machine, which is why `--passphrase` carries a warning
 and the terminal prompt exists.
 
+**A machine's own settings are read, never set.** Its name, the servers it
+takes the time from, whether the firewall is on, whether it accepts SSH — these
+are read where the system keeps them and written into `apply-settings.sh` /
+`.ps1` for somebody to look at and run. Not one of them is applied. Where each
+system keeps them is a table compiled into the binary,
+`resources/system-map.json`, which is deliberately **not** extensible from the
+user's profile the way the application catalogue is: every entry in it names a
+command, and a file naming commands that anything able to write to a home
+directory can replace is a way to run whatever it likes — as that user for the
+reads, and as root for the rest. A value that goes into one of those commands
+is single-quoted at the substitution, because a hostname or a line out of a
+hosts file is text this program did not write.
+
 **Transmit never runs the scripts it writes.** Installing software and changing
 privileged settings are your decision and your password. It writes
 `install-apps.sh` / `.ps1` and `apply-settings.sh` / `.ps1`, tells you they are

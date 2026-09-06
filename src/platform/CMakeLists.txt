@@ -5,6 +5,7 @@ add_library(transmit_platform STATIC
     PlatformService.cpp
     PlatformServiceFactory.cpp
     SettingsProvider.cpp
+    SystemSettingsMap.cpp
     SecretStore.cpp)
 
 add_library(Transmit::Platform ALIAS transmit_platform)
@@ -14,6 +15,14 @@ target_include_directories(transmit_platform PUBLIC "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(transmit_platform
     PUBLIC  Transmit::Common Transmit::Format Transmit::Warnings Qt6::Core
     PRIVATE Qt6::Network)
+
+# Compiled in beside the code that reads it, rather than installed alongside.
+# The table names commands; a file on disk that names commands is a file that
+# can be replaced, and this one must not be.
+qt_add_resources(transmit_platform "transmit_system_map"
+    PREFIX "/catalog"
+    BASE "${CMAKE_SOURCE_DIR}/resources"
+    FILES "${CMAKE_SOURCE_DIR}/resources/system-map.json")
 
 if(WIN32)
     # Credential Manager lives in advapi32; wincred.h needs it at link time.

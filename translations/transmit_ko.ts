@@ -2263,6 +2263,30 @@
         <source>Show hidden files</source>
         <translation>숨김 파일 보기</translation>
     </message>
+    <message>
+        <source>The name this computer answers to</source>
+        <translation>이 컴퓨터의 이름</translation>
+    </message>
+    <message>
+        <source>Names this computer resolves by itself</source>
+        <translation>이 컴퓨터가 스스로 해석하는 이름들</translation>
+    </message>
+    <message>
+        <source>The server this computer sets its clock from</source>
+        <translation>시각을 맞춰오는 서버</translation>
+    </message>
+    <message>
+        <source>Whether the firewall is on</source>
+        <translation>방화벽이 켜져 있는지</translation>
+    </message>
+    <message>
+        <source>Whether this computer accepts SSH connections</source>
+        <translation>SSH 접속을 받는지</translation>
+    </message>
+    <message>
+        <source>this system has no way to set it from a script</source>
+        <translation>이 시스템에는 스크립트로 설정할 방법이 없습니다</translation>
+    </message>
 </context>
 <context>
     <name>SettingsPage</name>

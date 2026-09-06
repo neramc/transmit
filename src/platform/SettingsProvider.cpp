@@ -2,6 +2,8 @@
 
 #include <QCoreApplication>
 
+#include "platform/SystemSettingsMap.h"
+
 namespace transmit::platform {
 
 QString settingKeyName(SettingKey key) {
@@ -40,6 +42,19 @@ QString settingKeyName(SettingKey key) {
             return QStringLiteral("locale.clock24Hour");
         case SettingKey::ShowHiddenFiles:
             return QStringLiteral("files.showHidden");
+
+        // The names the table in resources/system-map.json uses. They have to
+        // match, and the catalogue test checks that they do.
+        case SettingKey::SystemHostname:
+            return QStringLiteral("SystemHostname");
+        case SettingKey::SystemHostsEntries:
+            return QStringLiteral("SystemHostsEntries");
+        case SettingKey::SystemTimeServer:
+            return QStringLiteral("SystemTimeServer");
+        case SettingKey::SystemFirewallEnabled:
+            return QStringLiteral("SystemFirewallEnabled");
+        case SettingKey::SystemRemoteLogin:
+            return QStringLiteral("SystemRemoteLogin");
     }
     return {};
 }
@@ -80,8 +95,44 @@ QString settingKeyDescription(SettingKey key) {
             return QCoreApplication::translate("Settings", "24-hour clock");
         case SettingKey::ShowHiddenFiles:
             return QCoreApplication::translate("Settings", "Show hidden files");
+
+        case SettingKey::SystemHostname:
+            return QCoreApplication::translate("Settings", "The name this computer answers to");
+        case SettingKey::SystemHostsEntries:
+            return QCoreApplication::translate("Settings",
+                                               "Names this computer resolves by itself");
+        case SettingKey::SystemTimeServer:
+            return QCoreApplication::translate("Settings",
+                                               "The server this computer sets its clock from");
+        case SettingKey::SystemFirewallEnabled:
+            return QCoreApplication::translate("Settings", "Whether the firewall is on");
+        case SettingKey::SystemRemoteLogin:
+            return QCoreApplication::translate("Settings",
+                                               "Whether this computer accepts SSH connections");
     }
     return {};
+}
+
+QList<SettingValue> SettingsProvider::readSystemSettings() {
+    QList<SettingValue> values;
+    for (const SettingKey key : SystemSettingsMap::keys()) {
+        const SettingValue value = SystemSettingsMap::read(key);
+        if (value.present) {
+            values.append(value);
+        }
+    }
+    return values;
+}
+
+ApplyResult SettingsProvider::applySystemSetting(const SettingValue& value) {
+    const QString command = SystemSettingsMap::applyCommand(value.key, value.value);
+    if (command.isEmpty()) {
+        return {ApplyOutcome::Unsupported,
+                QCoreApplication::translate("Settings",
+                                            "this system has no way to set it from a script"),
+                {}};
+    }
+    return {ApplyOutcome::NeedsPrivilege, {}, command};
 }
 
 QList<SettingKey> allSettingKeys() {
@@ -101,7 +152,12 @@ QList<SettingKey> allSettingKeys() {
             SettingKey::AccessibilityReduceMotion,
             SettingKey::MouseNaturalScroll,
             SettingKey::ClockUses24Hour,
-            SettingKey::ShowHiddenFiles};
+            SettingKey::ShowHiddenFiles,
+            SettingKey::SystemHostname,
+            SettingKey::SystemHostsEntries,
+            SettingKey::SystemTimeServer,
+            SettingKey::SystemFirewallEnabled,
+            SettingKey::SystemRemoteLogin};
 }
 
 }  // namespace transmit::platform

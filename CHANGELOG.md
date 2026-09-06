@@ -16,6 +16,14 @@ notes say so.
   of the standard folders — are loaded too, so a window is not half translated.
   Korean is complete for the shell, the home page and settings; the rest falls
   back to English rather than being guessed at.
+- The settings that belong to the machine rather than to the person now travel
+  too: its name, the entries somebody added to its hosts file, the server it
+  takes the time from, whether the firewall is on and whether it accepts SSH.
+  Every one is read where that system keeps it and written into the script a
+  restore leaves behind — none is applied, because none can be without rights
+  Transmit does not ask for. Where each system keeps them is a table rather
+  than three implementations of the same list, which is what lets somebody
+  correct the Windows entry without a Windows machine.
 - The interface takes its measurements from the desktop it is running on.
   Corner radii, control and row heights, and the order of the buttons in a
   dialog now follow Windows 11, Windows 10, macOS, GNOME, KDE Plasma, Xfce or

@@ -193,6 +193,10 @@ QList<SettingValue> MacOsSettingsProvider::readAll() const {
                {QStringLiteral("-e"),
                 QStringLiteral("tell application \"Finder\" to get POSIX path of "
                                "(get desktop picture as alias)")}));
+    // And the machine's own, from resources/system-map.json: the same
+    // walk on every system, so it is done once rather than three times.
+    values.append(readSystemSettings());
+
     return values;
 }
 
@@ -207,6 +211,16 @@ ApplyResult MacOsSettingsProvider::apply(const SettingValue& value) const {
     };
 
     switch (value.key) {
+        // The machine's own settings. Read from the table, and written into
+        // the script rather than applied: none of these can be set without
+        // rights this program does not ask for.
+        case SettingKey::SystemHostname:
+        case SettingKey::SystemHostsEntries:
+        case SettingKey::SystemTimeServer:
+        case SettingKey::SystemFirewallEnabled:
+        case SettingKey::SystemRemoteLogin:
+            return applySystemSetting(value);
+
         case SettingKey::AppearanceTheme:
             if (value.value == QLatin1String("dark")) {
                 return defaultsWrite(QStringLiteral("-g"), QStringLiteral("AppleInterfaceStyle"),

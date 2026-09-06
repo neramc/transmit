@@ -32,6 +32,16 @@ enum class SettingKey {
     MouseNaturalScroll,
     ClockUses24Hour,
     ShowHiddenFiles,
+
+    // The machine's own, rather than the person's. Every one of these needs
+    // rights Transmit does not ask for, so they are read here and written into
+    // the script a restore leaves behind rather than applied. Where each
+    // system keeps them is resources/system-map.json.
+    SystemHostname,
+    SystemHostsEntries,
+    SystemTimeServer,
+    SystemFirewallEnabled,
+    SystemRemoteLogin,
 };
 
 QString settingKeyName(SettingKey key);
@@ -72,6 +82,21 @@ struct ApplyResult {
 class SettingsProvider {
 public:
     virtual ~SettingsProvider() = default;
+
+    /// The machine's own settings, read from resources/system-map.json.
+    ///
+    /// Here rather than in each of the three implementations because it is the
+    /// same work on all of them: the differences are entries in the table, and
+    /// three copies of the code that walks it would be three places for the
+    /// list to fall out of step.
+    [[nodiscard]] static QList<SettingValue> readSystemSettings();
+
+    /// Always NeedsPrivilege, with the command the table names.
+    ///
+    /// None of these can be set without rights this program does not ask for,
+    /// and it does not ask for them: the command is written into the script a
+    /// restore leaves behind, and running it is the user's decision.
+    [[nodiscard]] static ApplyResult applySystemSetting(const SettingValue& value);
 
     /// Everything this system can tell us. Keys it has no answer for come back
     /// with `present` false rather than being omitted, so the report can say

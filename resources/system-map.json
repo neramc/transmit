@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "_comment": [
+    "Where each operating system keeps the settings that belong to the machine",
+    "rather than to the person using it.",
+    "",
+    "This file is read from the compiled-in resource and from nowhere else. The",
+    "application catalogue can be extended from a folder in the user's profile;",
+    "this one cannot, because every entry here names a command, and a file that",
+    "names commands and can be replaced by anything that can write to a home",
+    "directory is a way to run whatever it likes as that user - and, for the",
+    "apply lines, as root.",
+    "",
+    "Nothing here is ever applied by Transmit. Every one of these needs rights",
+    "the program does not ask for, so restoring writes the commands into",
+    "apply-settings.sh or .ps1 and stops. Installing software and changing a",
+    "machine's own settings are the user's decision and the user's password."
+  ],
+  "settings": [
+    {
+      "key": "SystemHostname",
+      "description": "The name this computer answers to on a network",
+      "linux": {
+        "read": { "file": "/etc/hostname", "whole": true },
+        "apply": "hostnamectl set-hostname {value}"
+      },
+      "windows": {
+        "read": {
+          "registry": "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+          "name": "Hostname"
+        },
+        "apply": "Rename-Computer -NewName {value} -Force"
+      },
+      "macos": {
+        "read": { "command": ["scutil", "--get", "ComputerName"] },
+        "apply": "scutil --set ComputerName {value}"
+      }
+    },
+    {
+      "key": "SystemHostsEntries",
+      "description": "Names this computer resolves by itself, from its hosts file",
+      "_note": [
+        "Only the lines somebody added. The defaults every system ships -",
+        "localhost, the IPv6 block - are the same everywhere and carrying them",
+        "would duplicate them on the far side."
+      ],
+      "linux": {
+        "read": { "file": "/etc/hosts", "lines": "custom-hosts" },
+        "apply": "printf '%s\\n' {value} >> /etc/hosts"
+      },
+      "windows": {
+        "read": {
+          "file": "C:/Windows/System32/drivers/etc/hosts",
+          "lines": "custom-hosts"
+        },
+        "apply": "Add-Content -Path $env:SystemRoot\\System32\\drivers\\etc\\hosts -Value {value}"
+      },
+      "macos": {
+        "read": { "file": "/etc/hosts", "lines": "custom-hosts" },
+        "apply": "printf '%s\\n' {value} >> /etc/hosts"
+      }
+    },
+    {
+      "key": "SystemTimeServer",
+      "description": "The server this computer sets its clock from",
+      "linux": {
+        "read": { "file": "/etc/systemd/timesyncd.conf", "setting": "NTP" },
+        "apply": "timedatectl set-ntp true && sed -i 's/^#\\?NTP=.*/NTP={value}/' /etc/systemd/timesyncd.conf"
+      },
+      "windows": {
+        "read": {
+          "registry": "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\W32Time\\Parameters",
+          "name": "NtpServer"
+        },
+        "apply": "w32tm /config /manualpeerlist:{value} /syncfromflags:manual /update"
+      },
+      "macos": {
+        "read": { "command": ["systemsetup", "-getnetworktimeserver"] },
+        "apply": "systemsetup -setnetworktimeserver {value}"
+      }
+    },
+    {
+      "key": "SystemFirewallEnabled",
+      "description": "Whether the built-in firewall is on",
+      "linux": {
+        "read": { "command": ["systemctl", "is-active", "ufw"], "booleanWhen": "active" },
+        "apply": "ufw --force enable"
+      },
+      "windows": {
+        "read": {
+          "registry": "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\SharedAccess\\Parameters\\FirewallPolicy\\StandardProfile",
+          "name": "EnableFirewall",
+          "booleanWhen": "1"
+        },
+        "apply": "Set-NetFirewallProfile -All -Enabled True"
+      },
+      "macos": {
+        "read": {
+          "command": ["defaults", "read", "/Library/Preferences/com.apple.alf", "globalstate"],
+          "booleanUnless": "0"
+        },
+        "apply": "defaults write /Library/Preferences/com.apple.alf globalstate -int 1"
+      }
+    },
+    {
+      "key": "SystemRemoteLogin",
+      "description": "Whether this computer accepts connections over SSH",
+      "linux": {
+        "read": { "command": ["systemctl", "is-enabled", "sshd"], "booleanWhen": "enabled" },
+        "apply": "systemctl enable --now sshd"
+      },
+      "windows": {
+        "read": {
+          "registry": "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\sshd",
+          "name": "Start",
+          "booleanWhen": "2"
+        },
+        "apply": "Set-Service -Name sshd -StartupType Automatic; Start-Service sshd"
+      },
+      "macos": {
+        "read": { "command": ["systemsetup", "-getremotelogin"], "booleanUnless": "Remote Login: Off" },
+        "apply": "systemsetup -setremotelogin on"
+      }
+    }
+  ]
+}
