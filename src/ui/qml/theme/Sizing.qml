@@ -1,6 +1,7 @@
 pragma Singleton
 
 import QtQuick
+import Transmit.ThemeState
 
 /// Control metrics.
 ///
@@ -11,9 +12,25 @@ QtObject {
     // Section 14: 32 to 40, and nothing taller. A form control the height of a
     // phone's is the clearest single sign of a mobile interface stretched to
     // fit a desktop.
-    readonly property int controlHeightSmall: 28
-    readonly property int controlHeight:      32
-    readonly property int controlHeightLarge: 40
+    /// How tall a control is and how much room a row gets is the other half of
+    /// looking like you belong: GNOME and COSMIC are generous, macOS is
+    /// compact, Windows sits between them. These are each desktop's own.
+    readonly property var _byPlatform: ({
+        "windows11": { small: 28, control: 32, large: 40, row: 36 },
+        "windows10": { small: 26, control: 30, large: 38, row: 34 },
+        "macos":     { small: 24, control: 28, large: 36, row: 32 },
+        "gnome":     { small: 30, control: 36, large: 44, row: 40 },
+        "kde":       { small: 26, control: 30, large: 38, row: 34 },
+        "xfce":      { small: 24, control: 28, large: 36, row: 32 },
+        "cosmic":    { small: 30, control: 36, large: 44, row: 40 },
+        "default":   { small: 28, control: 32, large: 40, row: 36 }
+    })
+
+    readonly property var _current: _byPlatform[ThemeState.platform] || _byPlatform["default"]
+
+    readonly property int controlHeightSmall: _current.small
+    readonly property int controlHeight:      _current.control
+    readonly property int controlHeightLarge: _current.large
 
     /// The smallest a thing can be and still be reliably hit with a pointer.
     /// Nothing interactive may be smaller in either direction.
@@ -22,7 +39,7 @@ QtObject {
     // Section 24. Rows are compact because desktop applications are good at
     // dense data and bad at making people scroll for it.
     readonly property int rowHeightCompact:     32
-    readonly property int rowHeight:            36
+    readonly property int rowHeight:            _current.row
     readonly property int rowHeightComfortable: 44
 
     // Section 26. One family, five sizes, no drifting in between.

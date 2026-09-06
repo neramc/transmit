@@ -16,6 +16,13 @@ notes say so.
   of the standard folders — are loaded too, so a window is not half translated.
   Korean is complete for the shell, the home page and settings; the rest falls
   back to English rather than being guessed at.
+- The interface takes its measurements from the desktop it is running on.
+  Corner radii, control and row heights, and the order of the buttons in a
+  dialog now follow Windows 11, Windows 10, macOS, GNOME, KDE Plasma, Xfce or
+  COSMIC — detected, and overridable in settings. The accent follows the
+  desktop's own where it can be read without starting a process (Windows and
+  Plasma); elsewhere the brand colour is used, because an accent guessed wrong
+  is worse than one chosen on purpose.
 - A `.deb` and a `.rpm`, built by CPack from the same install rules as
   everything else, published beside the AppImage. Both are built against the
   distribution's Qt rather than carrying one, and both leave the updater out:
@@ -42,6 +49,12 @@ notes say so.
   fortified calls — read back off the finished files rather than assumed from
   the flags. Those flags are now asked for explicitly instead of inherited from
   whichever distribution happened to build it.
+- Every page is laid out again in each of the eight desktop profiles at the
+  tightest window size, because a taller control and a wider corner are only a
+  problem where there was no room to begin with. And each profile's
+  measurements are read back out of the design system after being asked for,
+  so a table that stopped being consulted is a failure rather than a look
+  nobody notices is missing.
 - Nothing that looks like a credential can be committed.
 - Every string a person reads has to go through a translation, and every
   translation has to carry the same placeholders as its source — `"%1 of %2"`

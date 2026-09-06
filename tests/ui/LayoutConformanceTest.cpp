@@ -218,7 +218,12 @@ private slots:
     void everyPageFitsAtEverySize_data();
     void everyPageFitsAtEverySize();
 
+    void everyDesktopsMeasurementsAreUsed();
+    void everyPageFitsInEveryDesktopsMeasurements_data();
+    void everyPageFitsInEveryDesktopsMeasurements();
+
 private:
+    void setPlatform(const QString& profile);
     void showPage(const QString& page);
 
     /// Shows one screen, including the wizard step when there is one.
@@ -250,6 +255,11 @@ private:
     void setScheme(const QString& scheme);
     void setSidebarCollapsed(bool collapsed);
     void evaluate(const QString& expression);
+
+    /// The same, for an expression whose answer is wanted. Kept apart from
+    /// evaluate() because that one is used everywhere for its effect, and a
+    /// version that returns would have every caller ignoring a value.
+    [[nodiscard]] QVariant valueOf(const QString& expression);
     [[nodiscard]] QQuickWindow* window() const;
     [[nodiscard]] QQuickItem* contentRoot() const;
 
@@ -319,6 +329,17 @@ void LayoutConformanceTest::evaluate(const QString& expression) {
     QVERIFY2(!evaluated.hasError(), qPrintable(evaluated.error().toString()));
 }
 
+QVariant LayoutConformanceTest::valueOf(const QString& expression) {
+    QObject* const shell =
+        engine_->rootObjects().constFirst()->findChild<QObject*>(QStringLiteral("appShell"));
+    if (shell == nullptr) {
+        return {};
+    }
+    QQmlExpression evaluated(qmlContext(shell), shell, expression);
+    const QVariant answer = evaluated.evaluate();
+    return evaluated.hasError() ? QVariant{} : answer;
+}
+
 void LayoutConformanceTest::showPage(const QString& page) {
     evaluate(QStringLiteral("AppController.currentPage = '%1'").arg(page));
     settle();
@@ -358,6 +379,11 @@ void LayoutConformanceTest::setSidebarCollapsed(bool collapsed) {
 
 void LayoutConformanceTest::setScheme(const QString& scheme) {
     evaluate(QStringLiteral("AppController.themeMode = '%1'").arg(scheme));
+    QTest::qWait(60);
+}
+
+void LayoutConformanceTest::setPlatform(const QString& profile) {
+    evaluate(QStringLiteral("ThemeState.platform = '%1'").arg(profile));
     QTest::qWait(60);
 }
 
@@ -695,4 +721,90 @@ void LayoutConformanceTest::everyPageFitsAtEverySize() {
 }
 
 QTEST_MAIN(LayoutConformanceTest)
+
+// A profile that changes nothing is a setting that lies. Each desktop's
+// measurements are read back out of the design system after being asked for,
+// so a table that stopped being consulted - a binding replaced by a constant,
+// a name that no longer matches - is a failure here rather than a look nobody
+// notices is missing.
+void LayoutConformanceTest::everyDesktopsMeasurementsAreUsed() {
+    struct Expected {
+        const char* profile;
+        int control;  ///< Radius.control
+        int height;   ///< Sizing.controlHeight
+        bool accept;  ///< ThemeState.acceptFirst
+    };
+    static constexpr Expected kExpected[] = {
+        {"windows11", 4, 32, true}, {"windows10", 2, 30, true}, {"macos", 6, 28, false},
+        {"gnome", 8, 36, false},    {"kde", 4, 30, true},       {"xfce", 2, 28, true},
+        {"cosmic", 8, 36, false},   {"default", 6, 32, true},
+    };
+
+    QStringList wrong;
+    for (const Expected& expected : kExpected) {
+        setPlatform(QString::fromLatin1(expected.profile));
+
+        const int control = valueOf(QStringLiteral("Radius.control")).toInt();
+        const int height = valueOf(QStringLiteral("Sizing.controlHeight")).toInt();
+        const bool accept = valueOf(QStringLiteral("ThemeState.acceptFirst")).toBool();
+
+        if (control != expected.control || height != expected.height || accept != expected.accept) {
+            wrong << QStringLiteral(
+                         "%1: radius %2 (wanted %3), height %4 (wanted %5), "
+                         "accept first %6 (wanted %7)")
+                         .arg(QLatin1String(expected.profile))
+                         .arg(control)
+                         .arg(expected.control)
+                         .arg(height)
+                         .arg(expected.height)
+                         .arg(accept)
+                         .arg(expected.accept);
+        }
+    }
+    setPlatform(QStringLiteral("default"));
+
+    QVERIFY2(wrong.isEmpty(),
+             qPrintable(QStringLiteral("the desktop profiles are not being used:\n  %1")
+                            .arg(wrong.join(QStringLiteral("\n  ")))));
+}
+
+void LayoutConformanceTest::everyPageFitsInEveryDesktopsMeasurements_data() {
+    QTest::addColumn<QString>("profile");
+
+    // At the tightest window, because a taller control and a wider corner are
+    // only a problem where there was no room to begin with. Every profile, so
+    // that the one desktop nobody here runs is not the one that breaks.
+    for (const char* profile :
+         {"windows11", "windows10", "macos", "gnome", "kde", "xfce", "cosmic", "default"}) {
+        QTest::newRow(profile) << QString::fromLatin1(profile);
+    }
+}
+
+void LayoutConformanceTest::everyPageFitsInEveryDesktopsMeasurements() {
+    QFETCH(QString, profile);
+
+    setScheme(QStringLiteral("light"));
+    resizeTo(1280, 720);
+    setSidebarCollapsed(false);
+    setPlatform(profile);
+
+    QStringList problems;
+    for (const View& view : kViews) {
+        showView(view);
+        problems += faultsThatStay(nameOf(view));
+    }
+
+    for (const char* wizard : {"exportPage", "importPage"}) {
+        if (QQuickItem* const page = findItem(contentRoot(), QString::fromLatin1(wizard));
+            page != nullptr) {
+            page->setProperty("step", 0);
+        }
+    }
+    setPlatform(QStringLiteral("default"));
+
+    QVERIFY2(problems.isEmpty(),
+             qPrintable(QStringLiteral("at 1280x720 with %1's measurements:\n%2")
+                            .arg(profile, problems.join(QLatin1Char('\n')))));
+}
+
 #include "LayoutConformanceTest.moc"

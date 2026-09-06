@@ -36,6 +36,24 @@ AppScrollView {
 
         AppLabelledField {
             Layout.fillWidth: true
+            label: qsTr("Look")
+            helperText: qsTr("Corners, control heights and the order of the buttons in a "
+                           + "dialog, taken from the desktop this is running on.")
+
+            AppComboBox {
+                model: DesktopProfile.available.map(function (profile) {
+                    return { value: profile, label: DesktopProfile.nameOf(profile) };
+                })
+                textRole: "label"
+                valueRole: "value"
+                currentIndex: Math.max(0, DesktopProfile.available.indexOf(DesktopProfile.current))
+                onActivated: DesktopProfile.use(currentValue)
+                Accessible.name: qsTr("Look")
+            }
+        }
+
+        AppLabelledField {
+            Layout.fillWidth: true
             label: qsTr("Language")
             helperText: qsTr("Takes effect straight away. Anything not translated yet "
                            + "stays in English rather than being guessed at.")

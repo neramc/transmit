@@ -5,13 +5,14 @@
 # makes it obvious at the import site what a file actually depends on.
 #
 # ThemeState holds the only value that changes at runtime; everything else is
-# constants, or reads ThemeState. That keeps the dependencies acyclic:
+# constants, or reads it. It lives in Transmit.ThemeState, a module of its own,
+# so that the
+# files here can read it without importing the module they are part of:
 #
-#   ThemeState <- Colors <- Elevation
-#   Typography, Spacing, Radius, Sizing, Motion   (no dependencies)
+#   Transmit.ThemeState <- Colors, Radius, Sizing <- Elevation
+#   Typography, Spacing, Motion                     (no dependencies)
 
 set(TRANSMIT_THEME_SINGLETONS
-    ThemeState.qml
     Colors.qml
     Typography.qml
     Spacing.qml
@@ -32,3 +33,6 @@ qt_add_qml_module(transmit_qml_theme
     STATIC
     QML_FILES ${TRANSMIT_THEME_SINGLETONS}
     RESOURCE_PREFIX /qt/qml)
+
+# Colors, Radius and Sizing read ThemeState, which lives next door.
+target_link_libraries(transmit_qml_theme PRIVATE transmit_qml_themestateplugin)

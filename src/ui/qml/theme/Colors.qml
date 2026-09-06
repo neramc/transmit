@@ -1,7 +1,7 @@
 pragma Singleton
 
 import QtQuick
-import Transmit.Theme
+import Transmit.ThemeState
 
 /// The palette, in both schemes.
 ///
@@ -56,8 +56,20 @@ QtObject {
     // the accent used as text or an icon straight on the background, which
     // needs more contrast than a fill does and so is a lighter shade in the
     // dark scheme.
-    readonly property color accent:        dark ? "#A71AF9" : "#A200FF"
-    readonly property color accentHover:   dark ? "#AF2EFA" : "#8F00E0"
+    /// The desktop's own highlight colour where it could be read, and the
+    /// brand's where it could not.
+    ///
+    /// Following the system is the whole point of an accent on Windows and
+    /// Plasma - somebody who set theirs to green expects green - but only when
+    /// it is actually known. A guess is worse than a decision, so the fallback
+    /// is deliberate rather than approximate.
+    readonly property color brandAccent:   dark ? "#A71AF9" : "#A200FF"
+    readonly property color accent:        ThemeState.hasSystemAccent ? ThemeState.systemAccent
+                                                                      : brandAccent
+    readonly property color accentHover:   ThemeState.hasSystemAccent
+                                               ? Qt.lighter(ThemeState.systemAccent, dark ? 1.15
+                                                                                          : 0.9)
+                                               : (dark ? "#AF2EFA" : "#8F00E0")
     readonly property color accentPressed: dark ? "#9306E5" : "#7A00BF"
     readonly property color accentSubtle:  dark ? "#231033" : "#F6EBFF"
     readonly property color accentBorder:  dark ? "#4A1E6B" : "#E0C2FA"

@@ -266,6 +266,45 @@
     </message>
 </context>
 <context>
+    <name>DesktopProfile</name>
+    <message>
+        <source>Match this desktop</source>
+        <translation>이 데스크톱에 맞추기</translation>
+    </message>
+    <message>
+        <source>Windows 11</source>
+        <translation>Windows 11</translation>
+    </message>
+    <message>
+        <source>Windows 10</source>
+        <translation>Windows 10</translation>
+    </message>
+    <message>
+        <source>macOS</source>
+        <translation>macOS</translation>
+    </message>
+    <message>
+        <source>GNOME</source>
+        <translation>GNOME</translation>
+    </message>
+    <message>
+        <source>KDE Plasma</source>
+        <translation>KDE Plasma</translation>
+    </message>
+    <message>
+        <source>Xfce</source>
+        <translation>Xfce</translation>
+    </message>
+    <message>
+        <source>COSMIC</source>
+        <translation>COSMIC</translation>
+    </message>
+    <message>
+        <source>Transmit&apos;s own</source>
+        <translation>Transmit 고유</translation>
+    </message>
+</context>
+<context>
     <name>DialogHost</name>
     <message>
         <source>Continue</source>
@@ -2342,6 +2381,14 @@
     <message>
         <source>Takes effect straight away. Anything not translated yet stays in English rather than being guessed at.</source>
         <translation>바꾸면 바로 적용됩니다. 아직 번역되지 않은 부분은 짐작해서 옮기지 않고 영어 그대로 둡니다.</translation>
+    </message>
+    <message>
+        <source>Look</source>
+        <translation>모양</translation>
+    </message>
+    <message>
+        <source>Corners, control heights and the order of the buttons in a dialog, taken from the desktop this is running on.</source>
+        <translation>모서리, 컨트롤 높이, 대화 상자의 버튼 순서를 지금 돌고 있는 데스크톱에서 가져옵니다.</translation>
     </message>
 </context>
 <context>

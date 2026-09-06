@@ -19,6 +19,7 @@ qt_add_qml_module(transmit_backend
         models/ProfileListModel.h models/ProfileListModel.cpp
         models/ContinuityReportModel.h models/ContinuityReportModel.cpp
         i18n/Language.h i18n/Language.cpp
+        DesktopProfile.h DesktopProfile.cpp
     RESOURCE_PREFIX /qt/qml)
 
 target_link_libraries(transmit_backend
@@ -85,6 +86,7 @@ target_link_libraries(transmit PRIVATE
     Qt6::Quick Qt6::QuickControls2 Qt6::Gui
     transmit_qml_mainplugin
     transmit_qml_themeplugin
+    transmit_qml_themestateplugin
     transmit_qml_componentsplugin
     transmit_qml_dialogsplugin
     transmit_qml_pagesplugin

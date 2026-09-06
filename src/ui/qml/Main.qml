@@ -4,6 +4,7 @@ import QtQuick.Controls.Basic
 import Transmit.Backend
 import Transmit.Layouts
 import Transmit.Theme
+import Transmit.ThemeState
 
 /// The window itself: its size, the keyboard shortcuts, and the two pieces of
 /// theme state the design system reads. Everything inside the frame is
@@ -29,6 +30,8 @@ ApplicationWindow {
     // has to know how the preference is stored.
     Component.onCompleted: {
         ThemeState.mode = AppController.themeMode
+        ThemeState.platform = DesktopProfile.current
+        ThemeState.systemAccent = DesktopProfile.systemAccent
         Motion.reduced = AppController.reduceMotion
 
         // Asked once a day at most, and not at all when the preference says
@@ -41,6 +44,11 @@ ApplicationWindow {
         target: AppController
         function onThemeModeChanged() { ThemeState.mode = AppController.themeMode }
         function onReduceMotionChanged() { Motion.reduced = AppController.reduceMotion }
+    }
+
+    Connections {
+        target: DesktopProfile
+        function onChanged() { ThemeState.platform = DesktopProfile.current }
     }
 
     // Qt's palette follows the desktop's colour scheme, which is the most
