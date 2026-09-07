@@ -412,21 +412,34 @@ QList<MatchedApp> RecipeCatalog::matchByStateOnly(const QList<MatchedApp>& alrea
         }
 
         // A recipe whose data directory is present counts even when no package
-        // manager knows about it: portable installs, sideloaded builds, and
-        // applications uninstalled without their settings being cleaned up.
+        // manager knows about it: portable installs, sideloaded builds, games
+        // bought from a store the system does not list, and applications
+        // uninstalled without their settings being cleaned up.
+        //
+        // Every candidate is tried, not just the first. A recipe that names the
+        // native location and then the Flatpak one would otherwise be invisible
+        // to anybody who has only the Flatpak - which is most of the point of
+        // listing more than one.
+        bool found = false;
         for (const RecipeStatePath& state : recipe.state) {
-            const QString absolute = resolveStatePath(state.forOs(os), folders);
-            if (absolute.isEmpty() || !QFileInfo::exists(absolute)) {
-                continue;
-            }
+            for (const QString& tokenised : state.candidatesForOs(os)) {
+                const QString absolute = resolveStatePath(tokenised, folders);
+                if (absolute.isEmpty() || !QFileInfo::exists(absolute)) {
+                    continue;
+                }
 
-            MatchedApp match;
-            match.recipe = recipe;
-            match.installation.id = recipe.id;
-            match.installation.displayName = recipe.displayName;
-            match.hasState = true;
-            extra.push_back(match);
-            break;
+                MatchedApp match;
+                match.recipe = recipe;
+                match.installation.id = recipe.id;
+                match.installation.displayName = recipe.displayName;
+                match.hasState = true;
+                extra.push_back(match);
+                found = true;
+                break;
+            }
+            if (found) {
+                break;
+            }
         }
     }
 

@@ -156,6 +156,14 @@ ENRICHMENT = {
              "file": "*/global-messages-db.sqlite", "action": "regenerate"},
         ],
     },
+    # The Firefox forks. Each is a Mozilla profile root in the same shape, so
+    # the same description of what is inside one applies to all of them - which
+    # is the whole reason this knowledge is written here rather than typed into
+    # each entry.
+    "io.gitlab.librewolf": {"profile": {"contents": MOZILLA_CONTENTS}, "move": MOZILLA_MOVES},
+    "one.ablaze.floorp": {"profile": {"contents": MOZILLA_CONTENTS}, "move": MOZILLA_MOVES},
+    "net.waterfox.waterfox": {"profile": {"contents": MOZILLA_CONTENTS}, "move": MOZILLA_MOVES},
+    "app.zen-browser.zen": {"profile": {"contents": MOZILLA_CONTENTS}, "move": MOZILLA_MOVES},
     # Deliberately not Tor Browser. Its state root is the bundle directory,
     # not a Mozilla profile root - the profile is several levels inside it - so
     # the rules above would name files that are not where they say.
@@ -172,6 +180,8 @@ ENRICHMENT = {
                            "pairs": CHROMIUM_PAIRS},
     "com.vivaldi.browser": {"profile": {"contents": CHROMIUM_CONTENTS}, "move": CHROMIUM_MOVES,
                             "pairs": CHROMIUM_PAIRS},
+    "com.opera.opera": {"profile": {"contents": CHROMIUM_CONTENTS}, "move": CHROMIUM_MOVES,
+                        "pairs": CHROMIUM_PAIRS},
     "com.microsoft.vscode": {
         "config": {"contents": [
             {"path": "settings.json", "role": "settings", "format": "json", "portable": "rewrite"},

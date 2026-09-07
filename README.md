@@ -110,12 +110,17 @@ leave out.
 **Your files** — documents, pictures, music, video, downloads, desktop.
 
 **Application data and settings** — the whole configuration tree travels, so a
-program Transmit has never heard of keeps its settings. On top of that, 73
+program Transmit has never heard of keeps its settings. On top of that, 192
 programs are described in the shipped catalog: browsers, editors, terminals,
-shells, messengers, media players, graphics tools, office suites and utilities.
-For those, Transmit also knows where their state lives on *each* platform, so it
-can move it to the right place; which parts are cache worth leaving behind;
-which files hold paths that need correcting; and what it should warn you about.
+shells, messengers, media players, graphics tools, office suites and utilities,
+and — because a machine people actually use has games on it — game launchers,
+emulators and the save folders of the games themselves. For those, Transmit
+also knows where their state lives on *each* platform, so it can move it to the
+right place; which parts are cache worth leaving behind; which files hold paths
+that need correcting; and what it should warn you about.
+
+A game bought through a store is in no package manager's list, so the catalog
+finds those the other way round: if the save folder is there, the game is.
 
 **Desktop preferences** — appearance and accent colour, wallpaper (including
 the image itself), language, formats, time zone, keyboard layouts, default

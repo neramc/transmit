@@ -31,6 +31,19 @@ notes say so.
   desktop's own where it can be read without starting a process (Windows and
   Plasma); elsewhere the brand colour is used, because an accent guessed wrong
   is worse than one chosen on purpose.
+- The catalog now describes 192 programs rather than 73. The new entries are
+  mostly the things a machine somebody actually uses has on it and the old list
+  did not: game launchers and stores, emulators, and the save folders of games
+  themselves — worlds, characters, mods and settings, with the downloaded game
+  files marked as what they are so they are left behind rather than carried.
+  Four more Firefox forks and Opera join the browser families, and the rest
+  fills in the gaps: build tools and cloud command lines (whose credential
+  files are named as credentials), more editors, players, cameras and
+  note-takers.
+- A game bought through a store is in no package manager's list, so it is found
+  by its save folder instead. That path already existed; it only ever looked at
+  the first place a recipe named, so anyone whose copy was the Flatpak had it
+  treated as absent. Every candidate is tried now.
 - A `.deb` and a `.rpm`, built by CPack from the same install rules as
   everything else, published beside the AppImage. Both are built against the
   distribution's Qt rather than carrying one, and both leave the updater out:
@@ -63,6 +76,12 @@ notes say so.
   measurements are read back out of the design system after being asked for,
   so a table that stopped being consulted is a failure rather than a look
   nobody notices is missing.
+- Five more things the catalog has to be true about, each shown to fail when
+  broken on purpose: a file inside a state folder cannot be written as an
+  absolute path, no state root names the same place twice, anything whose role
+  is "credentials" is marked sensitive, every recipe can be found by one of the
+  two means there are, and a sandboxed install is found even when it is not the
+  first place the recipe names.
 - Nothing that looks like a credential can be committed.
 - Every string a person reads has to go through a translation, and every
   translation has to carry the same placeholders as its source — `"%1 of %2"`
@@ -139,7 +158,7 @@ First release. Everything below is new.
 - Restores onto a different operating system, resolving locations by meaning
   (`{DOCUMENTS}`, `{APPCONFIG}`) rather than by path.
 - Moves application state to where each program looks for it on the target
-  system, for the 73 programs in the shipped catalog, and rewrites the absolute
+  system, for the programs in the shipped catalog, and rewrites the absolute
   paths inside their settings files field by field rather than by search and
   replace. Users can extend the catalog from `~/.config/Transmit/catalog.d/`.
 - Detects name collisions a target filesystem cannot hold (`Notes.txt` beside

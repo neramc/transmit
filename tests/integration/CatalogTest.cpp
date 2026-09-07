@@ -6,11 +6,13 @@
 // does not exist, or a path that climbs out of the folder it names, is not a
 // compile error and would never be one.
 
+#include <QDir>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
+#include <QTemporaryDir>
 #include <QTest>
 
 #include "core/recipe/AppInventoryPayload.h"
@@ -31,6 +33,11 @@ private slots:
     void everyMoveStepUsesAnActionWeImplement();
     void noTwoApplicationsClaimTheSameFolder();
     void carriesDataAgreesWithHavingState();
+    void everyRecipeCanBeFoundOneWayOrTheOther();
+    void nothingInsideAStateFolderIsAnAbsolutePath();
+    void noStateRootNamesTheSamePlaceTwice();
+    void everySavedPasswordIsMarkedAsOne();
+    void aSandboxedInstallIsFoundWhenItIsNotTheFirstCandidate();
     void theOldSchemaAndTheNewProduceTheSameRecipes();
     void theInventoryPayloadSurvivesTheJourney();
 
@@ -55,7 +62,7 @@ QJsonArray CatalogTest::rawEntries(const QString& path) {
 
 void CatalogTest::everyRecipeHasAUniqueId() {
     const QJsonArray entries = rawEntries(QStringLiteral(":/catalog/app-catalog.json"));
-    QVERIFY2(entries.size() >= 70, "the built-in catalog is much smaller than it should be");
+    QVERIFY2(entries.size() >= 150, "the built-in catalog is much smaller than it should be");
 
     QSet<QString> seen;
     for (const QJsonValue& value : entries) {
@@ -223,6 +230,135 @@ void CatalogTest::carriesDataAgreesWithHavingState() {
     }
 }
 
+void CatalogTest::everyRecipeCanBeFoundOneWayOrTheOther() {
+    // Two ways an application is found: the system's list of installed
+    // programs knows its name, or its state folder is simply there. A game
+    // bought through a store is in nobody's list, so its folder is the only
+    // evidence - and a recipe with neither is dead weight that can never
+    // match anything.
+    const core::RecipeCatalog catalog = builtIn();
+    for (const core::AppRecipe& recipe : catalog.recipes()) {
+        const bool named = !recipe.detectNames.isEmpty();
+        const bool findable = !recipe.state.isEmpty();
+        QVERIFY2(named || findable,
+                 qPrintable(QStringLiteral("%1 has no detection names and no state, so nothing "
+                                           "could ever match it")
+                                .arg(recipe.id)));
+    }
+}
+
+void CatalogTest::nothingInsideAStateFolderIsAnAbsolutePath() {
+    // A content path is read relative to the state root it sits in. One that
+    // began with a token or a root would be joined onto that folder and land
+    // somewhere nobody meant - and, unlike "..", it does not look wrong.
+    const core::RecipeCatalog catalog = builtIn();
+    for (const core::AppRecipe& recipe : catalog.recipes()) {
+        for (const core::RecipeStatePath& root : recipe.state) {
+            for (const core::RecipeContent& content : root.contents) {
+                const QString path = content.path;
+                QVERIFY2(!path.startsWith(u'{'),
+                         qPrintable(QStringLiteral("%1: \"%2\" is written as a known folder, but "
+                                                   "it is read as a name inside %3")
+                                        .arg(recipe.id, path, root.id)));
+                QVERIFY2(
+                    !path.startsWith(u'/') && !path.startsWith(u'\\'),
+                    qPrintable(QStringLiteral("%1: \"%2\" starts at a root").arg(recipe.id, path)));
+                QVERIFY2(
+                    !path.contains(QStringLiteral(":/")) && !path.contains(QStringLiteral(":\\")),
+                    qPrintable(QStringLiteral("%1: \"%2\" names a drive").arg(recipe.id, path)));
+            }
+        }
+    }
+}
+
+void CatalogTest::noStateRootNamesTheSamePlaceTwice() {
+    // Candidates are tried in order and the first that exists is taken, so a
+    // repeat is never reached. It is always a copy-and-paste slip, and it
+    // hides the candidate the author meant to write.
+    const core::RecipeCatalog catalog = builtIn();
+    for (const core::AppRecipe& recipe : catalog.recipes()) {
+        for (const core::RecipeStatePath& root : recipe.state) {
+            for (auto it = root.candidatesByOs.constBegin(); it != root.candidatesByOs.constEnd();
+                 ++it) {
+                QSet<QString> seen;
+                for (const QString& candidate : it.value()) {
+                    QVERIFY2(!seen.contains(candidate),
+                             qPrintable(QStringLiteral("%1 names %2 twice for %3")
+                                            .arg(recipe.id, candidate, it.key())));
+                    seen.insert(candidate);
+                }
+            }
+        }
+    }
+}
+
+void CatalogTest::everySavedPasswordIsMarkedAsOne() {
+    // Being marked sensitive is what keeps a file out of an archive nobody
+    // asked to carry secrets in. The loader sets it for anything whose role is
+    // "credentials"; this is the check that it kept doing so, because the
+    // failure is silent and lands in somebody's unencrypted archive.
+    const core::RecipeCatalog catalog = builtIn();
+    int found = 0;
+    for (const core::AppRecipe& recipe : catalog.recipes()) {
+        for (const core::RecipeStatePath& root : recipe.state) {
+            for (const core::RecipeContent& content : root.contents) {
+                if (content.role != core::ContentRole::Credentials) {
+                    continue;
+                }
+                ++found;
+                QVERIFY2(content.sensitive,
+                         qPrintable(QStringLiteral("%1: %2 holds credentials and is not marked "
+                                                   "sensitive")
+                                        .arg(recipe.id, content.path)));
+            }
+        }
+    }
+    QVERIFY2(found >= 20, "the catalog stopped describing credentials at all");
+}
+
+void CatalogTest::aSandboxedInstallIsFoundWhenItIsNotTheFirstCandidate() {
+    // A recipe lists the native location first and the Flatpak one after it.
+    // Somebody who has only the Flatpak has the second, and matching by state
+    // has to look past the first to see it - which for most of a year it did
+    // not do, so every sandboxed install was invisible unless the package
+    // manager happened to name it too.
+    QTemporaryDir home;
+    QVERIFY(home.isValid());
+    const QString sandboxed = home.filePath(QStringLiteral(".var/app/org.example.App/config/ex"));
+    QVERIFY(QDir().mkpath(sandboxed));
+
+    format::PathTokenMap folders;
+    folders.setBase(format::PathTokenId::Home, home.path().toStdString());
+
+    core::RecipeCatalog catalog;
+    QCOMPARE(catalog.loadFromJson(R"({
+      "schemaVersion": 2,
+      "apps": [{
+        "id": "org.example.app",
+        "name": "Example",
+        "state": [{
+          "id": "config",
+          "role": "config",
+          "paths": { "linux": ["{HOME}/.config/ex", "{HOME}/.var/app/org.example.App/config/ex"] }
+        }]
+      }]
+    })"),
+             1);
+
+    const QList<core::MatchedApp> found =
+        catalog.matchByStateOnly({}, format::OsFamily::Linux, folders);
+    QCOMPARE(found.size(), 1);
+    QCOMPARE(found.constFirst().recipe.id, QStringLiteral("org.example.app"));
+    QVERIFY(found.constFirst().hasState);
+
+    // And with neither present, nothing is claimed.
+    QTemporaryDir empty;
+    QVERIFY(empty.isValid());
+    format::PathTokenMap nowhere;
+    nowhere.setBase(format::PathTokenId::Home, empty.path().toStdString());
+    QCOMPARE(catalog.matchByStateOnly({}, format::OsFamily::Linux, nowhere).size(), 0);
+}
+
 void CatalogTest::theOldSchemaAndTheNewProduceTheSameRecipes() {
     // tests/fixtures/app-catalog-v1.json is the catalog exactly as it was
     // before the migration. Everything it could express must still be read
@@ -233,7 +369,12 @@ void CatalogTest::theOldSchemaAndTheNewProduceTheSameRecipes() {
     QVERIFY(fromV1.loadFromFile(QStringLiteral(":/fixtures/app-catalog-v1.json")) >= 70);
 
     const core::RecipeCatalog fromV2 = builtIn();
-    QCOMPARE(fromV1.recipes().size(), fromV2.recipes().size());
+
+    // The catalog has grown a long way past that file since. What it has to
+    // show is that nothing the old one described went missing on the way, not
+    // that the two are still the same size.
+    QVERIFY2(fromV2.recipes().size() >= fromV1.recipes().size(),
+             "the catalog is smaller than the file it was migrated from");
 
     for (const core::AppRecipe& old : fromV1.recipes()) {
         const core::AppRecipe fresh = fromV2.recipeById(old.id);
@@ -285,7 +426,7 @@ void CatalogTest::theInventoryPayloadSurvivesTheJourney() {
         match.installation.displayName = recipe.displayName;
         matched.push_back(match);
     }
-    QVERIFY(matched.size() >= 70);
+    QVERIFY(matched.size() >= 150);
 
     const format::ByteBuffer encoded = core::encodeAppInventory(matched);
     const QList<core::InventoryEntry> decoded = core::decodeAppInventory(encoded);
