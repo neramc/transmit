@@ -27,6 +27,8 @@
 
 #include <cmath>
 
+#include "app/DesktopProfile.h"
+
 namespace {
 
 /// Every resolution docs/design.md section 6 requires the application to be
@@ -218,6 +220,7 @@ private slots:
     void everyPageFitsAtEverySize_data();
     void everyPageFitsAtEverySize();
 
+    void theDesktopIsRecognisedFromWhatItCallsItself();
     void everyDesktopsMeasurementsAreUsed();
     void everyPageFitsInEveryDesktopsMeasurements_data();
     void everyPageFitsInEveryDesktopsMeasurements();
@@ -721,6 +724,53 @@ void LayoutConformanceTest::everyPageFitsAtEverySize() {
 }
 
 QTEST_MAIN(LayoutConformanceTest)
+
+// What a desktop calls itself, and which look that means.
+//
+// XDG_CURRENT_DESKTOP is a colon-separated list whose case nobody agrees on,
+// and the whole detection turns on reading it. Checked here rather than only on
+// a Linux machine with that desktop actually running: it is pure text, so the
+// answer is the same everywhere, and the alternative is a rule that can only be
+// wrong in front of a user.
+void LayoutConformanceTest::theDesktopIsRecognisedFromWhatItCallsItself() {
+    const struct {
+        const char* says;
+        const char* means;
+    } cases[] = {
+        {"GNOME", "gnome"},
+        {"gnome", "gnome"},
+        {"ubuntu:GNOME", "gnome"},
+        {"X-Cinnamon", "gnome"},
+        {"Unity:Unity7:ubuntu", "gnome"},
+        {"KDE", "kde"},
+        {"plasma", "kde"},
+        {"KDE:plasmawayland", "kde"},
+        {"XFCE", "xfce"},
+        {"xubuntu:XFCE", "xfce"},
+        {"COSMIC", "cosmic"},
+        {"pop:COSMIC", "cosmic"},
+
+        // A desktop nobody here has measured gets the design system's own look
+        // rather than the nearest guess.
+        {"LXQt", "default"},
+        {"MATE", "default"},
+        {"", "default"},
+    };
+
+    for (const auto& one : cases) {
+        QCOMPARE(
+            transmit::app::DesktopProfile::profileForDesktopName(QString::fromLatin1(one.says)),
+            QString::fromLatin1(one.means));
+    }
+
+    // GNOME is matched last on purpose: several desktops built on it name it
+    // in the list beside their own, and those are closer to GNOME than to
+    // anything else here - but a desktop with a look of its own must win.
+    QCOMPARE(transmit::app::DesktopProfile::profileForDesktopName(QStringLiteral("KDE:GNOME")),
+             QStringLiteral("kde"));
+    QCOMPARE(transmit::app::DesktopProfile::profileForDesktopName(QStringLiteral("COSMIC:GNOME")),
+             QStringLiteral("cosmic"));
+}
 
 // A profile that changes nothing is a setting that lies. Each desktop's
 // measurements are read back out of the design system after being asked for,

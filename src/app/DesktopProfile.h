@@ -49,6 +49,18 @@ public:
 
     [[nodiscard]] static QStringList available();
 
+    /// Which profile a desktop's own name means.
+    ///
+    /// XDG_CURRENT_DESKTOP is a colon-separated list and is not consistent
+    /// about case, so this matches on a lowercased substring rather than
+    /// comparing. Public and compiled everywhere rather than hidden inside the
+    /// branch that uses it: it is pure text, it is the one part of the
+    /// detection that can be got wrong quietly, and a rule that only exists on
+    /// the machine it applies to is a rule nobody can test. (It also stopped
+    /// the macOS build outright, where a file-static function nothing calls is
+    /// an error.)
+    [[nodiscard]] static QString profileForDesktopName(const QString& raw);
+
     /// The name to show for a profile, translated.
     Q_INVOKABLE [[nodiscard]] static QString nameOf(const QString& profile);
 

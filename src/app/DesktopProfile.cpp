@@ -27,10 +27,9 @@ const QStringList& profiles() {
     return known;
 }
 
-/// Which of them a desktop's own name means. XDG_CURRENT_DESKTOP is a
-/// colon-separated list and is not consistent about case, which is why this
-/// matches on a lowercased substring rather than comparing.
-QString fromDesktopName(const QString& raw) {
+}  // namespace
+
+QString DesktopProfile::profileForDesktopName(const QString& raw) {
     const QString name = raw.toLower();
     if (name.contains(QLatin1String("cosmic"))) {
         return QStringLiteral("cosmic");
@@ -51,8 +50,6 @@ QString fromDesktopName(const QString& raw) {
     }
     return QStringLiteral("default");
 }
-
-}  // namespace
 
 DesktopProfile::DesktopProfile(QObject* parent) : QObject(parent) {
     detected_ = detect();
@@ -131,7 +128,7 @@ QString DesktopProfile::detect() {
     if (desktop.isEmpty()) {
         desktop = qEnvironmentVariable("DESKTOP_SESSION");
     }
-    return fromDesktopName(desktop);
+    return profileForDesktopName(desktop);
 #endif
 }
 

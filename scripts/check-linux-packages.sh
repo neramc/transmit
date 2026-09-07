@@ -68,6 +68,20 @@ else
         *libqt6core*) ;;
         *) fault "the .deb does not depend on Qt, so shlibdeps found nothing" ;;
     esac
+
+    # And the ones shlibdeps cannot find. A QML plugin is opened by name at run
+    # time and appears in no ELF header, so nothing automatic will ever notice
+    # it is missing - which is how a package that installed cleanly came to say
+    # "Type ApplicationWindow unavailable" on every launch. Checked here as
+    # well as by starting the program, because this failure names the line to
+    # change and a launch failure names a QML file.
+    for module in qml6-module-qtquick qml6-module-qtquick-templates \
+                  qml6-module-qtquick-controls qml6-module-qtquick-layouts; do
+        case "$depends" in
+            *"$module"*) ;;
+            *) fault "the .deb does not depend on $module, which it loads at run time" ;;
+        esac
+    done
 fi
 
 if [ -n "$deb" ] && command -v dpkg >/dev/null 2>&1; then
@@ -134,6 +148,13 @@ else
         case "$requires" in
             *libQt6Core*) ;;
             *) fault "the .rpm does not require Qt, so its dependencies are wrong" ;;
+        esac
+
+        # The same thing rpm's automatic requirements cannot see: the QML
+        # modules, which on Fedora all live in qt6-qtdeclarative.
+        case "$requires" in
+            *qt6-qtdeclarative*) ;;
+            *) fault "the .rpm does not require qt6-qtdeclarative, which holds every QML module it loads" ;;
         esac
     else
         note "rpm is not installed here, so the package was not inspected"
