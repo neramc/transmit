@@ -39,6 +39,7 @@ private slots:
     void initTestCase();
     void capturesAndRestoresUserFiles();
     void theTagsOnAFileTravelWithIt();
+    void whatTheSystemWillNotLetItReadIsSaidBeforeTheCapture();
     void restoringTwiceDoesNotDuplicateWhatIsAlreadyThere();
     void deduplicatesRepeatedContent();
     void splitsAcrossVolumesAndReadsThemBack();
@@ -550,6 +551,62 @@ void ContinuityRoundTripTest::theTagsOnAFileTravelWithIt() {
         qInfo("this filesystem refuses an oversized attribute, so the limit was not exercised");
     }
 #endif
+}
+
+// What this system will not let Transmit read, said before the capture rather
+// than explained afterwards.
+//
+// Each real one needs a machine in a particular state - a macOS that has not
+// been given Full Disk Access, a build running inside a Flatpak, a Windows
+// process that is not elevated - and all three fail the same silent way: the
+// capture succeeds and the archive is short. The finding of them belongs to
+// each platform; what has to be true everywhere is that a finding reaches the
+// report, so somebody sees it while they can still do something about it.
+void ContinuityRoundTripTest::whatTheSystemWillNotLetItReadIsSaidBeforeTheCapture() {
+    auto platform = std::make_unique<testing::PlatformWithDrives>(
+        platform::PlatformService::create(), QList<platform::StorageVolume>{});
+    platform->putInTheWay(platform::AccessObstacle{
+        QStringLiteral("Mail, Messages"),
+        QStringLiteral("Grant Full Disk Access and start Transmit again."), true});
+    platform->putInTheWay(platform::AccessObstacle{
+        QStringLiteral("A consistent copy of files being written"),
+        QStringLiteral("Not running as an administrator, so there is no shadow copy."), false});
+
+    core::ExportService exporter(*platform);
+    core::CancelToken token;
+
+    core::ExportRequest request;
+    request.destinationPath = archivePath("obstacles.txa");
+    request.selection = documentsSelection();
+    request.packaging.preset = format::CompressionPreset::Fast;
+
+    const core::ExportReport report = exporter.run(request, token);
+
+    // The capture still runs. Something in the way is not a reason to refuse
+    // to carry everything that is not.
+    QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
+
+    const auto noteAbout = [&report](const QString& subject) -> const core::ContinuityNote* {
+        for (const core::ContinuityNote& note : report.notes) {
+            if (note.subject == subject) {
+                return &note;
+            }
+        }
+        return nullptr;
+    };
+
+    const core::ContinuityNote* const missing = noteAbout(QStringLiteral("Mail, Messages"));
+    QVERIFY2(missing != nullptr, "the report says nothing about what could not be read");
+    QVERIFY2(!missing->detail.isEmpty(), "the note says what is wrong and not what to do");
+
+    // Data that will not be there is graded differently from a copy that is
+    // merely less careful, because only one of them is worth stopping for.
+    QCOMPARE(missing->grade, core::ContinuityGrade::Manual);
+
+    const core::ContinuityNote* const careful =
+        noteAbout(QStringLiteral("A consistent copy of files being written"));
+    QVERIFY2(careful != nullptr, "the report says nothing about the shadow copy");
+    QCOMPARE(careful->grade, core::ContinuityGrade::Adapted);
 }
 
 // A restore that was interrupted leaves a machine with some of the files on it,

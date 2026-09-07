@@ -137,6 +137,14 @@ notes say so.
   one everywhere. Each of the three - the attribute bits, the name of an
   evicted iCloud file, and the policy merge - was shown to fail when broken on
   purpose.
+- A finding about what the system will not let Transmit read has to reach the
+  report. Each of the three real ones needs a machine in a particular state - a
+  macOS without Full Disk Access, a build inside a Flatpak, a Windows process
+  that is not elevated - so the finding is the platform's job and the fake
+  platform can now put one in the way, which is what makes the half that runs
+  everywhere testable anywhere. Data that will not be there is graded
+  differently from a copy that is merely less careful, and both were shown to
+  fail when broken.
 - The rule that decides what a single folder may change about the whole
   capture's scope is a named function with a suite of its own now, because it
   is the one that was wrong: nine cases covering the size limits at both ends,

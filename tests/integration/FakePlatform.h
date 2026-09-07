@@ -29,6 +29,17 @@ public:
     /// means on one of the three CI runners and never in a developer's loop.
     void pretendToBe(format::OsFamily os) { pretend_ = os; }
 
+    /// Answer accessObstacles() with something in the way.
+    ///
+    /// Each real one needs a machine in a particular state - a macOS without
+    /// Full Disk Access, a build running inside a Flatpak, a Windows process
+    /// that is not elevated - so without this the code that turns them into
+    /// something the person reads could only be exercised on three machines
+    /// nobody has to hand.
+    void putInTheWay(platform::AccessObstacle obstacle) {
+        obstacles_.push_back(std::move(obstacle));
+    }
+
     [[nodiscard]] QList<platform::StorageVolume> storageVolumes() const override {
         return volumes_;
     }
@@ -67,10 +78,14 @@ public:
     [[nodiscard]] std::unique_ptr<platform::SecretStore> secretStore() const override {
         return real_->secretStore();
     }
+    [[nodiscard]] QList<platform::AccessObstacle> accessObstacles() const override {
+        return obstacles_.isEmpty() ? real_->accessObstacles() : obstacles_;
+    }
 
 private:
     std::unique_ptr<platform::PlatformService> real_;
     format::OsFamily pretend_ = format::OsFamily::Unknown;
+    QList<platform::AccessObstacle> obstacles_;
     QList<platform::StorageVolume> volumes_;
 };
 
