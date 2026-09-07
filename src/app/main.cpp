@@ -8,6 +8,7 @@
 #include <QQuickWindow>
 #include <QSGRendererInterface>
 #include <QSurfaceFormat>
+#include <QTextStream>
 #include <QUrl>
 
 #include "core/utils/Logging.h"
@@ -149,6 +150,19 @@ int main(int argc, char** argv) {
     const bool benchmarking = qEnvironmentVariableIsSet("TRANSMIT_STARTUP_BENCHMARK");
     qCDebug(logPerformance) << "window built after" << startup.elapsed() << "ms";
 
+    // Said on stdout as well, and only when asked to benchmark.
+    //
+    // The checks that prove a package actually runs look for these two lines,
+    // and going through a logging category made that proof depend on the
+    // machine's logging configuration rather than on the program. On Fedora it
+    // did: the .rpm installed, the window was built, a frame was painted and
+    // the process exited cleanly - and printed nothing at all, so the check
+    // reported that the program had not started. A line nobody can filter is
+    // what the question deserves.
+    if (benchmarking) {
+        QTextStream(stdout) << "window built after " << startup.elapsed() << " ms\n";
+    }
+
     if (auto* const window = qobject_cast<QQuickWindow*>(engine.rootObjects().constFirst())) {
         // The second half of the graphics fallback, and the reason the window
         // is reached at all rather than the process being aborted from under
@@ -170,6 +184,9 @@ int main(int argc, char** argv) {
             [&startup, benchmarking]() {
                 qCDebug(logPerformance) << "first frame after" << startup.elapsed() << "ms";
                 if (benchmarking) {
+                    QTextStream out(stdout);
+                    out << "first frame after " << startup.elapsed() << " ms\n";
+                    out.flush();
                     QCoreApplication::quit();
                 }
             },

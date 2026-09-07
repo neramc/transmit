@@ -315,58 +315,6 @@ namespace {
 /// say it better in one.
 constexpr quint64 kMaxSkipNotes = 50;
 
-/// The stricter of two rules, field by field. A root can only ever narrow what
-/// the selection asked for.
-ScopeRule narrowest(const ScopeRule& selection, const ScopeRule& root) {
-    ScopeRule merged = selection;
-
-    const auto tighterMaximum = [](quint64 a, quint64 b) {
-        if (a == 0)
-            return b;
-        if (b == 0)
-            return a;
-        return std::min(a, b);
-    };
-    merged.maximumFileSize = tighterMaximum(selection.maximumFileSize, root.maximumFileSize);
-    merged.minimumFileSize = std::max(selection.minimumFileSize, root.minimumFileSize);
-
-    if (!root.includeExtensions.isEmpty()) {
-        merged.includeExtensions = selection.includeExtensions.isEmpty()
-                                       ? root.includeExtensions
-                                       : selection.includeExtensions & root.includeExtensions;
-    }
-    merged.excludeExtensions |= root.excludeExtensions;
-
-    if (root.modifiedSince.isValid() &&
-        (!merged.modifiedSince.isValid() || root.modifiedSince > merged.modifiedSince)) {
-        merged.modifiedSince = root.modifiedSince;
-    }
-    if (root.modifiedBefore.isValid() &&
-        (!merged.modifiedBefore.isValid() || root.modifiedBefore < merged.modifiedBefore)) {
-        merged.modifiedBefore = root.modifiedBefore;
-    }
-
-    // includeHidden defaults to taking everything, so a root that sets it to
-    // false is saying something and the stricter of the two is right.
-    merged.includeHidden = selection.includeHidden && root.includeHidden;
-
-    // These two do not work that way, and the difference is the whole reason
-    // for the comment. Both default to the restrictive answer, so a root that
-    // was never given a rule of its own - which is every root that did not come
-    // from a per-application choice - is indistinguishable from one that
-    // deliberately asked for the restrictive answer. Taking the stricter of the
-    // two therefore turned them off for every capture: `--follow-symlinks` did
-    // nothing at all on a user folder, silently, because the default-built root
-    // rule beside it always said no.
-    //
-    // A root can still narrow what is taken, through the size, date, extension
-    // and pattern rules above. It cannot overrule a policy the person set for
-    // the whole capture.
-    merged.followSymlinks = selection.followSymlinks;
-    merged.fetchCloudFiles = selection.fetchCloudFiles;
-    return merged;
-}
-
 }  // namespace
 
 ScanService::ScanService(const platform::PlatformService& platformService)
@@ -468,7 +416,7 @@ void ScanService::scanRoot(const CaptureRoot& root, const CaptureSelection& sele
     // A root may narrow the selection but not widen it, so the two are merged
     // rather than one replacing the other: somebody who set a size limit for
     // the whole capture does not expect one application to ignore it.
-    const ScopeRule scope = narrowest(selection.scope, root.scope);
+    const ScopeRule scope = selection.scope.narrowedBy(root.scope);
 
     QElapsedTimer throttle;
     throttle.start();

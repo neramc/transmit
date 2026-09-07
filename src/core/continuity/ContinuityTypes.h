@@ -110,6 +110,17 @@ struct ScopeRule {
     /// decision made with the number in front of you.
     bool fetchCloudFiles = false;
 
+    /// This rule as narrowed by one a single folder carries.
+    ///
+    /// A root may take less than the whole capture asked for - by size, by
+    /// date, by type, by pattern - and may not take more. Which is not the
+    /// same as "the stricter of the two, field by field": every root that was
+    /// never given a rule of its own carries a default-built one, and for a
+    /// flag whose default is already the restrictive answer that is
+    /// indistinguishable from a deliberate no. Taking the stricter of the two
+    /// there turned those flags off for every capture, silently.
+    [[nodiscard]] ScopeRule narrowedBy(const ScopeRule& root) const;
+
     /// True when this rule would accept everything, which lets the scan skip
     /// the per-file work entirely.
     [[nodiscard]] bool isUnrestricted() const;

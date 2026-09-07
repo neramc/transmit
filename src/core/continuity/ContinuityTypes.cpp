@@ -2,6 +2,8 @@
 
 #include <QCoreApplication>
 
+#include <algorithm>
+
 namespace transmit::core {
 
 QString continuityGradeName(ContinuityGrade grade) {
@@ -64,6 +66,56 @@ bool ScopeRule::isUnrestricted() const {
     // fast path that skips the per-file work, and leaving a cloud placeholder
     // alone is not a restriction the person asked for - it is the difference
     // between reading a file and downloading it.
+}
+
+ScopeRule ScopeRule::narrowedBy(const ScopeRule& root) const {
+    ScopeRule merged = *this;
+
+    const auto tighterMaximum = [](quint64 a, quint64 b) {
+        if (a == 0)
+            return b;
+        if (b == 0)
+            return a;
+        return std::min(a, b);
+    };
+    merged.maximumFileSize = tighterMaximum(maximumFileSize, root.maximumFileSize);
+    merged.minimumFileSize = std::max(minimumFileSize, root.minimumFileSize);
+
+    if (!root.includeExtensions.isEmpty()) {
+        merged.includeExtensions = includeExtensions.isEmpty()
+                                       ? root.includeExtensions
+                                       : includeExtensions & root.includeExtensions;
+    }
+    merged.excludeExtensions |= root.excludeExtensions;
+
+    if (root.modifiedSince.isValid() &&
+        (!merged.modifiedSince.isValid() || root.modifiedSince > merged.modifiedSince)) {
+        merged.modifiedSince = root.modifiedSince;
+    }
+    if (root.modifiedBefore.isValid() &&
+        (!merged.modifiedBefore.isValid() || root.modifiedBefore < merged.modifiedBefore)) {
+        merged.modifiedBefore = root.modifiedBefore;
+    }
+
+    // includeHidden defaults to taking everything, so a root that sets it to
+    // false is saying something and the stricter of the two is right.
+    merged.includeHidden = includeHidden && root.includeHidden;
+
+    // These two do not work that way, and the difference is the whole reason
+    // for the comment. Both default to the restrictive answer, so a root that
+    // was never given a rule of its own - which is every root that did not come
+    // from a per-application choice - is indistinguishable from one that
+    // deliberately asked for the restrictive answer. Taking the stricter of the
+    // two therefore turned them off for every capture: `--follow-symlinks` did
+    // nothing at all on a user folder, silently, because the default-built root
+    // rule beside it always said no.
+    //
+    // A root can still narrow what is taken, through the size, date, extension
+    // and pattern rules above. It cannot overrule a policy the person set for
+    // the whole capture.
+    merged.followSymlinks = followSymlinks;
+    merged.fetchCloudFiles = fetchCloudFiles;
+    return merged;
 }
 
 QString skipReasonName(SkipReason reason) {

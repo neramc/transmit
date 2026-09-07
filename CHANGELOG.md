@@ -86,6 +86,15 @@ notes say so.
 
 ### Fixed
 
+- The .rpm was working and the check said it was not. The two lines that prove
+  a launch reached a painted window went through a logging category, so whether
+  the proof appeared depended on the machine's logging configuration rather
+  than on the program: on Fedora the package installed, the window was built, a
+  frame was painted and the process exited cleanly - and printed nothing, which
+  the check read as "it never started". Reproduced exactly here by silencing
+  the categories, and fixed by saying those two lines on standard output when
+  the benchmark is asked for, where nothing can filter them.
+
 - A rule set for the whole capture is no longer cancelled by a folder that says
   nothing. Each root carries a scope of its own and the stricter of the two was
   taken, which is right for a flag whose default is permissive and wrong for
@@ -128,6 +137,11 @@ notes say so.
   one everywhere. Each of the three - the attribute bits, the name of an
   evicted iCloud file, and the policy merge - was shown to fail when broken on
   purpose.
+- The rule that decides what a single folder may change about the whole
+  capture's scope is a named function with a suite of its own now, because it
+  is the one that was wrong: nine cases covering the size limits at both ends,
+  the dates, the intersection of file types, hidden files and the two policy
+  flags a folder may not overrule, each shown to fail when the merge is broken.
 - Five more things the catalog has to be true about, each shown to fail when
   broken on purpose: a file inside a state folder cannot be written as an
   absolute path, no state root names the same place twice, anything whose role

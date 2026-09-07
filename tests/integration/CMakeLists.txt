@@ -4,7 +4,7 @@
 
 foreach(suite ContinuityRoundTrip PathRewrite SecretStore Catalog SelectionCodec
               VerifyService StageTimer ResumeCapture ResumeRestore Eject
-              FormatCompatibility Update CloudFiles)
+              FormatCompatibility Update CloudFiles ScopeRule)
     add_executable(transmit_${suite}_test ${suite}Test.cpp)
     target_link_libraries(transmit_${suite}_test
         PRIVATE Transmit::Core Transmit::Warnings Qt6::Test SQLite::SQLite3)
