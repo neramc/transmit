@@ -64,7 +64,16 @@ constexpr std::uint32_t kCaptureNote = 21;
 // the field, so an archive carrying MD5 still opens on an older build - which
 // is why this is a new tag rather than a change to kHash.
 constexpr std::uint32_t kMd5 = 22;
+
+/// A nested record per attribute, repeated. Also added after the first release,
+/// so an older reader skips them and reads the rest of the entry.
+constexpr std::uint32_t kExtendedAttribute = 23;
 }  // namespace entry_field
+
+namespace xattr_field {
+constexpr std::uint32_t kName = 1;
+constexpr std::uint32_t kValue = 2;
+}  // namespace xattr_field
 
 namespace block_field {
 constexpr std::uint32_t kBlockId = 1;
@@ -237,6 +246,12 @@ void writeEntry(ByteWriter& writer, const ManifestEntry& entry) {
     if (!entry.captureNote.empty()) {
         writer.putString(entry_field::kCaptureNote, entry.captureNote);
     }
+    for (const ExtendedAttribute& attribute : entry.extendedAttributes) {
+        writer.putRecord(entry_field::kExtendedAttribute, [&attribute](ByteWriter& nested) {
+            nested.putString(xattr_field::kName, attribute.name);
+            nested.putString(xattr_field::kValue, attribute.value);
+        });
+    }
 }
 
 Result<ManifestEntry> readEntry(ByteView data) {
@@ -354,6 +369,30 @@ Result<ManifestEntry> readEntry(ByteView data) {
             case entry_field::kAppId: {
                 TRANSMIT_TRY(value, reader.getString());
                 entry.appId = std::move(value);
+                break;
+            }
+            case entry_field::kExtendedAttribute: {
+                TRANSMIT_TRY(nestedBytes, reader.getBytes());
+                ByteReader nested(nestedBytes);
+                ExtendedAttribute attribute;
+                while (!nested.atEnd()) {
+                    TRANSMIT_TRY(nestedTag, nested.getTag());
+                    if (nestedTag.field == xattr_field::kName) {
+                        TRANSMIT_TRY(value, nested.getString());
+                        attribute.name = std::move(value);
+                    } else if (nestedTag.field == xattr_field::kValue) {
+                        TRANSMIT_TRY(value, nested.getString());
+                        attribute.value = std::move(value);
+                    } else {
+                        TRANSMIT_CHECK(nested.skip(nestedTag.type));
+                    }
+                }
+                // A record with no name is not an attribute. Dropped rather
+                // than kept, because setting one would be a call with an empty
+                // key and the failure would land on the far side.
+                if (!attribute.name.empty()) {
+                    entry.extendedAttributes.push_back(std::move(attribute));
+                }
                 break;
             }
             case entry_field::kCaptureNote: {

@@ -123,6 +123,21 @@ own manifest already recorded for that path, so dropping a crafted `.repair`
 file next to somebody's archive changes nothing about what restoring it puts
 on their machine. The original archive is never modified.
 
+**A restored file is never given powers the file it came from did not have.**
+Extended attributes travel by an allow-list — `user.*` and the tag attributes
+macOS keeps — and the two namespaces it excludes are the reason it is a list
+rather than a filter. `security.capability` is honoured by the kernel: a binary
+carrying one runs with the powers it names, so an archive able to set that
+attribute would be a way to hand out privilege by restoring a file, and an
+archive is not a thing that should be able to do that. `system.*` and
+`trusted.*` describe the filesystem rather than the file, and both need
+privilege to write. The same list is applied again on the restore side rather
+than trusted from the archive, because the rule is about what this machine
+should be given and the archive is the one thing in the room that somebody else
+may have written. `com.apple.quarantine` is refused for a different reason: it
+means "this came from the internet", and carrying it forward would put a
+warning on documents that never did.
+
 **An encrypted archive's `.md5` file does not list its contents.** The point of
 encrypting one is that the names of somebody's files are not readable from the
 drive; a sidecar listing every path beside it would hand them over in plain

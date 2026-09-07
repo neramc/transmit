@@ -110,5 +110,58 @@ TEST(AttributesWorthCarrying, AMixedWordKeepsOnlyTheHalfThatTravels) {
               file_attribute::kHidden | file_attribute::kReadOnly);
 }
 
+TEST(ExtendedAttributes, WhatSomebodyPutThereTravels) {
+    EXPECT_TRUE(extendedAttributeTravels("user.xdg.tags"));
+    EXPECT_TRUE(extendedAttributeTravels("user.xdg.comment"));
+    EXPECT_TRUE(extendedAttributeTravels("user.dublincore.title"));
+    EXPECT_TRUE(extendedAttributeTravels("user.anything.at.all"));
+
+    // Finder tags and the Spotlight comment: the same idea, where macOS keeps
+    // it.
+    EXPECT_TRUE(extendedAttributeTravels("com.apple.metadata:_kMDItemUserTags"));
+    EXPECT_TRUE(extendedAttributeTravels("com.apple.metadata:kMDItemFinderComment"));
+}
+
+TEST(ExtendedAttributes, NothingThatGrantsPrivilegeTravels) {
+    // The one that matters: security.capability is honoured by the kernel, so
+    // an archive able to set it would be a way to hand a binary powers by
+    // restoring it. The other two namespaces need privilege to write and
+    // describe the filesystem rather than the file.
+    EXPECT_FALSE(extendedAttributeTravels("security.capability"));
+    EXPECT_FALSE(extendedAttributeTravels("security.selinux"));
+    EXPECT_FALSE(extendedAttributeTravels("security.ima"));
+    EXPECT_FALSE(extendedAttributeTravels("system.posix_acl_access"));
+    EXPECT_FALSE(extendedAttributeTravels("system.nfs4_acl"));
+    EXPECT_FALSE(extendedAttributeTravels("trusted.overlay.opaque"));
+}
+
+TEST(ExtendedAttributes, TheMarkOfTheInternetIsLeftBehind) {
+    // Carrying this forward would make every restored document arrive with a
+    // warning it did not have before - and the archive it arrived in is not
+    // the download the mark is about.
+    EXPECT_FALSE(extendedAttributeTravels("com.apple.quarantine"));
+    EXPECT_FALSE(extendedAttributeTravels("com.apple.provenance"));
+    EXPECT_FALSE(extendedAttributeTravels("com.apple.macl"));
+
+    // Not a tag: a file's worth of data behind the same interface.
+    EXPECT_FALSE(extendedAttributeTravels("com.apple.ResourceFork"));
+    EXPECT_FALSE(extendedAttributeTravels("com.apple.FinderInfo"));
+}
+
+TEST(ExtendedAttributes, NothingElseIsCarriedByAccident) {
+    // An allow-list, so a namespace nobody here has thought about stays where
+    // it is rather than travelling because it looked harmless.
+    EXPECT_FALSE(extendedAttributeTravels("os2.type"));
+    EXPECT_FALSE(extendedAttributeTravels("btrfs.compression"));
+    EXPECT_FALSE(extendedAttributeTravels("com.apple.lastuseddate#PS"));
+    EXPECT_FALSE(extendedAttributeTravels("userfoo.bar"));
+    EXPECT_FALSE(extendedAttributeTravels("user"));
+    EXPECT_FALSE(extendedAttributeTravels(""));
+
+    // A refusal wins over an allowance, whichever order a future name matches
+    // in.
+    EXPECT_FALSE(extendedAttributeTravels("security.user.tags"));
+}
+
 }  // namespace
 }  // namespace transmit::format

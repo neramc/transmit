@@ -20,6 +20,12 @@ ManifestEntry sampleEntry() {
     entry.location = BlockLocation{7, 4096, 1234};
     entry.appId = "org.mozilla.firefox";
     entry.captureNote = "read from a VSS snapshot";
+    entry.extendedAttributes = {
+        ExtendedAttribute{"user.xdg.tags", "work,taxes"},
+        // Arbitrary bytes, including a NUL: an attribute is not text, and a
+        // reader that treated it as a C string would truncate this one.
+        ExtendedAttribute{"user.checksum", std::string("\x01\0\x02", 3)},
+    };
     return entry;
 }
 
@@ -103,6 +109,14 @@ TEST(Manifest, RoundTripsEveryField) {
     EXPECT_EQ(file.location.offset, 4096u);
     EXPECT_EQ(file.appId, "org.mozilla.firefox");
     EXPECT_EQ(file.captureNote, "read from a VSS snapshot");
+    ASSERT_EQ(file.extendedAttributes.size(), 2u);
+    EXPECT_EQ(file.extendedAttributes[0].name, "user.xdg.tags");
+    EXPECT_EQ(file.extendedAttributes[0].value, "work,taxes");
+    EXPECT_EQ(file.extendedAttributes[1].name, "user.checksum");
+    EXPECT_EQ(file.extendedAttributes[1].value, std::string("\x01\0\x02", 3));
+
+    // An entry with none is an entry with none, not one with an empty tag.
+    EXPECT_TRUE(decoded->entries[1].extendedAttributes.empty());
 
     EXPECT_EQ(decoded->entries[1].type, EntryType::Directory);
     EXPECT_EQ(decoded->entries[2].symlinkTarget, "/home/bob/Documents");

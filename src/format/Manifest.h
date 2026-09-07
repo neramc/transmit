@@ -73,6 +73,21 @@ struct BlockLocation {
     }
 };
 
+/// One named tag a filesystem keeps beside a file.
+///
+/// A colour label, a Finder tag, the comment a file manager wrote, the checksum
+/// some other program left behind. Not the contents and not the permissions -
+/// a third thing, which every system Transmit runs on has and none of them
+/// calls by the same name.
+struct ExtendedAttribute {
+    std::string name;
+    std::string value;  ///< arbitrary bytes, not necessarily text
+
+    friend bool operator==(const ExtendedAttribute& a, const ExtendedAttribute& b) {
+        return a.name == b.name && a.value == b.value;
+    }
+};
+
 struct ManifestEntry {
     std::uint64_t id = 0;
     DomainId domain = DomainId::UserData;
@@ -105,6 +120,10 @@ struct ManifestEntry {
 
     /// Set when the capture had to fall back (locked file, snapshot missing).
     std::string captureNote;
+
+    /// The tags this file carried, in the order the filesystem listed them.
+    /// Empty for most files; what is in here was put there deliberately.
+    std::vector<ExtendedAttribute> extendedAttributes;
 
     [[nodiscard]] bool hasContent() const noexcept { return type == EntryType::File && size > 0; }
 };

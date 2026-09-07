@@ -35,6 +35,9 @@
 
 #ifndef Q_OS_WIN
 #include <sys/stat.h>
+#if defined(Q_OS_LINUX) || defined(Q_OS_MACOS)
+#include <sys/xattr.h>
+#endif
 #else
 #include <windows.h>
 #endif
@@ -49,7 +52,39 @@ constexpr qint64 kProgressIntervalMs = 100;
 /// deliberately not restored: the numeric ids from the source machine rarely
 /// mean the same thing here, and changing owner needs privileges the app
 /// should not ask for.
+void applyExtendedAttributes(const QString& path, const format::ManifestEntry& entry) {
+#if defined(Q_OS_LINUX) || defined(Q_OS_MACOS)
+    if (entry.extendedAttributes.empty()) {
+        return;
+    }
+    const QByteArray native = QFile::encodeName(path);
+    for (const format::ExtendedAttribute& attribute : entry.extendedAttributes) {
+        // Asked again on this side rather than trusted from the archive. The
+        // rule is about what this machine should be given, and an archive is
+        // the one thing in the room that somebody else may have written.
+        if (!format::extendedAttributeTravels(attribute.name)) {
+            continue;
+        }
+#if defined(Q_OS_MACOS)
+        ::setxattr(native.constData(), attribute.name.c_str(), attribute.value.data(),
+                   attribute.value.size(), 0, XATTR_NOFOLLOW);
+#else
+        ::lsetxattr(native.constData(), attribute.name.c_str(), attribute.value.data(),
+                    attribute.value.size(), 0);
+#endif
+        // Deliberately unchecked. A filesystem that does not keep attributes,
+        // or refuses one of them, is not a reason to fail a restore that has
+        // already put the file itself in place - and the alternative is a
+        // report full of "could not set user.xdg.tags" on every FAT stick.
+    }
+#else
+    Q_UNUSED(path);
+    Q_UNUSED(entry);
+#endif
+}
+
 void applyMetadata(const QString& path, const format::ManifestEntry& entry, OsFamily target) {
+    applyExtendedAttributes(path, entry);
 #ifndef Q_OS_WIN
     if (entry.posix.isSet() && target != OsFamily::Windows) {
         ::chmod(QFile::encodeName(path).constData(), static_cast<mode_t>(entry.posix.mode));

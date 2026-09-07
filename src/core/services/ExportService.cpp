@@ -128,6 +128,7 @@ format::ManifestEntry toManifestEntry(const ScannedItem& item, quint64 id) {
     entry.windows = item.windows;
     entry.symlinkTarget = toUtf8(item.symlinkTarget);
     entry.appId = toUtf8(item.appId);
+    entry.extendedAttributes = item.extendedAttributes;
     return entry;
 }
 

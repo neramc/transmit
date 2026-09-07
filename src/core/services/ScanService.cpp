@@ -22,6 +22,7 @@
 #include <grp.h>
 #include <pwd.h>
 #include <sys/stat.h>
+#include <sys/xattr.h>
 #include <unistd.h>
 #else
 #include <windows.h>
@@ -133,6 +134,75 @@ void fillWindowsMetadata(const QFileInfo& info, format::WindowsMetadata& windows
 #else
     Q_UNUSED(info);
     Q_UNUSED(windows);
+#endif
+}
+
+/// Reads the extended attributes worth carrying.
+///
+/// Every system Transmit runs on keeps a third thing beside a file's contents
+/// and its permissions: named tags. Linux calls them extended attributes,
+/// macOS the same, Windows keeps the equivalent in alternate data streams. The
+/// two that share an interface are read here; what is worth carrying is
+/// decided in one place, in the format layer, because the answer has to be the
+/// same on the machine that writes an archive and the one that reads it.
+void fillExtendedAttributes(const QFileInfo& info,
+                            std::vector<format::ExtendedAttribute>& attributes) {
+#if defined(Q_OS_LINUX) || defined(Q_OS_MACOS)
+    const QByteArray path = QFile::encodeName(info.absoluteFilePath());
+
+#if defined(Q_OS_MACOS)
+    const auto list = [&path](char* buffer, size_t size) {
+        return ::listxattr(path.constData(), buffer, size, XATTR_NOFOLLOW);
+    };
+    const auto get = [&path](const char* name, void* buffer, size_t size) {
+        return ::getxattr(path.constData(), name, buffer, size, 0, XATTR_NOFOLLOW);
+    };
+#else
+    const auto list = [&path](char* buffer, size_t size) {
+        return ::llistxattr(path.constData(), buffer, size);
+    };
+    const auto get = [&path](const char* name, void* buffer, size_t size) {
+        return ::lgetxattr(path.constData(), name, buffer, size);
+    };
+#endif
+
+    const ssize_t needed = list(nullptr, 0);
+    if (needed <= 0) {
+        return;  // none, or a filesystem that does not keep them
+    }
+
+    std::vector<char> names(static_cast<size_t>(needed));
+    const ssize_t written = list(names.data(), names.size());
+    if (written <= 0) {
+        return;
+    }
+
+    // A NUL-separated list, which is why this walks rather than splits: an
+    // attribute name may contain anything but a NUL.
+    size_t at = 0;
+    while (at < static_cast<size_t>(written)) {
+        const std::string name(names.data() + at);
+        at += name.size() + 1;
+        if (name.empty() || !format::extendedAttributeTravels(name)) {
+            continue;
+        }
+
+        const ssize_t size = get(name.c_str(), nullptr, 0);
+        if (size < 0 || static_cast<size_t>(size) > format::kLargestExtendedAttribute) {
+            continue;
+        }
+
+        std::string value(static_cast<size_t>(size), '\0');
+        const ssize_t read = get(name.c_str(), value.data(), value.size());
+        if (read < 0) {
+            continue;  // it went away between the two calls
+        }
+        value.resize(static_cast<size_t>(read));
+        attributes.push_back(format::ExtendedAttribute{name, std::move(value)});
+    }
+#else
+    Q_UNUSED(info);
+    Q_UNUSED(attributes);
 #endif
 }
 
@@ -423,6 +493,7 @@ void ScanService::scanRoot(const CaptureRoot& root, const CaptureSelection& sele
         item.createdUnixNs = toUnixNs(info.birthTime());
         fillPosixMetadata(info, item.posix);
         fillWindowsMetadata(info, item.windows);
+        fillExtendedAttributes(info, item.extendedAttributes);
 
         if (info.isSymLink()) {
             item.type = format::EntryType::Symlink;

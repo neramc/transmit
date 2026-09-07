@@ -11,6 +11,9 @@
 #ifndef Q_OS_WIN
 #include <pwd.h>
 #include <unistd.h>
+#if defined(Q_OS_LINUX) || defined(Q_OS_MACOS)
+#include <sys/xattr.h>
+#endif
 #endif
 
 #include "core/services/ExportService.h"
@@ -19,6 +22,7 @@
 #include "core/services/RollbackWriter.h"
 #include "core/services/ScanService.h"
 #include "core/utils/Conversions.h"
+#include "format/FileTraits.h"
 #include "platform/PlatformService.h"
 
 #include "FakePlatform.h"
@@ -34,6 +38,7 @@ class ContinuityRoundTripTest : public QObject {
 private slots:
     void initTestCase();
     void capturesAndRestoresUserFiles();
+    void theTagsOnAFileTravelWithIt();
     void restoringTwiceDoesNotDuplicateWhatIsAlreadyThere();
     void deduplicatesRepeatedContent();
     void splitsAcrossVolumesAndReadsThemBack();
@@ -445,6 +450,106 @@ void ContinuityRoundTripTest::capturesAndRestoresUserFiles() {
     QCOMPARE(restored.readAll(), original.readAll());
 
     QVERIFY(QDir(workspace_.filePath("restored") + "/DOCUMENTS/empty").exists());
+}
+
+// The third thing a filesystem keeps beside a file: its tags.
+//
+// Not the contents and not the permissions - the colour label somebody set, the
+// tag a file manager wrote, the comment. Every system Transmit runs on has
+// them, and until now none of them arrived: the archive had nowhere to put one.
+//
+// The refusals - security.capability and the rest - are checked in the format
+// tests, because an unprivileged process cannot create one to capture.
+void ContinuityRoundTripTest::theTagsOnAFileTravelWithIt() {
+#if !defined(Q_OS_LINUX) && !defined(Q_OS_MACOS)
+    QSKIP("this system keeps its tags somewhere Transmit does not read yet");
+#else
+    const QString tagged = sourceHome() + QStringLiteral("/Documents/reports/q1.txt");
+    const QByteArray native = QFile::encodeName(tagged);
+
+    // A big one too. An attribute is where a tag goes, not a file: macOS will
+    // hand back a whole resource fork through the same interface, and the
+    // manifest is not the place for it.
+    const std::string huge(format::kLargestExtendedAttribute + 1, 'x');
+
+#if defined(Q_OS_MACOS)
+    const auto set = [&native](const char* name, const std::string& value) {
+        return ::setxattr(native.constData(), name, value.data(), value.size(), 0, XATTR_NOFOLLOW);
+    };
+    const auto read = [](const QString& path, const char* name) {
+        const QByteArray at = QFile::encodeName(path);
+        const ssize_t size = ::getxattr(at.constData(), name, nullptr, 0, 0, XATTR_NOFOLLOW);
+        if (size < 0) {
+            return QByteArray();
+        }
+        QByteArray value(static_cast<int>(size), '\0');
+        ::getxattr(at.constData(), name, value.data(), static_cast<size_t>(value.size()), 0,
+                   XATTR_NOFOLLOW);
+        return value;
+    };
+#else
+    const auto set = [&native](const char* name, const std::string& value) {
+        return ::lsetxattr(native.constData(), name, value.data(), value.size(), 0);
+    };
+    const auto read = [](const QString& path, const char* name) {
+        const QByteArray at = QFile::encodeName(path);
+        const ssize_t size = ::lgetxattr(at.constData(), name, nullptr, 0);
+        if (size < 0) {
+            return QByteArray();
+        }
+        QByteArray value(static_cast<int>(size), '\0');
+        ::lgetxattr(at.constData(), name, value.data(), static_cast<size_t>(value.size()));
+        return value;
+    };
+#endif
+
+    if (set("user.xdg.tags", "work,taxes") != 0) {
+        QSKIP("this filesystem does not keep extended attributes");
+    }
+    QCOMPARE(set("user.transmit.test", std::string("\x01\0\x02", 3)), 0);
+
+    // ext4 keeps every attribute of a file inside one block, so it refuses
+    // this one outright and the limit cannot be exercised here. On a
+    // filesystem that accepts it - APFS, XFS with large blocks - it must be
+    // left behind, and that is asserted below only where it could be made.
+    const bool enormousExists = set("user.transmit.enormous", huge) == 0;
+
+    core::ExportService exporter(*platform_);
+    core::CancelToken token;
+
+    core::ExportRequest request;
+    request.destinationPath = archivePath("tags.txa");
+    request.selection = documentsSelection();
+    request.packaging.preset = format::CompressionPreset::Fast;
+
+    const core::ExportReport exported = exporter.run(request, token);
+    QVERIFY2(exported.succeeded, qPrintable(exported.errorMessage));
+
+    core::ImportService importer(*platform_);
+    core::ImportRequest restore;
+    restore.archivePath = request.destinationPath;
+    restore.destinationOverride = workspace_.filePath("restored-tags");
+
+    const core::ImportReport imported = importer.run(restore, token);
+    QVERIFY2(imported.succeeded, qPrintable(imported.errorMessage));
+
+    const QString arrived =
+        workspace_.filePath("restored-tags") + QStringLiteral("/DOCUMENTS/reports/q1.txt");
+    QVERIFY2(QFile::exists(arrived), qPrintable(arrived));
+
+    QCOMPARE(read(arrived, "user.xdg.tags"), QByteArray("work,taxes"));
+
+    // Bytes, not text: a NUL in the middle is part of the value, and a reader
+    // that treated it as a C string would deliver two of the three bytes.
+    QCOMPARE(read(arrived, "user.transmit.test"), QByteArray("\x01\0\x02", 3));
+
+    if (enormousExists) {
+        QVERIFY2(read(arrived, "user.transmit.enormous").isEmpty(),
+                 "an attribute larger than the limit was carried anyway");
+    } else {
+        qInfo("this filesystem refuses an oversized attribute, so the limit was not exercised");
+    }
+#endif
 }
 
 // A restore that was interrupted leaves a machine with some of the files on it,

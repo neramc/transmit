@@ -30,6 +30,10 @@ struct ScannedItem {
     format::WindowsMetadata windows;
     QString symlinkTarget;
 
+    /// The tags the filesystem keeps beside the file - a colour label, a
+    /// Finder tag, a comment. Empty for almost every file.
+    std::vector<format::ExtendedAttribute> extendedAttributes;
+
     /// Set when the scan could not read the item; it still appears in the
     /// report so nothing disappears silently.
     QString problem;

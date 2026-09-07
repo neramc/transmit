@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 
@@ -89,5 +90,29 @@ inline constexpr std::uint32_t kRecallOnDataAccess = 0x00400000;
                                       file_attribute::kNotContentIndexed;
     return attributes & carried;
 }
+
+/// The largest single attribute worth carrying.
+///
+/// Most are a few dozen bytes - a colour label, a tag list, a checksum some
+/// other program left. macOS will also hand back a whole resource fork through
+/// the same interface, which is a file's worth of data pretending to be a tag,
+/// and the manifest is not where a file belongs.
+inline constexpr std::size_t kLargestExtendedAttribute = 64 * 1024;
+
+/// Whether an extended attribute of this name should travel with its file.
+///
+/// Three answers, and the interesting one is the middle:
+///
+///   - `user.*` on Linux and the tag attributes on macOS are what a person or
+///     their programs put there - colour labels, Finder tags, the comment a
+///     file manager keeps - and they are the whole point of this.
+///   - `security.*`, `system.*` and `trusted.*` never travel, and not because
+///     they would fail: `security.capability` grants a binary powers the
+///     kernel then honours, and an archive that could set it would be a way to
+///     hand out privilege by restoring a file.
+///   - `com.apple.quarantine` never travels either. It is the mark that says
+///     "this came from the internet", and carrying it forward would make every
+///     restored document arrive with a warning it did not have before.
+[[nodiscard]] bool extendedAttributeTravels(std::string_view name) noexcept;
 
 }  // namespace transmit::format

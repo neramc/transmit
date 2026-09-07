@@ -31,6 +31,15 @@ notes say so.
   desktop's own where it can be read without starting a process (Windows and
   Plasma); elsewhere the brand colour is used, because an accent guessed wrong
   is worse than one chosen on purpose.
+- The tags a filesystem keeps beside a file now travel with it: the colour
+  label somebody set, the Finder tag, the comment a file manager wrote. Every
+  system Transmit runs on has them and the archive had nowhere to put one, so
+  none of them ever arrived. What travels is an allow-list - `user.*` and
+  macOS's tag attributes - because two kinds of extended attribute must not:
+  `security.capability` grants a binary powers the kernel then honours, so an
+  archive able to set it would be a way to hand out privilege by restoring a
+  file, and `com.apple.quarantine` is the mark that says "this came from the
+  internet", which would arrive on documents that never did.
 - Files that are not really on the machine are listed rather than downloaded.
   OneDrive keeps a file's name, size and modification time on disk with the
   contents on its own servers, and iCloud Drive replaces an evicted
