@@ -135,6 +135,12 @@ core::ScanResult CloudFilesTest::scanFollowingLinks(bool follow) const {
     auto platform = std::make_unique<testing::PlatformWithDrives>(
         platform::PlatformService::create(), QList<platform::StorageVolume>{});
 
+    // Linux, wherever this is running. The fixture holds a file named like an
+    // evicted iCloud one, and on a macOS runner that is exactly what it is - so
+    // without this the counts below differ by the machine the test is on, which
+    // is not what this test is about.
+    platform->pretendToBe(format::OsFamily::Linux);
+
     core::CaptureSelection selection = selectionOfTheFixture();
     selection.scope.followSymlinks = follow;
 
