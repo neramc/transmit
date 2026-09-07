@@ -27,6 +27,7 @@
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
 #include "format/FileIo.h"
+#include "format/FileTraits.h"
 #include "format/NameSanitizer.h"
 #include "format/RestoreJournal.h"
 #include "format/TransferJournal.h"
@@ -34,6 +35,8 @@
 
 #ifndef Q_OS_WIN
 #include <sys/stat.h>
+#else
+#include <windows.h>
 #endif
 
 namespace transmit::core {
@@ -42,18 +45,34 @@ namespace {
 constexpr qint64 kProgressIntervalMs = 100;
 
 /// Applies the recorded modification time and, where the target supports them,
-/// the POSIX permission bits. Ownership is deliberately not restored: the
-/// numeric ids from the source machine rarely mean the same thing here, and
-/// changing owner needs privileges the app should not ask for.
+/// the POSIX permission bits or the Windows attributes. Ownership is
+/// deliberately not restored: the numeric ids from the source machine rarely
+/// mean the same thing here, and changing owner needs privileges the app
+/// should not ask for.
 void applyMetadata(const QString& path, const format::ManifestEntry& entry, OsFamily target) {
 #ifndef Q_OS_WIN
     if (entry.posix.isSet() && target != OsFamily::Windows) {
         ::chmod(QFile::encodeName(path).constData(), static_cast<mode_t>(entry.posix.mode));
     }
 #else
-    Q_UNUSED(path);
-    Q_UNUSED(entry);
     Q_UNUSED(target);
+
+    // Only the bits that say what the file is for. The rest of the word
+    // describes how the old disk was storing it - compressed, a reparse point,
+    // still in the cloud - and setting those here would be a claim about this
+    // machine that is not true. Nothing is cleared: a file that arrives with
+    // none of these set keeps whatever Windows gave it, which is the same
+    // outcome as before this existed.
+    const std::uint32_t wanted = format::attributesWorthCarrying(entry.windows.attributes);
+    if (wanted == 0) {
+        return;
+    }
+    const auto* native = reinterpret_cast<const wchar_t*>(path.utf16());
+    const DWORD current = ::GetFileAttributesW(native);
+    if (current == INVALID_FILE_ATTRIBUTES) {
+        return;
+    }
+    ::SetFileAttributesW(native, current | static_cast<DWORD>(wanted));
 #endif
 }
 

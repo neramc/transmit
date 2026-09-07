@@ -107,6 +107,10 @@ if(APPLE)
         PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 elseif(WIN32)
     target_sources(transmit PRIVATE "${CMAKE_SOURCE_DIR}/resources/transmit.rc")
+    # The manifest sits beside the .rc that names it, and CMake has to be told
+    # so a change to it rebuilds the resource.
+    set_source_files_properties("${CMAKE_SOURCE_DIR}/resources/transmit.rc"
+        PROPERTIES OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/resources/transmit.manifest")
 endif()
 
 set_target_properties(transmit PROPERTIES

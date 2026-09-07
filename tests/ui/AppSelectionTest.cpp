@@ -38,6 +38,7 @@ private slots:
     void nothingCarriesDataItHasNotGot();
     void closingIsOnlyAskedForTheApplicationsBeingTaken();
     void theFileLimitsAreReadBackInWords();
+    void theOneSettingThatCostsADownloadIsSaidOutLoud();
     void anImpossibleSizeLimitIsNoLimitAtAll();
     void theApplicationSummarySaysWhichCaseThisIs();
 
@@ -404,7 +405,7 @@ void AppSelectionTest::theFileLimitsAreReadBackInWords() {
     app::ExportController controller;
     QCOMPARE(controller.scopeSummary(), QStringLiteral("Everything in the folders you chose"));
 
-    controller.setScope(1073741824.0, 30, QStringLiteral("iso, VMDK .dmg"));
+    controller.setScope(1073741824.0, 30, QStringLiteral("iso, VMDK .dmg"), false);
 
     const QString summary = controller.scopeSummary();
     QVERIFY2(summary.contains(QStringLiteral("1.00 GiB")), qPrintable(summary));
@@ -422,6 +423,29 @@ void AppSelectionTest::theFileLimitsAreReadBackInWords() {
     QCOMPARE(controller.scopeSummary(), QStringLiteral("Everything in the folders you chose"));
 }
 
+void AppSelectionTest::theOneSettingThatCostsADownloadIsSaidOutLoud() {
+    // Every other control on that page takes less. This one takes more, and
+    // what it costs lands on somebody's connection rather than on the drive -
+    // so it has to appear in the summary even when nothing else is restricted,
+    // and Reset has to actually clear it.
+    app::ExportController controller;
+    QCOMPARE(controller.scopeSummary(), QStringLiteral("Everything in the folders you chose"));
+
+    controller.setScope(0, 0, QString(), true);
+    const QString summary = controller.scopeSummary();
+    QVERIFY2(summary.contains(QStringLiteral("kept online")), qPrintable(summary));
+
+    controller.clearScope();
+    QCOMPARE(controller.scopeSummary(), QStringLiteral("Everything in the folders you chose"));
+
+    // And beside a real restriction it is one clause among several rather than
+    // replacing them.
+    controller.setScope(1073741824.0, 0, QString(), true);
+    const QString both = controller.scopeSummary();
+    QVERIFY2(both.contains(QStringLiteral("kept online")), qPrintable(both));
+    QVERIFY2(both.contains(QStringLiteral("1.00 GiB")), qPrintable(both));
+}
+
 void AppSelectionTest::anImpossibleSizeLimitIsNoLimitAtAll() {
     app::ExportController controller;
 
@@ -430,11 +454,11 @@ void AppSelectionTest::anImpossibleSizeLimitIsNoLimitAtAll() {
     // dragging a size control down to nothing means.
     for (const double impossible :
          {-1.0, -1e18, 0.5, std::nan(""), -std::numeric_limits<double>::infinity()}) {
-        controller.setScope(impossible, 0, QString());
+        controller.setScope(impossible, 0, QString(), false);
         QCOMPARE(controller.scopeSummary(), QStringLiteral("Everything in the folders you chose"));
     }
 
-    controller.setScope(std::numeric_limits<double>::infinity(), 0, QString());
+    controller.setScope(std::numeric_limits<double>::infinity(), 0, QString(), false);
     QCOMPARE(controller.scopeSummary(), QStringLiteral("Everything in the folders you chose"));
 }
 

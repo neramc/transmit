@@ -122,6 +122,12 @@ that need correcting; and what it should warn you about.
 A game bought through a store is in no package manager's list, so the catalog
 finds those the other way round: if the save folder is there, the game is.
 
+Files that are not really on the machine are listed rather than fetched.
+OneDrive and iCloud Drive both leave a name, a size and a modification time
+behind with the contents on their own servers; reading one downloads it. They
+are counted and reported instead — with the size, since that is what decides
+anything — and `--fetch-cloud-files` asks for them.
+
 **Desktop preferences** — appearance and accent colour, wallpaper (including
 the image itself), language, formats, time zone, keyboard layouts, default
 browser and mail program, sleep and screen timeouts, text scale, high contrast,

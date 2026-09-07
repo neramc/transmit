@@ -97,6 +97,10 @@ Item {
     property int ageLimitChoice: 0
     property string excludedExtensions: ""
 
+    // Off, and asked for by name. Every other control here takes less; this one
+    // takes more, and what it costs is a download rather than room on the drive.
+    property bool fetchCloudFiles: false
+
     readonly property var sizeLimits: [
         { bytes: 0,           label: qsTr("No limit") },
         { bytes: 104857600,   label: qsTr("Skip files over 100 MB") },
@@ -123,7 +127,8 @@ Item {
     function applyScope() {
         ExportController.setScope(page.sizeLimits[page.sizeLimitChoice].bytes,
                                   page.ageLimits[page.ageLimitChoice].days,
-                                  page.excludedExtensions)
+                                  page.excludedExtensions,
+                                  page.fetchCloudFiles)
     }
 
     function goTo(next) {
@@ -462,6 +467,21 @@ Item {
                                 }
                             }
 
+                            AppCheckRow {
+                                label: qsTr("Download files kept online")
+                                description: qsTr("OneDrive and iCloud Drive leave the name and "
+                                                + "the size of a file on this machine and keep "
+                                                + "the contents on their own. Reading one fetches "
+                                                + "it. Left off, they are listed and counted "
+                                                + "instead, and the report says how much they "
+                                                + "would have come to.")
+                                checked: page.fetchCloudFiles
+                                onCheckedChanged: {
+                                    page.fetchCloudFiles = checked
+                                    page.applyScope()
+                                }
+                            }
+
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: Spacing.controlGap
@@ -480,10 +500,12 @@ Item {
                                     variant: "ghost"
                                     visible: page.sizeLimitChoice !== 0 || page.ageLimitChoice !== 0
                                              || page.excludedExtensions !== ""
+                                             || page.fetchCloudFiles
                                     onClicked: {
                                         page.sizeLimitChoice = 0
                                         page.ageLimitChoice = 0
                                         page.excludedExtensions = ""
+                                        page.fetchCloudFiles = false
                                         ExportController.clearScope()
                                     }
                                 }

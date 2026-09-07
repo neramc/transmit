@@ -10,6 +10,15 @@ set_target_properties(transmit-cli PROPERTIES
     WIN32_EXECUTABLE FALSE
     MACOSX_BUNDLE FALSE)
 
+# The same manifest as the interface: this program restores the same trees, so
+# the 260-character cap would stop it at the same place. No icon - a console
+# program has none to show.
+if(WIN32)
+    target_sources(transmit-cli PRIVATE "${CMAKE_SOURCE_DIR}/resources/transmit-cli.rc")
+    set_source_files_properties("${CMAKE_SOURCE_DIR}/resources/transmit-cli.rc"
+        PROPERTIES OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/resources/transmit.manifest")
+endif()
+
 # Installed from here rather than next to the interface's own rule: src/app is
 # configured first, so an "if(TARGET transmit-cli)" over there is asking about
 # a target that does not exist yet. It answered no, quietly, and every package

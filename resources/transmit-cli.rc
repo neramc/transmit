@@ -1,0 +1,7 @@
+// The command line program's resources: the manifest and nothing else.
+//
+// Separate from transmit.rc because that one also names the icon Explorer
+// shows, and a console program has no window to show it in.
+#define TRANSMIT_MANIFEST_ID 1
+#define RT_MANIFEST_TYPE 24
+TRANSMIT_MANIFEST_ID RT_MANIFEST_TYPE "transmit.manifest"

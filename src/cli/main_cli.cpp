@@ -292,6 +292,15 @@ int printPlan(const platform::PlatformService& platform, const core::ExportServi
                   << Qt::endl;
         }
     }
+    if (scan.cloudOnlyBytes > 0) {
+        // The size, not only the count: "1,204 files" and "310 GB" lead to
+        // different answers and only the second one says why it matters.
+        out() << QStringLiteral(
+                     "  %1 is kept online and was not downloaded "
+                     "(--fetch-cloud-files to fetch it)")
+                     .arg(core::formatBytes(scan.cloudOnlyBytes))
+              << Qt::endl;
+    }
     if (scan.incomplete()) {
         out() << QStringLiteral("  %1 folder(s) could not be opened at all:")
                      .arg(scan.unreadableDirectories.size())
@@ -497,6 +506,9 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
     }
     if (parser.isSet(QStringLiteral("follow-symlinks"))) {
         scope.followSymlinks = true;
+    }
+    if (parser.isSet(QStringLiteral("fetch-cloud-files"))) {
+        scope.fetchCloudFiles = true;
     }
 
     if (parser.isSet(QStringLiteral("workers"))) {
@@ -1583,6 +1595,12 @@ int main(int argc, char** argv) {
                                           "settings are.")),
         QCommandLineOption(QStringLiteral("follow-symlinks"),
                            QStringLiteral("Copy what a link points at rather than the link.")),
+        QCommandLineOption(QStringLiteral("fetch-cloud-files"),
+                           QStringLiteral("Download the files OneDrive or iCloud Drive keeps "
+                                          "online rather than on this machine. Off by default: "
+                                          "they are listed and counted instead, because reading "
+                                          "them fetches every byte over whatever connection this "
+                                          "machine is on.")),
         QCommandLineOption(QStringLiteral("block-size"),
                            QStringLiteral("How much is compressed together, e.g. 64M. Larger "
                                           "compresses better and costs more memory per worker."),

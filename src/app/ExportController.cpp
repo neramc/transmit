@@ -151,8 +151,9 @@ void ExportController::carryEveryApplication() {
 }
 
 void ExportController::setScope(double maximumFileSize, int modifiedWithinDays,
-                                const QString& excludedExtensions) {
+                                const QString& excludedExtensions, bool fetchCloudFiles) {
     core::ScopeRule rule;
+    rule.fetchCloudFiles = fetchCloudFiles;
 
     // Guarded rather than cast straight through: QML hands this over as a
     // double, and a negative or non-finite one would wrap to an enormous
@@ -174,7 +175,10 @@ void ExportController::setScope(double maximumFileSize, int modifiedWithinDays,
 }
 
 void ExportController::clearScope() {
-    if (scope_.isUnrestricted()) {
+    // fetchCloudFiles is asked about separately: it is not a restriction, so
+    // isUnrestricted() does not count it, and a Reset that ignored it would
+    // leave the one setting here that costs a download still switched on.
+    if (scope_.isUnrestricted() && !scope_.fetchCloudFiles) {
         return;
     }
     scope_ = {};
@@ -211,11 +215,21 @@ QString ExportController::verificationText() const {
 }
 
 QString ExportController::scopeSummary() const {
+    // Said even when nothing is restricted, because it is the one setting here
+    // that makes a capture do more rather than less, and the cost of it lands
+    // on somebody's connection rather than on the drive.
+    const QString cloud =
+        scope_.fetchCloudFiles ? tr("files kept online will be downloaded") : QString();
+
     if (scope_.isUnrestricted()) {
-        return tr("Everything in the folders you chose");
+        return cloud.isEmpty() ? tr("Everything in the folders you chose")
+                               : tr("Everything in the folders you chose, and %1").arg(cloud);
     }
 
     QStringList parts;
+    if (!cloud.isEmpty()) {
+        parts << cloud;
+    }
     if (scope_.maximumFileSize > 0) {
         parts << tr("nothing over %1").arg(formatBytes(scope_.maximumFileSize));
     }

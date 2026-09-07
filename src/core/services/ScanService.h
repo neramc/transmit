@@ -35,6 +35,22 @@ struct ScannedItem {
     QString problem;
 };
 
+/// Whether this file's bytes are somewhere other than this machine, so that
+/// reading it would fetch them over the network.
+///
+/// Two systems, two pieces of evidence. Windows sets bits in the attribute
+/// word - OneDrive's "Files On-Demand" leaves the name, the size and the
+/// modification time on disk and nothing else. macOS has no such bit: iCloud
+/// Drive replaces an evicted `report.pdf` with a stub called
+/// `.report.pdf.icloud`, so the name is the only evidence a plain scan has.
+///
+/// The system is a parameter rather than a compiled-in fact, because the rules
+/// differ per system and a rule that only runs on the machine that has it is a
+/// rule nobody can test. It also keeps the macOS name rule off Linux, where a
+/// file somebody genuinely called ".notes.txt.icloud" is a file.
+[[nodiscard]] bool storedOnlyInTheCloud(const QString& fileName,
+                                        const format::WindowsMetadata& windows, OsFamily host);
+
 struct ScanResult {
     QList<ScannedItem> items;
     quint64 totalBytes = 0;
@@ -42,6 +58,11 @@ struct ScanResult {
     quint64 directoryCount = 0;
     quint64 symlinkCount = 0;
     quint64 skippedCount = 0;
+
+    /// What the files kept online would have cost to download. Reported as a
+    /// size rather than only a count, because "1,204 files" and "310 GB" lead
+    /// to different decisions and only the second one is the reason to care.
+    quint64 cloudOnlyBytes = 0;
 
     /// Folders the scan could not look inside. QDirIterator walks past those
     /// without a word, so without this list a capture that missed a whole
@@ -109,6 +130,11 @@ private:
     // Only the folder table is needed after construction; holding the whole
     // service would tie every scan to the object that created it.
     format::PathTokenMap tokens_;
+
+    /// Which system's rules apply to what is on this disk. Taken from the
+    /// platform service rather than from a compiled-in macro, so the macOS
+    /// rules can be run against a fixture anywhere.
+    OsFamily host_ = OsFamily::Unknown;
 };
 
 }  // namespace transmit::core

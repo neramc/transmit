@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  What Windows has to be told before the program starts.
+
+  longPathAware is the one that matters here. Without it every Win32 call in
+  the process is capped at 260 characters, whatever the machine's registry
+  says, and a restore of a tree that came off a Linux or macOS home directory
+  fails part way down: a node_modules folder or a deep photo library passes
+  260 without being remarkable. The failure is per-file and looks like a
+  permission problem, which is the worst way for it to look.
+
+  activeCodePage makes the narrow Win32 calls speak UTF-8, so a path with a
+  Korean or an emoji name behaves the same in the parts of the code that do not
+  go through Qt.
+
+  It is applied to both programs, because the command line does the same work.
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity type="win32" name="com.transmit.app" version="1.0.0.0"/>
+
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
+    </windowsSettings>
+  </application>
+
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 and 11. Without this the version reported to the process
+           is capped at 6.2, and the long-path support is not offered at all. -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+    </application>
+  </compatibility>
+
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <!-- Never elevated. Transmit reads and writes one person's own files
+             and writes a script for anything that needs more; asking for
+             administrator here would be asking for rights it does not use. -->
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+</assembly>

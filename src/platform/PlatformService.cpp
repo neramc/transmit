@@ -93,6 +93,14 @@ QString PlatformService::eject(const QString& rootPath) const {
     return unmountVolume(rootPath);
 }
 
+QList<AccessObstacle> PlatformService::accessObstacles() const {
+    // Nothing in the way, which is the honest answer for a system whose
+    // implementation has not been asked the question. A platform that knows of
+    // an obstacle overrides this; one that does not stays silent rather than
+    // inventing a warning.
+    return {};
+}
+
 QString PlatformService::unmountVolume(const QString& rootPath) const {
     Q_UNUSED(rootPath);
     return QCoreApplication::translate(

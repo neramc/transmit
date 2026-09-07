@@ -1131,6 +1131,14 @@
         <source>Choose where to write the archive</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Download files kept online</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>OneDrive and iCloud Drive leave the name and the size of a file on this machine and keep the contents on their own. Reading one fetches it. Left off, they are listed and counted instead, and the report says how much they would have come to.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>Folders</name>
@@ -1798,6 +1806,26 @@
         <source>Windows would not let go of it.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Everything outside this sandbox</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transmit is running as a Flatpak, so it sees only the folders the sandbox was given. Grant it the whole home directory with `flatpak override --user --filesystem=home com.transmit.app`, or use the AppImage or the .deb/.rpm package instead.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transmit is running as a Snap, so it sees only the folders the sandbox was given - hidden folders in the home directory among them, which is where most settings live. Use the AppImage or the .deb/.rpm package instead.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A consistent copy of files being written</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transmit is not running as an administrator, so Windows will not give it a Volume Shadow Copy. Databases are still copied consistently; an ordinary file that a program writes during the capture may be caught part way through. Closing the programs Transmit lists, or running it as an administrator, avoids it.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>Profile</name>
@@ -1942,6 +1970,14 @@
     </message>
     <message>
         <source>A Volume Shadow Copy was not created. Live databases are still copied consistently, but files written during the capture may be missed. Running Transmit as an administrator enables shadow copies.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>kept online rather than on this machine</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This file is kept online rather than on this machine, so it was listed but not read. Turn on &quot;download files kept online&quot; to fetch it.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2625,6 +2661,14 @@
     </message>
     <message>
         <source>%1 was left unfinished on %2. %3 of it is already on the drive.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>files kept online will be downloaded</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Everything in the folders you chose, and %1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

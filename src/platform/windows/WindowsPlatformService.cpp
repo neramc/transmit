@@ -248,6 +248,31 @@ QList<RunningApp> WindowsPlatformService::runningApplications(
     return running;
 }
 
+namespace {
+
+/// Whether this process is running with an administrator token.
+///
+/// Asked rather than assumed: "is the user an administrator" and "is this
+/// process elevated" are different questions on Windows, and only the second
+/// one decides whether a shadow copy can be made.
+bool runningElevated() {
+    HANDLE token = nullptr;
+    if (::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &token) == 0) {
+        return false;
+    }
+    TOKEN_ELEVATION elevation{};
+
+    // Sized explicitly. sizeof is size_t and the call wants a DWORD, which on
+    // a 64-bit build is a narrowing conversion the warnings treat as an error.
+    constexpr DWORD kSize = static_cast<DWORD>(sizeof(TOKEN_ELEVATION));
+    DWORD written = 0;
+    const bool ok = ::GetTokenInformation(token, TokenElevation, &elevation, kSize, &written) != 0;
+    ::CloseHandle(token);
+    return ok && elevation.TokenIsElevated != 0;
+}
+
+}  // namespace
+
 std::unique_ptr<Snapshot> WindowsPlatformService::createSnapshot(const QStringList& paths) const {
     Q_UNUSED(paths);
     // A Volume Shadow Copy needs administrator rights and a COM session; when
@@ -274,6 +299,29 @@ std::unique_ptr<SettingsProvider> WindowsPlatformService::settingsProvider() con
 
 std::unique_ptr<SecretStore> WindowsPlatformService::secretStore() const {
     return std::make_unique<WindowsSecretStore>();
+}
+
+QList<AccessObstacle> WindowsPlatformService::accessObstacles() const {
+    QList<AccessObstacle> obstacles;
+
+    // A Volume Shadow Copy needs an elevated process. Without one the capture
+    // still works - live databases go through SQLite's own backup API - but a
+    // file written while the scan is passing over it can be caught half way.
+    // Not lost data, so it does not stop anything; worth saying once.
+    if (!runningElevated()) {
+        obstacles.push_back(AccessObstacle{
+            QCoreApplication::translate("Platform", "A consistent copy of files being written"),
+            QCoreApplication::translate(
+                "Platform",
+                "Transmit is not running as an administrator, so Windows will not give it a "
+                "Volume Shadow Copy. Databases are still copied consistently; an ordinary file "
+                "that a program writes during the capture may be caught part way through. "
+                "Closing the programs Transmit lists, or running it as an administrator, avoids "
+                "it."),
+            false});
+    }
+
+    return obstacles;
 }
 
 QString WindowsPlatformService::unmountVolume(const QString& rootPath) const {

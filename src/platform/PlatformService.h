@@ -93,6 +93,29 @@ struct RunningApp {
     qint64 processId = 0;
 };
 
+/// Something this system will not let Transmit see, which no amount of trying
+/// harder will fix: the person has to change it outside the program.
+///
+/// Every operating system has one of these and each is invisible in the same
+/// way - the capture succeeds, the archive is short, and nobody finds out
+/// until the far side. macOS refuses Mail and Messages to a program without
+/// Full Disk Access. A Flatpak or a Snap sees a home directory made of
+/// whatever the portal handed it. Windows will not hand out a shadow copy to a
+/// process that is not elevated. All three are worth saying before the capture
+/// rather than explaining afterwards.
+struct AccessObstacle {
+    /// What is out of reach, named the way the person would name it.
+    QString subject;
+
+    /// What to do about it, in one sentence, ending in something they can act
+    /// on. Empty when there is nothing they can do.
+    QString detail;
+
+    /// True when the capture will be missing data because of this, as opposed
+    /// to merely being less careful about it.
+    bool losesData = true;
+};
+
 /// A point-in-time view of the filesystem, so live databases can be copied
 /// consistently. Falls back to reading the live files when the platform or the
 /// user's privileges do not allow a real snapshot.
@@ -154,6 +177,14 @@ public:
     /// Reads and writes this system's credential store. Only ever used when
     /// the user has explicitly opted in and the archive is encrypted.
     [[nodiscard]] virtual std::unique_ptr<SecretStore> secretStore() const = 0;
+
+    /// What this system will not let Transmit read, found by asking it rather
+    /// than by guessing from privileges. Empty when there is nothing in the
+    /// way, which is the common case.
+    ///
+    /// Called before a capture starts, so the answer arrives while the person
+    /// can still do something about it. Not pure: it touches the filesystem.
+    [[nodiscard]] virtual QList<AccessObstacle> accessObstacles() const;
 
     /// Unmounts the removable volume at `rootPath` so it can be pulled out.
     ///

@@ -31,6 +31,32 @@ notes say so.
   desktop's own where it can be read without starting a process (Windows and
   Plasma); elsewhere the brand colour is used, because an accent guessed wrong
   is worse than one chosen on purpose.
+- Files that are not really on the machine are listed rather than downloaded.
+  OneDrive keeps a file's name, size and modification time on disk with the
+  contents on its own servers, and iCloud Drive replaces an evicted
+  `report.pdf` with a stub called `.report.pdf.icloud`. Reading either one
+  fetches it, so a capture of a home directory full of them was a
+  several-hundred-gigabyte download nobody agreed to. They are now counted and
+  reported - with the size, because that is the number that decides anything -
+  and `--fetch-cloud-files`, or the box beside the file limits, asks for them.
+- What a file is on Windows travels with it. The manifest has had a place for
+  the attribute word since the format was written and nothing ever filled it
+  in, so a hidden file arrived visible and a read-only one writable. Only the
+  bits that say what the file is for are put back; the ones describing how the
+  old disk stored it - compressed, a reparse point, still in the cloud - are
+  left behind, because on the new machine they would be untrue.
+- Both programs now carry a Windows application manifest, so long paths work at
+  all. Without it every call in the process is capped at 260 characters
+  whatever the machine is configured to allow, and a restore of a tree that
+  came off a Linux or macOS home directory failed part way down with what
+  looked like a permission error.
+- Transmit now says what the system will not let it read, before the capture
+  rather than after. macOS refuses Mail, Messages, Safari and the address book
+  to a program without Full Disk Access and gives no error when it does - the
+  archive is simply short. A Flatpak or Snap build sees only what its sandbox
+  was given. Windows will not hand a shadow copy to a process that is not
+  elevated. Each is probed rather than assumed, so a machine that has already
+  granted what is needed is not nagged about it.
 - The catalog now describes 192 programs rather than 73. The new entries are
   mostly the things a machine somebody actually uses has on it and the old list
   did not: game launchers and stores, emulators, and the save folders of games
@@ -50,6 +76,16 @@ notes say so.
   a copy `dpkg` or `rpm` owns is theirs to replace.
 
 ### Fixed
+
+- A rule set for the whole capture is no longer cancelled by a folder that says
+  nothing. Each root carries a scope of its own and the stricter of the two was
+  taken, which is right for a flag whose default is permissive and wrong for
+  one whose default is already the strict answer: every root that was never
+  given a rule carried a default-built one saying no, so `--follow-symlinks`
+  did nothing whatsoever on a user folder and said nothing about it. A root can
+  still narrow what is taken by size, date, type or pattern; it cannot overrule
+  a policy set for the whole capture.
+
 
 - Restoring into a chosen folder now keeps everything inside it. Files an
   archive gave an absolute path for were the exception: the folder table was
@@ -76,6 +112,13 @@ notes say so.
   measurements are read back out of the design system after being asked for,
   so a table that stopped being consulted is a failure rather than a look
   nobody notices is missing.
+- The rules that differ per operating system are now run against a fixture on
+  whatever machine happens to be building, rather than only on the one that has
+  the thing they are about: which evidence says a file is kept online is a
+  parameter, so the macOS rule is exercised on a Linux runner and the Windows
+  one everywhere. Each of the three - the attribute bits, the name of an
+  evicted iCloud file, and the policy merge - was shown to fail when broken on
+  purpose.
 - Five more things the catalog has to be true about, each shown to fail when
   broken on purpose: a file inside a state folder cannot be written as an
   absolute path, no state root names the same place twice, anything whose role

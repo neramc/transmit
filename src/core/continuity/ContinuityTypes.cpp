@@ -60,6 +60,10 @@ bool ScopeRule::isUnrestricted() const {
     return maximumFileSize == 0 && minimumFileSize == 0 && includeExtensions.isEmpty() &&
            excludeExtensions.isEmpty() && !modifiedSince.isValid() && !modifiedBefore.isValid() &&
            excludePatterns.isEmpty() && includeHidden;
+    // fetchCloudFiles is deliberately not part of this. "Unrestricted" is the
+    // fast path that skips the per-file work, and leaving a cloud placeholder
+    // alone is not a restriction the person asked for - it is the difference
+    // between reading a file and downloading it.
 }
 
 QString skipReasonName(SkipReason reason) {
@@ -80,6 +84,8 @@ QString skipReasonName(SkipReason reason) {
             return QObject::tr("hidden");
         case SkipReason::Unreadable:
             return QObject::tr("could not be read");
+        case SkipReason::StoredInTheCloud:
+            return QObject::tr("kept online rather than on this machine");
     }
     return QObject::tr("skipped");
 }

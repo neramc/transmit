@@ -9,18 +9,22 @@
 
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
 #include "format/FileIo.h"
+#include "format/FileTraits.h"
 
 #ifndef Q_OS_WIN
 #include <grp.h>
 #include <pwd.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#else
+#include <windows.h>
 #endif
 
 namespace transmit::core {
@@ -113,6 +117,25 @@ void fillPosixMetadata(const QFileInfo& info, format::PosixMetadata& posix) {
 #endif
 }
 
+/// Reads the Windows attribute word: hidden, read-only, system, and the bits
+/// that say the contents are somewhere else.
+///
+/// The manifest has had a place for this since the format was written and
+/// nothing ever filled it in, so every capture made on Windows arrived with a
+/// hidden file no longer hidden and a read-only one writable.
+void fillWindowsMetadata(const QFileInfo& info, format::WindowsMetadata& windows) {
+#ifdef Q_OS_WIN
+    const DWORD attributes =
+        ::GetFileAttributesW(reinterpret_cast<const wchar_t*>(info.absoluteFilePath().utf16()));
+    if (attributes != INVALID_FILE_ATTRIBUTES) {
+        windows.attributes = static_cast<quint32>(attributes);
+    }
+#else
+    Q_UNUSED(info);
+    Q_UNUSED(windows);
+#endif
+}
+
 /// Converts a wildcard pattern into a regular expression. "**" crosses
 /// directory boundaries, "*" does not, which matches what users expect from
 /// .gitignore-style patterns.
@@ -169,6 +192,19 @@ bool ExcludeMatcher::matches(const QString& relativePath) const {
         }
     }
     return false;
+}
+
+bool storedOnlyInTheCloud(const QString& fileName, const format::WindowsMetadata& windows,
+                          OsFamily host) {
+    if (format::storedInTheCloud(windows.attributes)) {
+        return true;
+    }
+    if (host != OsFamily::MacOs) {
+        return false;
+    }
+    const QByteArray name = fileName.toUtf8();
+    return format::isEvictedICloudFile(
+        std::string_view(name.constData(), static_cast<size_t>(name.size())));
 }
 
 std::optional<SkipReason> ScopeRule::reject(quint64 size, const QFileInfo& info) const {
@@ -240,15 +276,31 @@ ScopeRule narrowest(const ScopeRule& selection, const ScopeRule& root) {
         merged.modifiedBefore = root.modifiedBefore;
     }
 
-    merged.followSymlinks = selection.followSymlinks && root.followSymlinks;
+    // includeHidden defaults to taking everything, so a root that sets it to
+    // false is saying something and the stricter of the two is right.
     merged.includeHidden = selection.includeHidden && root.includeHidden;
+
+    // These two do not work that way, and the difference is the whole reason
+    // for the comment. Both default to the restrictive answer, so a root that
+    // was never given a rule of its own - which is every root that did not come
+    // from a per-application choice - is indistinguishable from one that
+    // deliberately asked for the restrictive answer. Taking the stricter of the
+    // two therefore turned them off for every capture: `--follow-symlinks` did
+    // nothing at all on a user folder, silently, because the default-built root
+    // rule beside it always said no.
+    //
+    // A root can still narrow what is taken, through the size, date, extension
+    // and pattern rules above. It cannot overrule a policy the person set for
+    // the whole capture.
+    merged.followSymlinks = selection.followSymlinks;
+    merged.fetchCloudFiles = selection.fetchCloudFiles;
     return merged;
 }
 
 }  // namespace
 
 ScanService::ScanService(const platform::PlatformService& platformService)
-    : tokens_(platformService.knownFolders()) {}
+    : tokens_(platformService.knownFolders()), host_(platformService.environment().os) {}
 
 ScanResult ScanService::scan(const CaptureSelection& selection, CancelToken& cancelToken,
                              const ProgressCallback& progress) const {
@@ -370,6 +422,7 @@ void ScanService::scanRoot(const CaptureRoot& root, const CaptureSelection& sele
         item.modifiedUnixNs = toUnixNs(info.lastModified());
         item.createdUnixNs = toUnixNs(info.birthTime());
         fillPosixMetadata(info, item.posix);
+        fillWindowsMetadata(info, item.windows);
 
         if (info.isSymLink()) {
             item.type = format::EntryType::Symlink;
@@ -418,6 +471,24 @@ void ScanService::scanRoot(const CaptureRoot& root, const CaptureSelection& sele
                 }
                 return;
             }
+            // Before anything that would open the file. The size is right -
+            // both systems keep it locally - so the count and the total tell
+            // the person exactly what turning this on would cost.
+            if (!scope.fetchCloudFiles &&
+                storedOnlyInTheCloud(info.fileName(), item.windows, host_)) {
+                ++result.skippedCount;
+                result.skippedByReason[static_cast<int>(SkipReason::StoredInTheCloud)]++;
+                result.cloudOnlyBytes += item.size;
+                if (result.skippedCount <= kMaxSkipNotes) {
+                    result.notes.push_back(ContinuityNote{
+                        ContinuityGrade::Manual, root.domain, absolute,
+                        QObject::tr("This file is kept online rather than on this machine, so it "
+                                    "was listed but not read. Turn on \"download files kept "
+                                    "online\" to fetch it.")});
+                }
+                return;
+            }
+
             if (!info.isReadable()) {
                 item.problem = QObject::tr("could not be read");
                 result.notes.push_back(ContinuityNote{

@@ -14,6 +14,9 @@
 #include <QStorageInfo>
 #include <QSysInfo>
 
+#include <dirent.h>
+#include <cerrno>
+
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
 
@@ -298,6 +301,58 @@ std::unique_ptr<SettingsProvider> MacOsPlatformService::settingsProvider() const
 
 std::unique_ptr<SecretStore> MacOsPlatformService::secretStore() const {
     return std::make_unique<MacOsSecretStore>();
+}
+
+QList<AccessObstacle> MacOsPlatformService::accessObstacles() const {
+    // macOS does not refuse these folders with an error a scan would notice.
+    // Without Full Disk Access, opendir() on ~/Library/Mail returns EPERM and
+    // QDirIterator walks straight past it, so the archive simply has no mail
+    // in it and says nothing. The only way to know is to ask, before starting.
+    //
+    // Every one of these is protected by TCC and holds something somebody
+    // would miss. They are probed rather than listed as "you need Full Disk
+    // Access", because a machine that has granted it must not be nagged.
+    static const QStringList kProtected = {
+        QStringLiteral("Library/Mail"),
+        QStringLiteral("Library/Messages"),
+        QStringLiteral("Library/Safari"),
+        QStringLiteral("Library/Calendars"),
+        QStringLiteral("Library/Application Support/AddressBook"),
+        QStringLiteral("Library/Containers/com.apple.Notes"),
+    };
+
+    const QString home = QDir::homePath();
+    QStringList refused;
+    for (const QString& relative : kProtected) {
+        const QString path = home + u'/' + relative;
+        if (!QFileInfo::exists(path)) {
+            continue;  // nothing there to be refused
+        }
+        // exists() answers from the parent directory, which is readable. Only
+        // opening it asks TCC the question.
+        errno = 0;
+        DIR* handle = ::opendir(QFile::encodeName(path).constData());
+        if (handle != nullptr) {
+            ::closedir(handle);
+            continue;
+        }
+        if (errno == EPERM || errno == EACCES) {
+            refused.push_back(relative.section(u'/', -1));
+        }
+    }
+
+    if (refused.isEmpty()) {
+        return {};
+    }
+
+    return {AccessObstacle{
+        refused.join(QStringLiteral(", ")),
+        QCoreApplication::translate(
+            "Platform",
+            "macOS will not let Transmit read these without Full Disk Access, and gives no error "
+            "when it refuses - they would simply be missing from the archive. Grant it in System "
+            "Settings > Privacy & Security > Full Disk Access, then start Transmit again."),
+        true}};
 }
 
 QString MacOsPlatformService::unmountVolume(const QString& rootPath) const {

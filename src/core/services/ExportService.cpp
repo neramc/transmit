@@ -348,6 +348,20 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
 
     const platform::EnvironmentInfo environment = platform_.environment();
 
+    // ------------------------------------------- what this system refuses
+    // Asked before anything is written, because every one of these is
+    // invisible in the same way: the capture succeeds, the archive is short,
+    // and nobody finds out until the far side. macOS refuses Mail and Messages
+    // to a program without Full Disk Access and gives no error when it does; a
+    // sandboxed build sees whatever the portal handed it; Windows will not
+    // give a shadow copy to a process that is not elevated.
+    for (const platform::AccessObstacle& obstacle : platform_.accessObstacles()) {
+        report.notes.push_back(
+            ContinuityNote{obstacle.losesData ? ContinuityGrade::Manual : ContinuityGrade::Adapted,
+                           DomainId::Unknown, obstacle.subject, obstacle.detail});
+        qCWarning(logCapture) << "in the way:" << obstacle.subject;
+    }
+
     // ------------------------------------------------- application state
     // Program binaries cannot cross an operating system boundary, but the data
     // and settings they keep can. The catalog says where each application puts

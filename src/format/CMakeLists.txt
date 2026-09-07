@@ -11,6 +11,7 @@ add_library(transmit_format STATIC
     IoHooks.cpp
     PathToken.cpp
     NameSanitizer.cpp
+    FileTraits.cpp
     Manifest.cpp
     VolumeSplitter.cpp
     BlockPacker.cpp

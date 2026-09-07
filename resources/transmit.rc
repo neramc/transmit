@@ -5,3 +5,9 @@
 // icon in the file is the one Explorer picks, which is why this is the only
 // one here.
 IDI_ICON1 ICON "icons/transmit.ico"
+
+// The application manifest: long paths, UTF-8, and no request for
+// administrator. See transmit.manifest for why each of those is here.
+#define TRANSMIT_MANIFEST_ID 1
+#define RT_MANIFEST_TYPE 24
+TRANSMIT_MANIFEST_ID RT_MANIFEST_TYPE "transmit.manifest"

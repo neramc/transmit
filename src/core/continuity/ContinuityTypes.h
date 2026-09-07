@@ -54,6 +54,12 @@ enum class SkipReason {
     Excluded,
     Hidden,
     Unreadable,
+
+    /// The file's name and size are on this machine but its contents are not:
+    /// OneDrive has it "online only", or iCloud Drive has evicted it. Reading
+    /// one downloads it, so a home directory full of them turns a capture into
+    /// a several-hundred-gigabyte download nobody asked for.
+    StoredInTheCloud,
 };
 
 QString skipReasonName(SkipReason reason);
@@ -93,6 +99,16 @@ struct ScopeRule {
     /// Hidden files are carried by default: on every system Transmit runs on,
     /// that is where the settings are.
     bool includeHidden = true;
+
+    /// Whether to fetch the files whose contents are not on this machine.
+    ///
+    /// Off, because the cost is invisible until it has been paid: OneDrive and
+    /// iCloud Drive both leave the name, the size and the modification time on
+    /// disk and nothing else, so a scan sees a full home directory and reading
+    /// it downloads every byte - over whatever connection this machine happens
+    /// to be on. They are listed and counted instead, and turning this on is a
+    /// decision made with the number in front of you.
+    bool fetchCloudFiles = false;
 
     /// True when this rule would accept everything, which lets the scan skip
     /// the per-file work entirely.

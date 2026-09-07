@@ -749,6 +749,37 @@ std::unique_ptr<SecretStore> LinuxPlatformService::secretStore() const {
     return std::make_unique<LinuxSecretStore>();
 }
 
+QList<AccessObstacle> LinuxPlatformService::accessObstacles() const {
+    QList<AccessObstacle> obstacles;
+
+    // Running inside a sandbox. What a Flatpak or a Snap can see of the home
+    // directory is whatever it was granted, and the parts it was not granted
+    // are not refused loudly - they are simply not there. A capture from inside
+    // one looks like a capture of a machine with almost nothing on it.
+    if (QFile::exists(QStringLiteral("/.flatpak-info"))) {
+        obstacles.push_back(AccessObstacle{
+            QCoreApplication::translate("Platform", "Everything outside this sandbox"),
+            QCoreApplication::translate(
+                "Platform",
+                "Transmit is running as a Flatpak, so it sees only the folders the sandbox was "
+                "given. Grant it the whole home directory with "
+                "`flatpak override --user --filesystem=home com.transmit.app`, or use the "
+                "AppImage or the .deb/.rpm package instead."),
+            true});
+    } else if (!qEnvironmentVariableIsEmpty("SNAP")) {
+        obstacles.push_back(AccessObstacle{
+            QCoreApplication::translate("Platform", "Everything outside this sandbox"),
+            QCoreApplication::translate(
+                "Platform",
+                "Transmit is running as a Snap, so it sees only the folders the sandbox was "
+                "given - hidden folders in the home directory among them, which is where most "
+                "settings live. Use the AppImage or the .deb/.rpm package instead."),
+            true});
+    }
+
+    return obstacles;
+}
+
 QString LinuxPlatformService::unmountVolume(const QString& rootPath) const {
     // udisksctl first, because it is what a file manager uses: it goes through
     // the system service, so it works without root and the desktop is told the

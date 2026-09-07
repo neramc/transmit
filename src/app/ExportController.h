@@ -225,8 +225,12 @@ public slots:
     /// is 0 for any age; `excludedExtensions` is a free-text list such as
     /// "iso, vmdk dmg" - punctuation and dots are ignored, because a person
     /// typing a list of file types should not have to guess the separator.
-    void setScope(double maximumFileSize, int modifiedWithinDays,
-                  const QString& excludedExtensions);
+    /// `fetchCloudFiles` downloads the files OneDrive or iCloud Drive keeps
+    /// online rather than on this machine. Off is the default and the safe
+    /// answer: reading one fetches it, and a home directory of them turns a
+    /// capture into a download nobody agreed to.
+    void setScope(double maximumFileSize, int modifiedWithinDays, const QString& excludedExtensions,
+                  bool fetchCloudFiles);
 
     /// Everything again: no size limit, no age limit, no excluded types.
     void clearScope();

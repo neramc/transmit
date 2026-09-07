@@ -7,6 +7,7 @@ add_executable(transmit_format_tests
     SerializationTest.cpp
     PathTokenTest.cpp
     NameSanitizerTest.cpp
+    FileTraitsTest.cpp
     CodecTest.cpp
     BlockPackerTest.cpp
     ContainerTest.cpp

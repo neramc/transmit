@@ -21,13 +21,25 @@ public:
                        QList<platform::StorageVolume> volumes)
         : real_(std::move(real)), volumes_(std::move(volumes)) {}
 
+    /// Answer environment() with a different operating system.
+    ///
+    /// For the rules that differ per system and are read off files rather than
+    /// out of an API - what an evicted iCloud file is called, say. Without this
+    /// each of those could only be exercised on the machine that has it, which
+    /// means on one of the three CI runners and never in a developer's loop.
+    void pretendToBe(format::OsFamily os) { pretend_ = os; }
+
     [[nodiscard]] QList<platform::StorageVolume> storageVolumes() const override {
         return volumes_;
     }
 
     // Everything else is whatever this machine says.
     [[nodiscard]] platform::EnvironmentInfo environment() const override {
-        return real_->environment();
+        platform::EnvironmentInfo info = real_->environment();
+        if (pretend_ != format::OsFamily::Unknown) {
+            info.os = pretend_;
+        }
+        return info;
     }
     [[nodiscard]] format::PathTokenMap knownFolders() const override {
         return real_->knownFolders();
@@ -58,6 +70,7 @@ public:
 
 private:
     std::unique_ptr<platform::PlatformService> real_;
+    format::OsFamily pretend_ = format::OsFamily::Unknown;
     QList<platform::StorageVolume> volumes_;
 };
 
