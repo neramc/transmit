@@ -9,13 +9,28 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# What the file actually says, with the comments taken out.
+#
+# Both checks below are about what a module lists, and a comment is not a
+# listing. Reading them together made the module comment that explains why
+# ThemeState was moved away from Colors.qml and Sizing.qml read as a claim to
+# hold both of them - so the check failed, on prose, about files that were
+# never meant to be there.
+lists() {
+    sed 's/#.*//' "$1"
+}
+
 missing=0
 for cmakelists in src/ui/qml/*/CMakeLists.txt src/ui/qml/CMakeLists.txt; do
     directory="$(dirname "$cmakelists")"
     for qml in "$directory"/*.qml; do
         [ -e "$qml" ] || continue
         name="$(basename "$qml")"
-        if ! grep -q "\\b${name}\\b" "$cmakelists"; then
+        # A here-string rather than a pipe: `grep -q` stops at the first
+        # match, `sed` then dies of SIGPIPE, and `pipefail` reports 141 for a
+        # pipeline that found what it was looking for - so a listed file would
+        # read as missing.
+        if ! grep -q "\\b${name}\\b" <<<"$(lists "$cmakelists")"; then
             echo "$qml is not listed in $cmakelists"
             missing=1
         fi
@@ -26,7 +41,7 @@ done
 # the build, but only once somebody configures from scratch.
 for cmakelists in src/ui/qml/*/CMakeLists.txt src/ui/qml/CMakeLists.txt; do
     directory="$(dirname "$cmakelists")"
-    for name in $(grep -oE '[A-Za-z0-9_]+\.qml' "$cmakelists" | sort -u); do
+    for name in $(lists "$cmakelists" | grep -oE '[A-Za-z0-9_]+\.qml' | sort -u); do
         if [ ! -e "$directory/$name" ]; then
             echo "$cmakelists lists $name, which does not exist"
             missing=1

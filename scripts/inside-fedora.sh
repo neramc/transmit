@@ -10,7 +10,16 @@ set -euo pipefail
 
 package="$1"
 
-dnf install -y "$package" > /dev/null
+# Quiet when it works, and not when it does not. Sending this to /dev/null
+# outright meant a failure here printed nothing at all: the run said "the .rpm
+# did not install and start on Fedora" and left whoever read it to guess which
+# of the two it was.
+install_log=$(mktemp)
+if ! dnf install -y "$package" > "$install_log" 2>&1; then
+    echo "dnf could not install the package:"
+    cat "$install_log"
+    exit 1
+fi
 
 test -x /usr/bin/transmit
 test -x /usr/bin/transmit-cli

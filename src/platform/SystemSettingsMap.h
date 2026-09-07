@@ -48,6 +48,14 @@ public:
     /// puts the built-in one back.
     static void useTableForTesting(const QString& path);
 
+    /// Which section of the table the reads use.
+    ///
+    /// The rules differ per system and are read off files, so a rule that only
+    /// runs on the machine that has it is a rule nobody can check: the Linux
+    /// half of this table was exercised only on Linux and the Windows half
+    /// nowhere. Empty restores the running system.
+    static void useSystemForTesting(const QString& system);
+
     /// Where the reads look, so a test can point them at a fixture instead of
     /// at the machine running the test. Empty means the real paths.
     static void useRootForTesting(const QString& path);

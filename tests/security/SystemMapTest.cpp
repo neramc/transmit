@@ -141,7 +141,11 @@ TEST(SystemMap, SettingOneIsAlwaysHandedBackRatherThanDone) {
 }
 
 // The readers are checked against a fixture rather than against whatever the
-// machine running the test happens to have in /etc.
+// machine running the test happens to have in /etc - and against the Linux
+// half of the table wherever this is running, because a rule that is only
+// exercised on the machine that has it is a rule nobody checks. This test read
+// whichever section matched the runner, so on Windows it asked the registry
+// about a fixture made of files and reported four failures for one cause.
 TEST(SystemMap, ReadsWhatTheTableSaysToRead) {
     QTemporaryDir root;
     ASSERT_TRUE(root.isValid());
@@ -163,6 +167,7 @@ TEST(SystemMap, ReadsWhatTheTableSaysToRead) {
           QStringLiteral("[Time]\n#NTP=\nNTP=time.example.org\n"));
 
     SystemSettingsMap::useTableForTesting(tablePath());
+    SystemSettingsMap::useSystemForTesting(QStringLiteral("linux"));
     SystemSettingsMap::useRootForTesting(root.path());
 
     const SettingValue hostname = SystemSettingsMap::read(SettingKey::SystemHostname);
@@ -181,6 +186,7 @@ TEST(SystemMap, ReadsWhatTheTableSaysToRead) {
     EXPECT_EQ(ntp.value, QStringLiteral("time.example.org"));
 
     SystemSettingsMap::useRootForTesting({});
+    SystemSettingsMap::useSystemForTesting({});
     SystemSettingsMap::useTableForTesting({});
 }
 

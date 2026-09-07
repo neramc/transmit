@@ -86,21 +86,59 @@ def difference(a: str, b: str) -> float:
     return ((la - lb) ** 2 + (aa - ab) ** 2 + (ba - bb) ** 2) ** 0.5
 
 
+def statements(text: str) -> list[str]:
+    """One line per property, continuations joined and comments removed.
+
+    A property is not a line. Since the accent started following the desktop's
+    own, two of them run to four lines each, and a checker that read the file a
+    line at a time simply did not see them - so the palette came back without
+    an `accent` in it and the check died of a KeyError rather than saying
+    anything about contrast.
+    """
+    pieces = re.split(r"(?=(?:readonly\s+)?property\s+color\s+\w+\s*:)", text)
+    return [" ".join(re.sub(r"//[^\n]*", "", piece).split()) for piece in pieces]
+
+
 def parse_palette() -> tuple[dict[str, str], dict[str, str]]:
-    """Returns the light and dark palettes as name -> #RRGGBB."""
+    """Returns the light and dark palettes as name -> #RRGGBB.
+
+    The palette this file decides, which is the only one worth checking. Where
+    a colour follows the desktop's own accent, the branch taken when there is
+    no desktop accent to follow is the one read: what somebody's Windows or
+    Plasma highlight happens to be is theirs, and no check here can know it.
+    """
     light: dict[str, str] = {}
     dark: dict[str, str] = {}
+    aliases: dict[str, str] = {}
 
-    both = re.compile(
-        r'property\s+color\s+(\w+):\s*dark\s*\?\s*"(#[0-9A-Fa-f]{6,8})"\s*:\s*"(#[0-9A-Fa-f]{6,8})"')
-    single = re.compile(r'property\s+color\s+(\w+):\s*"(#[0-9A-Fa-f]{6,8})"')
+    colour = r'"(#[0-9A-Fa-f]{6,8})"'
+    system = r"ThemeState\.hasSystemAccent"
 
-    for line in COLORS_QML.read_text(encoding="utf-8").splitlines():
-        if (match := both.search(line)) is not None:
+    # The system-accent shapes first: both of them contain a "dark ? ... : ..."
+    # of their own, so the plain patterns would read the wrong half.
+    system_pair = re.compile(
+        rf"property\s+color\s+(\w+):.*{system}.*:\s*\(\s*dark\s*\?\s*{colour}"
+        rf"\s*:\s*{colour}\s*\)")
+    system_alias = re.compile(rf"property\s+color\s+(\w+):.*{system}.*:\s*(\w+)\s*$")
+    both = re.compile(rf"property\s+color\s+(\w+):\s*dark\s*\?\s*{colour}\s*:\s*{colour}")
+    single = re.compile(rf"property\s+color\s+(\w+):\s*{colour}")
+
+    for statement in statements(COLORS_QML.read_text(encoding="utf-8")):
+        if (match := system_pair.search(statement)) is not None:
             dark[match.group(1)] = match.group(2)
             light[match.group(1)] = match.group(3)
-        elif (match := single.search(line)) is not None:
+        elif (match := system_alias.search(statement)) is not None:
+            aliases[match.group(1)] = match.group(2)
+        elif (match := both.search(statement)) is not None:
+            dark[match.group(1)] = match.group(2)
+            light[match.group(1)] = match.group(3)
+        elif (match := single.search(statement)) is not None:
             dark[match.group(1)] = light[match.group(1)] = match.group(2)
+
+    for name, stands_for in aliases.items():
+        for palette in (light, dark):
+            if stands_for in palette:
+                palette[name] = palette[stands_for]
 
     return light, dark
 
@@ -181,6 +219,15 @@ DISTINCT = [
 
 def check(scheme: str, palette: dict[str, str]) -> list[str]:
     problems: list[str] = []
+
+    # Named before anything is measured. A colour the parser did not find is a
+    # check that silently stopped being made, and it used to end the run in a
+    # KeyError three functions down from the name that was missing.
+    wanted = {name for pair in PAIRS + DECORATIVE_BORDERS + DISTINCT for name in pair[:2]}
+    for name in sorted(wanted - palette.keys()):
+        problems.append(f"{scheme}: {name} is checked but was not found in the palette")
+    if len(problems) > 0:
+        return problems
 
     for foreground, background, minimum, what in PAIRS:
         if foreground not in palette or background not in palette:

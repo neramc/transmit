@@ -25,9 +25,13 @@ constexpr int kReadTimeoutMs = 4000;
 
 QString g_tablePath;
 QString g_root;
+QString g_system;
 
-/// Which section of the table applies here.
+/// Which section of the table applies here, or the one a test asked for.
 QString thisSystem() {
+    if (!g_system.isEmpty()) {
+        return g_system;
+    }
 #if defined(Q_OS_WIN)
     return QStringLiteral("windows");
 #elif defined(Q_OS_MACOS)
@@ -268,6 +272,10 @@ QString SystemSettingsMap::applyCommand(SettingKey key, const QString& value) {
 
 void SystemSettingsMap::useTableForTesting(const QString& path) {
     g_tablePath = path;
+}
+
+void SystemSettingsMap::useSystemForTesting(const QString& system) {
+    g_system = system;
 }
 
 void SystemSettingsMap::useRootForTesting(const QString& path) {

@@ -23,6 +23,14 @@ include(CheckCXXCompilerFlag)
 add_compile_options(-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2)
 add_compile_options(-fstack-protector-strong)
 
+# The probes below are run with -Werror, and that is the whole point of them.
+# A compiler that takes a flag, does nothing with it and says so has not
+# supported it: Apple's clang accepts -fstack-clash-protection, ignores it, and
+# warns that the argument went unused. Without -Werror here the check passed,
+# the flag was added, and the same warning met the -Werror this build uses
+# anyway - so every macOS build failed on the first file it compiled.
+set(CMAKE_REQUIRED_FLAGS "-Werror")
+
 check_cxx_compiler_flag(-fstack-clash-protection TRANSMIT_HAS_STACK_CLASH)
 if(TRANSMIT_HAS_STACK_CLASH)
     add_compile_options(-fstack-clash-protection)
@@ -35,6 +43,8 @@ check_cxx_compiler_flag(-fcf-protection=full TRANSMIT_HAS_CF_PROTECTION)
 if(TRANSMIT_HAS_CF_PROTECTION)
     add_compile_options(-fcf-protection=full)
 endif()
+
+unset(CMAKE_REQUIRED_FLAGS)
 
 # include() does not open a scope, so this lands in the top-level directory
 # where the targets are defined.

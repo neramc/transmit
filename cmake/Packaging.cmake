@@ -43,10 +43,19 @@ set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
 # dependency change. Everything the program links is found by dpkg-shlibdeps.
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 
-# QML modules are loaded at run time, so nothing links them and nothing can
-# find them automatically. These are the ones the interface imports.
-set(CPACK_DEBIAN_PACKAGE_RECOMMENDS
-    "qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-dialogs, qml6-module-qtqml-workerscript")
+# QML modules are loaded at run time, so nothing links them and dpkg-shlibdeps
+# cannot see them. They are Depends and not Recommends because without them the
+# program does not start at all: QtQuick.Controls' ApplicationWindow is built on
+# QtQuick.Templates, and a missing templates plugin makes the whole window
+# unavailable. The package installed cleanly and then said "Type
+# ApplicationWindow unavailable" on every launch - which is the shape of
+# failure a package that only Recommends what it needs produces.
+#
+# qtquick-templates was not even in the list. It is imported by nothing here;
+# it is what QtQuick.Controls imports, and that is exactly the kind of
+# dependency a list written from a file's own import statements misses.
+set(CPACK_DEBIAN_PACKAGE_DEPENDS
+    "qml6-module-qtquick, qml6-module-qtquick-templates, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-dialogs, qml6-module-qtqml-workerscript")
 set(CPACK_DEBIAN_PACKAGE_SUGGESTS "libsecret-tools")
 
 # --- RPM ---------------------------------------------------------------------
@@ -55,6 +64,14 @@ set(CPACK_RPM_PACKAGE_LICENSE "GPL-3.0-or-later")
 set(CPACK_RPM_PACKAGE_GROUP "Applications/System")
 set(CPACK_RPM_PACKAGE_URL "${CPACK_PACKAGE_HOMEPAGE_URL}")
 set(CPACK_RPM_PACKAGE_DESCRIPTION "${CPACK_PACKAGE_DESCRIPTION}")
+
+# The same runtime modules, under the names Fedora gives them. rpm's automatic
+# requirements find the shared libraries the binary links and stop there, so
+# the QML plugins - dlopen'd, named in no ELF header - have to be said.
+# qt6-qtdeclarative carries QtQuick, QtQml and, since Qt 6.2, Quick Controls
+# and its templates; qt6-qtbase-gui carries the platform plugins without which
+# there is no window to put them in.
+set(CPACK_RPM_PACKAGE_REQUIRES "qt6-qtdeclarative, qt6-qtbase-gui")
 
 # Directories the base system already owns. Claiming them makes the package
 # conflict with filesystem, and every other package that installs an icon.
