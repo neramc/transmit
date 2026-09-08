@@ -68,6 +68,10 @@ constexpr std::uint32_t kMd5 = 22;
 /// A nested record per attribute, repeated. Also added after the first release,
 /// so an older reader skips them and reads the rest of the entry.
 constexpr std::uint32_t kExtendedAttribute = 23;
+
+/// The set of names-for-one-file this entry belongs to. Added after the first
+/// release too, so an older reader skips it and writes each name separately.
+constexpr std::uint32_t kLinkGroup = 24;
 }  // namespace entry_field
 
 namespace xattr_field {
@@ -246,6 +250,9 @@ void writeEntry(ByteWriter& writer, const ManifestEntry& entry) {
     if (!entry.captureNote.empty()) {
         writer.putString(entry_field::kCaptureNote, entry.captureNote);
     }
+    if (entry.linkGroup != 0) {
+        writer.putUInt(entry_field::kLinkGroup, entry.linkGroup);
+    }
     for (const ExtendedAttribute& attribute : entry.extendedAttributes) {
         writer.putRecord(entry_field::kExtendedAttribute, [&attribute](ByteWriter& nested) {
             nested.putString(xattr_field::kName, attribute.name);
@@ -369,6 +376,11 @@ Result<ManifestEntry> readEntry(ByteView data) {
             case entry_field::kAppId: {
                 TRANSMIT_TRY(value, reader.getString());
                 entry.appId = std::move(value);
+                break;
+            }
+            case entry_field::kLinkGroup: {
+                TRANSMIT_TRY(value, reader.getVarint());
+                entry.linkGroup = value;
                 break;
             }
             case entry_field::kExtendedAttribute: {

@@ -31,6 +31,19 @@ notes say so.
   desktop's own where it can be read without starting a process (Windows and
   Plasma); elsewhere the brand colour is used, because an accent guessed wrong
   is worse than one chosen on purpose.
+- Two names for one file arrive as two names for one file. A hard link is not a
+  copy: writing through either name changes what the other one sees, so a
+  restore that made two independent files out of them changed the data and not
+  only how much room it took - and the room matters too, since a package store
+  or a backup tree can be almost entirely links. The scan notices a file with
+  more than one name from the stat it was already doing on Linux and macOS, and
+  from the file's own record on Windows; the capture puts them in a group named
+  after the first of them; the restore writes the first and makes the rest
+  names for it. Anything that refuses - a destination on another volume, a
+  filesystem with no hard links - gets the copy, which is what happened before.
+  The archive still holds the contents once, as it did, so an older reader
+  ignores the new field and writes each name separately.
+
 - A file that is mostly hole arrives as one. A disk image, a virtual machine or
   a database that has been emptied has a length far larger than the data in it,
   and the machine it came from was not storing those zeroes. Writing them out

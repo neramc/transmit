@@ -93,7 +93,8 @@ std::string resolveName(Id id, Lookup lookup, char* Record::*field) {
 
 /// Reads the ownership and permission bits the manifest records. They are kept
 /// even when capturing on Windows so a Linux-to-Linux move keeps its modes.
-void fillPosixMetadata(const QFileInfo& info, format::PosixMetadata& posix) {
+void fillPosixMetadata(const QFileInfo& info, ScannedItem& item) {
+    format::PosixMetadata& posix = item.posix;
 #ifndef Q_OS_WIN
     struct stat status {};
     const QByteArray nativePath = QFile::encodeName(info.absoluteFilePath());
@@ -103,6 +104,14 @@ void fillPosixMetadata(const QFileInfo& info, format::PosixMetadata& posix) {
     posix.mode = static_cast<quint32>(status.st_mode & 07777);
     posix.uid = static_cast<quint32>(status.st_uid);
     posix.gid = static_cast<quint32>(status.st_gid);
+
+    // The same stat already says how many names this file has, so asking costs
+    // nothing here. Only regular files: a directory's link count is its
+    // subdirectories and means something else entirely.
+    if (S_ISREG(status.st_mode) && status.st_nlink > 1) {
+        item.sharedVolume = static_cast<quint64>(status.st_dev);
+        item.sharedFile = static_cast<quint64>(status.st_ino);
+    }
 
     posix.userName =
         resolveName<::uid_t, struct ::passwd>(status.st_uid, ::getpwuid_r, &::passwd::pw_name);
@@ -124,16 +133,42 @@ void fillPosixMetadata(const QFileInfo& info, format::PosixMetadata& posix) {
 /// The manifest has had a place for this since the format was written and
 /// nothing ever filled it in, so every capture made on Windows arrived with a
 /// hidden file no longer hidden and a read-only one writable.
-void fillWindowsMetadata(const QFileInfo& info, format::WindowsMetadata& windows) {
+void fillWindowsMetadata(const QFileInfo& info, ScannedItem& item) {
+    format::WindowsMetadata& windows = item.windows;
 #ifdef Q_OS_WIN
-    const DWORD attributes =
-        ::GetFileAttributesW(reinterpret_cast<const wchar_t*>(info.absoluteFilePath().utf16()));
-    if (attributes != INVALID_FILE_ATTRIBUTES) {
-        windows.attributes = static_cast<quint32>(attributes);
+    const auto* native = reinterpret_cast<const wchar_t*>(info.absoluteFilePath().utf16());
+    const DWORD attributes = ::GetFileAttributesW(native);
+    if (attributes == INVALID_FILE_ATTRIBUTES) {
+        return;
     }
+    windows.attributes = static_cast<quint32>(attributes);
+
+    // How many names the file has, which the attribute word does not say.
+    // NTFS keeps it, and only a handle can be asked for it - so this costs an
+    // open per file, next to nothing beside reading the file's contents, and
+    // it is the only way to find out that two entries are one file. Files
+    // whose contents are elsewhere are left alone: opening one fetches it.
+    if ((attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0 ||
+        format::storedInTheCloud(static_cast<std::uint32_t>(attributes))) {
+        return;
+    }
+    const HANDLE handle = ::CreateFileW(
+        native, FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) {
+        return;
+    }
+    BY_HANDLE_FILE_INFORMATION about{};
+    if (::GetFileInformationByHandle(handle, &about) != 0 && about.nNumberOfLinks > 1) {
+        item.sharedVolume = static_cast<quint64>(about.dwVolumeSerialNumber);
+        item.sharedFile = (static_cast<quint64>(about.nFileIndexHigh) << 32) |
+                          static_cast<quint64>(about.nFileIndexLow);
+    }
+    ::CloseHandle(handle);
 #else
     Q_UNUSED(info);
     Q_UNUSED(windows);
+    Q_UNUSED(item);
 #endif
 }
 
@@ -439,8 +474,8 @@ void ScanService::scanRoot(const CaptureRoot& root, const CaptureSelection& sele
         item.appId = root.appId;
         item.modifiedUnixNs = toUnixNs(info.lastModified());
         item.createdUnixNs = toUnixNs(info.birthTime());
-        fillPosixMetadata(info, item.posix);
-        fillWindowsMetadata(info, item.windows);
+        fillPosixMetadata(info, item);
+        fillWindowsMetadata(info, item);
         fillExtendedAttributes(info, item.extendedAttributes);
 
         if (info.isSymLink()) {

@@ -8,6 +8,9 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#include <filesystem>
+#include <system_error>
+
 #ifndef Q_OS_WIN
 #include <pwd.h>
 #include <unistd.h>
@@ -67,6 +70,7 @@ private slots:
     void aDriveFarTooSmallIsRefusedBeforeAnythingIsWritten();
     void aDriveThatMightJustFitIsTriedAndSaysSo();
     void aDiskImageArrivesWithItsHolesIntact();
+    void twoNamesForOneFileArriveAsTwoNames();
     void cleanupTestCase();
 
 private:
@@ -417,6 +421,80 @@ void ContinuityRoundTripTest::aDiskImageArrivesWithItsHolesIntact() {
     }
 
     QVERIFY(QFile::remove(imagePath));
+}
+
+// A hard link is not a copy.
+//
+// Two names, one file: writing through either changes what the other one
+// sees. A restore that makes two independent files out of them has changed the
+// user's data, not merely how much room it takes - though the room matters
+// too, since a package store or a backup tree can be almost entirely links.
+//
+// Also last in the file, and for the same reason as the case above it: it puts
+// two files into the fixture tree that the earlier counts do not expect.
+void ContinuityRoundTripTest::twoNamesForOneFileArriveAsTwoNames() {
+    const QString first = sourceHome() + QStringLiteral("/Documents/twice.bin");
+    const QString second = sourceHome() + QStringLiteral("/Documents/also-twice.bin");
+    {
+        QFile file(first);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QCOMPARE(file.write(QByteArray("one file, two names\n")), 20);
+    }
+
+    std::error_code ec;
+    std::filesystem::create_hard_link(std::filesystem::path(first.toStdString()),
+                                      std::filesystem::path(second.toStdString()), ec);
+    if (ec) {
+        QVERIFY(QFile::remove(first));
+        QSKIP("this filesystem does not do hard links");
+    }
+
+    core::CancelToken token;
+    core::ExportService exporter(*platform_);
+    core::ExportRequest request;
+    request.destinationPath = archivePath("hard-links.txa");
+    request.selection = documentsSelection();
+    request.packaging.preset = format::CompressionPreset::Fast;
+
+    const core::ExportReport exported = exporter.run(request, token);
+    QVERIFY2(exported.succeeded, qPrintable(exported.errorMessage));
+
+    core::ImportService importer(*platform_);
+    core::ImportRequest restore;
+    restore.archivePath = request.destinationPath;
+    restore.destinationOverride = workspace_.filePath("restored-links");
+    const core::ImportReport imported = importer.run(restore, token);
+    QVERIFY2(imported.succeeded, qPrintable(imported.errorMessage));
+
+    const QString restoredFirst =
+        findRestored(workspace_.filePath("restored-links"), QStringLiteral("twice.bin"));
+    const QString restoredSecond =
+        findRestored(workspace_.filePath("restored-links"), QStringLiteral("also-twice.bin"));
+    QVERIFY2(!restoredFirst.isEmpty() && !restoredSecond.isEmpty(),
+             "both names have to be there whatever else happens");
+
+    // Whatever the filesystem allowed, both names have to hold the bytes.
+    for (const QString& name : {restoredFirst, restoredSecond}) {
+        QFile file(name);
+        QVERIFY2(file.open(QIODevice::ReadOnly), qPrintable(name));
+        QCOMPARE(file.readAll(), QByteArray("one file, two names\n"));
+    }
+
+    QCOMPARE(imported.filesLinked, 1u);
+
+    // And the property that makes it a link rather than a copy: a change
+    // through one name is visible through the other.
+    {
+        QFile file(restoredFirst);
+        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        QCOMPARE(file.write(QByteArray("changed\n")), 8);
+    }
+    QFile other(restoredSecond);
+    QVERIFY(other.open(QIODevice::ReadOnly));
+    QCOMPARE(other.readAll(), QByteArray("changed\n"));
+
+    QVERIFY(QFile::remove(first));
+    QVERIFY(QFile::remove(second));
 }
 
 void ContinuityRoundTripTest::cleanupTestCase() {

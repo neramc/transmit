@@ -125,6 +125,22 @@ struct ManifestEntry {
     /// Empty for most files; what is in here was put there deliberately.
     std::vector<ExtendedAttribute> extendedAttributes;
 
+    /// Which set of names-for-one-file this entry belongs to, or zero when the
+    /// file had only the one name - which is nearly every file.
+    ///
+    /// A hard link is not a copy: two names, one file, and writing through
+    /// either changes what the other one sees. A restore that turns them into
+    /// two independent files changes the user's data, not just its size - and
+    /// the size matters too, since a package store or a backup tree can be
+    /// mostly links.
+    ///
+    /// The value is the id of the first entry of the group, carried by every
+    /// member including that first one, so an entry says on its own that it
+    /// has company without anything having to be looked up. A reader that
+    /// predates this field ignores it and writes each name as its own file,
+    /// which is what happened before and is still correct.
+    std::uint64_t linkGroup = 0;
+
     [[nodiscard]] bool hasContent() const noexcept { return type == EntryType::File && size > 0; }
 };
 

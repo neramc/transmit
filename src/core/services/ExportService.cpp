@@ -5,6 +5,8 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFileInfo>
+#include <QHash>
+#include <QPair>
 #include <QTemporaryFile>
 
 #include <algorithm>
@@ -901,6 +903,9 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
         report.filesCarriedOver = filesDone;
     }
 
+    // Which entry first claimed each file that has more than one name.
+    QHash<QPair<quint64, quint64>, quint64> linkGroups;
+
     for (const ScannedItem& item : scan.items) {
         if (cancelToken.isCancelled()) {
             return fail(QCoreApplication::translate("Export", "Cancelled."));
@@ -911,6 +916,21 @@ ExportReport ExportService::run(const ExportRequest& request, CancelToken& cance
             continue;
         }
         entry.id = nextId++;
+
+        // Names that turn out to be the same file are put in a group, named
+        // after the first of them to be seen. The restore uses it to make one
+        // file with several names again instead of several files.
+        //
+        // A resumed capture starts this map empty, so a group split across two
+        // runs comes back as two groups: the links within each half survive
+        // and the ones between the halves become copies. Correct, and the only
+        // alternative would be carrying every inode number in the journal.
+        if (item.sharedFile != 0 || item.sharedVolume != 0) {
+            const auto identity = qMakePair(item.sharedVolume, item.sharedFile);
+            const auto known = linkGroups.constFind(identity);
+            entry.linkGroup =
+                known == linkGroups.constEnd() ? *linkGroups.insert(identity, entry.id) : *known;
+        }
 
         if (item.type == format::EntryType::File && item.size > 0) {
             const QString readPath = snapshot->translate(item.absolutePath);

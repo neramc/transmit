@@ -472,6 +472,15 @@ struct ImportReport {
     /// of these is a file the user expected and has not got.
     quint64 filesFailed = 0;
 
+    /// Of the restored files, how many were made as a second name for a file
+    /// already written rather than as a copy of it.
+    ///
+    /// Worth reporting rather than only doing: a package store or a backup
+    /// tree can be almost entirely links, and the difference between "restored
+    /// 40 GB" and "restored 3 GB, 812,000 of them as links" is the difference
+    /// between a number that looks wrong and one that explains itself.
+    quint64 filesLinked = 0;
+
     quint64 bytesWritten = 0;
     qint64 elapsedMilliseconds = 0;
 

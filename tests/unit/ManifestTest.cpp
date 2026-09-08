@@ -20,6 +20,7 @@ ManifestEntry sampleEntry() {
     entry.location = BlockLocation{7, 4096, 1234};
     entry.appId = "org.mozilla.firefox";
     entry.captureNote = "read from a VSS snapshot";
+    entry.linkGroup = 42;  // its own id: this entry is the first of its group
     entry.extendedAttributes = {
         ExtendedAttribute{"user.xdg.tags", "work,taxes"},
         // Arbitrary bytes, including a NUL: an attribute is not text, and a
@@ -109,6 +110,7 @@ TEST(Manifest, RoundTripsEveryField) {
     EXPECT_EQ(file.location.offset, 4096u);
     EXPECT_EQ(file.appId, "org.mozilla.firefox");
     EXPECT_EQ(file.captureNote, "read from a VSS snapshot");
+    EXPECT_EQ(file.linkGroup, 42u);
     ASSERT_EQ(file.extendedAttributes.size(), 2u);
     EXPECT_EQ(file.extendedAttributes[0].name, "user.xdg.tags");
     EXPECT_EQ(file.extendedAttributes[0].value, "work,taxes");
@@ -117,6 +119,9 @@ TEST(Manifest, RoundTripsEveryField) {
 
     // An entry with none is an entry with none, not one with an empty tag.
     EXPECT_TRUE(decoded->entries[1].extendedAttributes.empty());
+
+    // And a file with only one name says so by saying nothing.
+    EXPECT_EQ(decoded->entries[1].linkGroup, 0u);
 
     EXPECT_EQ(decoded->entries[1].type, EntryType::Directory);
     EXPECT_EQ(decoded->entries[2].symlinkTarget, "/home/bob/Documents");

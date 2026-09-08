@@ -136,6 +136,13 @@ out at the very end. Transmit leaves the long runs as holes — the file reads
 back byte for byte the same either way, and a filesystem with no holes to give
 simply writes them.
 
+Two names for one file stay two names for one file. A hard link is not a copy —
+writing through either name changes what the other one sees — and a package
+store or a backup tree can be almost entirely links, so restoring them as
+separate files changes both the data and how much room it takes. Where the
+destination cannot make one, Transmit writes the copy and the file is still
+there.
+
 **Desktop preferences** — appearance and accent colour, wallpaper (including
 the image itself), language, formats, time zone, keyboard layouts, default
 browser and mail program, sleep and screen timeouts, text scale, high contrast,

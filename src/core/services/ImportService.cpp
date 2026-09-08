@@ -5,12 +5,15 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QScopeGuard>
 #include <QSet>
 #include <QTemporaryDir>
 
 #include <algorithm>
+#include <filesystem>
 #include <optional>
+#include <system_error>
 #include <unordered_map>
 #include <vector>
 
@@ -802,6 +805,16 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
     QElapsedTimer throttle;
     throttle.start();
 
+    /// Where the first name of each set of names-for-one-file was put, so the
+    /// rest can be made names for it rather than copies of it.
+    QHash<quint64, QString> namesAlreadyPlaced;
+
+    // How far through the archive the restore is, which is not the same as how
+    // much has been written: a file restored as a second name for one already
+    // on disk costs nothing and would otherwise leave the progress stuck at a
+    // fraction of the total it is being measured against.
+    quint64 bytesAdvanced = 0;
+
     // The journal is allowed to fall behind the disk - see its header - so it
     // is pushed to the device every so often rather than per item. What an
     // unsynced tail costs is those items being settled again.
@@ -1063,6 +1076,39 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                 QDir().mkpath(parentDirectory);
                 touchedDirectories.insert(parentDirectory);
 
+                // Two names for one file arrive as two entries carrying the
+                // same group. The first is written; the rest are made names
+                // for it, which is what they were - writing through one
+                // changes what the others see, so restoring them as separate
+                // files changes the data and not merely how much room it
+                // takes. Anything that refuses - a destination on another
+                // volume, a filesystem with no hard links, a name already
+                // there that will not move - gets a copy instead, which is
+                // exactly what happened before this existed.
+                if (entry.linkGroup != 0) {
+                    const auto firstName = namesAlreadyPlaced.constFind(entry.linkGroup);
+                    if (firstName != namesAlreadyPlaced.constEnd() && *firstName != targetPath) {
+                        if (QFile::exists(targetPath)) {
+                            QFile::remove(targetPath);
+                        }
+                        std::error_code ec;
+                        std::filesystem::create_hard_link(
+                            format::toFsPath(firstName->toUtf8().toStdString()),
+                            format::toFsPath(targetPath.toUtf8().toStdString()), ec);
+                        if (!ec) {
+                            item.note = QCoreApplication::translate(
+                                            "Import", "Restored as another name for \"%1\".")
+                                            .arg(*firstName);
+                            ++report.filesLinked;
+                            bytesAdvanced += entry.size;
+                            break;
+                        }
+                        qCDebug(logRestore)
+                            << "could not link" << targetPath << "to" << *firstName
+                            << "- writing a copy instead:" << QString::fromStdString(ec.message());
+                    }
+                }
+
                 auto content = reader->readEntry(entry);
                 if (!content) {
                     report.notes.push_back(ContinuityNote{
@@ -1085,6 +1131,10 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                 }
                 applyMetadata(targetPath, entry, targetOs);
                 report.bytesWritten += entry.size;
+                bytesAdvanced += entry.size;
+                if (entry.linkGroup != 0) {
+                    namesAlreadyPlaced.insert(entry.linkGroup, targetPath);
+                }
                 break;
             }
         }
@@ -1097,7 +1147,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
             ProgressUpdate update;
             update.filesDone = report.filesRestored;
             update.filesTotal = static_cast<quint64>(ordered.size());
-            update.bytesDone = report.bytesWritten;
+            update.bytesDone = bytesAdvanced;
             update.bytesTotal = totalBytes;
             update.currentItem = targetPath;
             update.stage = request.dryRun ? QCoreApplication::translate(

@@ -34,6 +34,18 @@ struct ScannedItem {
     /// Finder tag, a comment. Empty for almost every file.
     std::vector<format::ExtendedAttribute> extendedAttributes;
 
+    /// Which file on the source machine this name points at, set only when
+    /// the file has more than one name. Both zero otherwise, which is nearly
+    /// every file.
+    ///
+    /// Two items with the same pair are two names for one file - a hard link -
+    /// and the restore is meant to make them two names again rather than two
+    /// files. The volume has to be part of it: inode numbers are only unique
+    /// within a filesystem, and a capture that spans two of them would
+    /// otherwise link together files that have nothing to do with each other.
+    quint64 sharedVolume = 0;
+    quint64 sharedFile = 0;
+
     /// Set when the scan could not read the item; it still appears in the
     /// report so nothing disappears silently.
     QString problem;
