@@ -111,6 +111,18 @@ elseif(WIN32)
     # so a change to it rebuilds the resource.
     set_source_files_properties("${CMAKE_SOURCE_DIR}/resources/transmit.rc"
         PROPERTIES OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/resources/transmit.manifest")
+
+    # The linker adds a manifest of its own unless it is told not to, and two
+    # manifests in one binary is not a warning: cvtres refuses the pair outright
+    # with CVT1100, and nothing links. The one in the .rc is the one that says
+    # what this program needs, so the generated one is the one to stop.
+    #
+    # Only for MSVC. A MinGW build has no /MANIFEST to switch off and takes the
+    # manifest from the .rc the same way, which is why it lives there rather
+    # than being passed to the linker.
+    if(MSVC)
+        target_link_options(transmit PRIVATE "/MANIFEST:NO")
+    endif()
 endif()
 
 set_target_properties(transmit PROPERTIES
