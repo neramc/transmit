@@ -220,6 +220,41 @@ TEST_F(FileIoTest, WritesASmallFileWholeEvenWhenAskedForHoles) {
     EXPECT_EQ(*readBack, data);
 }
 
+TEST_F(FileIoTest, SetsTheLengthWithoutWritingBytes) {
+    const auto path = directory_ / "resized";
+    auto stream = FileStream::open(path, FileStream::Mode::Write);
+    ASSERT_TRUE(stream) << stream.error().toString();
+
+    ASSERT_TRUE(stream->write(textBytes("nine bytes")));
+    // Longer: the file grows with a hole, not with anything written.
+    ASSERT_TRUE(stream->truncate(kSmallestHole));
+    stream->close();
+    EXPECT_EQ(std::filesystem::file_size(path), kSmallestHole);
+
+    const auto readBack = readWholeFile(path);
+    ASSERT_TRUE(readBack) << readBack.error().toString();
+    EXPECT_EQ(std::count(readBack->begin(), readBack->end(), Byte{0}), kSmallestHole - 10);
+
+    // And shorter, which is the direction that discards.
+    auto again = FileStream::open(path, FileStream::Mode::ReadWrite);
+    ASSERT_TRUE(again) << again.error().toString();
+    ASSERT_TRUE(again->truncate(4));
+    again->close();
+    EXPECT_EQ(contentsOf(path), "nine");
+}
+
+TEST_F(FileIoTest, WillNotResizeOrMarkAFileThatIsNotOpen) {
+    FileStream stream;
+    EXPECT_FALSE(stream.truncate(0));
+#if defined(_WIN32)
+    EXPECT_FALSE(stream.declareSparse());
+#else
+    // Nowhere but Windows has to be asked: a write past the end of a file
+    // makes the hole by itself, so there is nothing to fail.
+    EXPECT_TRUE(stream.declareSparse());
+#endif
+}
+
 TEST_F(FileIoTest, KnowsHowMuchDiskAFileTakes) {
     const auto path = directory_ / "measured";
     ASSERT_TRUE(writeFileAtomically(path, textBytes("a few bytes")));
