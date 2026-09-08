@@ -102,6 +102,22 @@ public:
     /// come back short by exactly that run.
     Status truncate(std::uint64_t length);
 
+    /// Gives back the disk behind a region, leaving a hole that reads as
+    /// zeroes.
+    ///
+    /// Needed because not every filesystem makes a hole out of a write that
+    /// lands past the end of the file. Linux does, and NTFS does once the file
+    /// has been marked sparse - but APFS fills the gap in, so on macOS the
+    /// zeroes have to be handed back afterwards rather than never written. It
+    /// is the one call of the three that is the same idea everywhere and a
+    /// different name in each place: fallocate, F_PUNCHHOLE, FSCTL_SET_ZERO_DATA.
+    ///
+    /// Refusals are success. A filesystem with no holes to give, a region too
+    /// small to align, a network mount that will not: in every one of those
+    /// the file already holds the right bytes, and failing a restore over how
+    /// much room they take would be the wrong trade.
+    Status punchHole(std::uint64_t offset, std::uint64_t length);
+
     /// Tells the filesystem this file is allowed to have holes in it.
     ///
     /// Only Windows needs asking: NTFS zero-fills a seek unless the file has

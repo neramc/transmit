@@ -204,6 +204,69 @@ TEST_F(FileIoTest, AFileFullOfHolesReadsBackWhole) {
     }
 }
 
+TEST_F(FileIoTest, GivesBackTheDiskUnderARegion) {
+    // The half of the mechanism that macOS depends on entirely: APFS fills a
+    // skipped region in, so there the zeroes are written and then handed back.
+    // Exercised here on its own rather than only through the writer, because
+    // on Linux the writer never needs it - the hole is already there - and a
+    // path that only runs on one platform is a path nobody can test.
+    constexpr std::uint64_t kLength = 2 * 1024 * 1024;
+    const ByteBuffer data(kLength, Byte{0x4D});
+
+    const auto path = directory_ / "punched";
+    {
+        auto stream = FileStream::open(path, FileStream::Mode::Write);
+        ASSERT_TRUE(stream) << stream.error().toString();
+        ASSERT_TRUE(stream->write(data));
+        ASSERT_TRUE(stream->sync());
+    }
+
+    const auto before = allocatedSize(path);
+    ASSERT_TRUE(before) << before.error().toString();
+
+    {
+        auto stream = FileStream::open(path, FileStream::Mode::ReadWrite);
+        ASSERT_TRUE(stream) << stream.error().toString();
+        const auto punched = stream->punchHole(kLength / 4, kLength / 2);
+        EXPECT_TRUE(punched) << punched.error().toString();
+    }
+
+    // The length is unchanged and the hole reads as zeroes, whatever the
+    // filesystem decided about the disk underneath.
+    EXPECT_EQ(std::filesystem::file_size(path), kLength);
+    const auto readBack = readWholeFile(path);
+    ASSERT_TRUE(readBack) << readBack.error().toString();
+    ASSERT_EQ(readBack->size(), kLength);
+    EXPECT_EQ((*readBack)[kLength / 4], Byte{0});
+    EXPECT_EQ((*readBack)[kLength / 4 + kLength / 2 - 1], Byte{0});
+    EXPECT_EQ((*readBack)[0], Byte{0x4D});
+    EXPECT_EQ((*readBack)[kLength - 1], Byte{0x4D});
+
+    const auto after = allocatedSize(path);
+    ASSERT_TRUE(after) << after.error().toString();
+    if (*before >= kLength) {
+        EXPECT_LT(*after, *before) << "half the file was given back and it takes the same room";
+    }
+}
+
+TEST_F(FileIoTest, PunchingNothingIsNotAFailure) {
+    const auto path = directory_ / "not-punched";
+    ASSERT_TRUE(writeFileAtomically(path, textBytes("short")));
+
+    auto stream = FileStream::open(path, FileStream::Mode::ReadWrite);
+    ASSERT_TRUE(stream) << stream.error().toString();
+    // Nothing to give back, and a region smaller than one block: both are
+    // ordinary, and neither may fail a restore.
+    EXPECT_TRUE(stream->punchHole(0, 0));
+    EXPECT_TRUE(stream->punchHole(1, 3));
+
+    FileStream closed;
+    EXPECT_TRUE(closed.punchHole(0, 4096));
+
+    stream->close();
+    EXPECT_EQ(contentsOf(path), "short");
+}
+
 TEST_F(FileIoTest, WritesASmallFileWholeEvenWhenAskedForHoles) {
     // Under the threshold the scan is skipped, so the file is written in one
     // piece - and still has to be right, which is the only part a caller can

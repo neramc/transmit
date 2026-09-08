@@ -50,14 +50,16 @@ notes say so.
   is how a restore of three gigabytes needs forty gigabytes of disk and fails
   at the very end, after everything else has already landed. The restore now
   skips runs of zeroes of 64 KiB and over in any file of a megabyte or more,
-  seeking over them instead - which is the one approach all three systems
-  agree on, since a write past the end of a file leaves a hole behind it
-  wherever holes exist and zeroes wherever they do not. Windows is asked first,
-  because NTFS fills a seek unless the file has been marked sparse while it was
-  still empty, and a refusal there is not an error: FAT32 on a stick has no
-  holes to give and writes the zeroes, which reads back the same. The length is
-  set explicitly at the end, or a file that ends in zeroes would arrive short by
-  exactly that run.
+  seeking over them, and then asking for the gaps back. Linux leaves a hole
+  behind a write that lands past the end of a file, and so does NTFS once the
+  file has been marked sparse - which it has to be asked for while the file is
+  still empty. APFS fills the gap in, so on macOS the zeroes are handed back
+  afterwards instead, which is the same idea under a third name: fallocate,
+  F_PUNCHHOLE, FSCTL_SET_ZERO_DATA. Every refusal along the way is a success -
+  FAT32 on a stick has no holes to give and writes the zeroes, which reads back
+  the same - because failing a restore over how much room the right bytes take
+  would be the wrong trade. The length is set explicitly at the end, or a file
+  that ends in zeroes would arrive short by exactly that run.
 
 - The tags a filesystem keeps beside a file now travel with it: the colour
   label somebody set, the Finder tag, the comment a file manager wrote. Every

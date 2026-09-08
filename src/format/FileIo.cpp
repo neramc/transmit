@@ -18,6 +18,9 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#if defined(__linux__)
+#include <linux/falloc.h>
+#endif
 #endif
 
 namespace transmit::format {
@@ -416,6 +419,57 @@ Status FileStream::truncate(std::uint64_t length) {
     return ok();
 }
 
+Status FileStream::punchHole(std::uint64_t offset, std::uint64_t length) {
+    if (handle_ == nullptr || length == 0) {
+        return ok();
+    }
+    TRANSMIT_CHECK(flush());
+
+#if defined(_WIN32)
+    // Nothing to do. A file marked sparse gets its holes from the seek itself,
+    // and on a filesystem that refused the mark this would write the zeroes
+    // out rather than take them back - the slow way round to the same bytes.
+    (void)offset;
+    return ok();
+#else
+    const int descriptor = ::fileno(handle_);
+    if (descriptor < 0) {
+        return ok();
+    }
+
+    // Both calls want whole filesystem blocks, so the hole is trimmed inward
+    // to them. Trimming the other way would give back a block that holds real
+    // data at one end of it.
+    struct stat about {};
+    const auto blockSize =
+        static_cast<std::uint64_t>(::fstat(descriptor, &about) == 0 && about.st_blksize > 0
+                                       ? static_cast<std::uint64_t>(about.st_blksize)
+                                       : 4096U);
+
+    const std::uint64_t first = ((offset + blockSize - 1) / blockSize) * blockSize;
+    const std::uint64_t last = ((offset + length) / blockSize) * blockSize;
+    if (last <= first) {
+        return ok();  // not a whole block of it, so there is nothing to give back
+    }
+
+#if defined(__APPLE__)
+    fpunchhole_t hole{};
+    hole.fp_offset = static_cast<off_t>(first);
+    hole.fp_length = static_cast<off_t>(last - first);
+    (void)::fcntl(descriptor, F_PUNCHHOLE, &hole);
+#elif defined(__linux__)
+    (void)::fallocate(descriptor, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE,
+                      static_cast<off_t>(first), static_cast<off_t>(last - first));
+#else
+    (void)first;
+    (void)last;
+#endif
+    // Deliberately unchecked: see the header. Every way this fails leaves the
+    // file holding exactly the bytes it should.
+    return ok();
+#endif
+}
+
 Status FileStream::declareSparse() {
 #if defined(_WIN32)
     if (handle_ == nullptr) {
@@ -537,12 +591,29 @@ namespace {
 Status writeSpansWithHoles(FileStream& stream, ByteView data) {
     TRANSMIT_CHECK(stream.declareSparse());
 
-    for (const ByteRange& span : spansWorthWriting(data)) {
+    const std::vector<ByteRange> spans = spansWorthWriting(data);
+    for (const ByteRange& span : spans) {
         TRANSMIT_CHECK(stream.seek(span.offset));
         TRANSMIT_CHECK(stream.write(data.subspan(static_cast<std::size_t>(span.offset),
                                                  static_cast<std::size_t>(span.length))));
     }
-    return stream.truncate(static_cast<std::uint64_t>(data.size()));
+    TRANSMIT_CHECK(stream.truncate(static_cast<std::uint64_t>(data.size())));
+
+    // And then ask for the gaps back, because not every filesystem left them
+    // empty. APFS fills a skipped region in, so on macOS the zeroes are
+    // written and then handed back; on ext4 and on NTFS the hole is already
+    // there and this finds nothing to do.
+    std::uint64_t after = 0;
+    for (const ByteRange& span : spans) {
+        if (span.offset > after) {
+            TRANSMIT_CHECK(stream.punchHole(after, span.offset - after));
+        }
+        after = span.offset + span.length;
+    }
+    if (static_cast<std::uint64_t>(data.size()) > after) {
+        TRANSMIT_CHECK(stream.punchHole(after, static_cast<std::uint64_t>(data.size()) - after));
+    }
+    return ok();
 }
 
 Status writeFileOnce(const std::filesystem::path& path, ByteView data, Durability durability,
