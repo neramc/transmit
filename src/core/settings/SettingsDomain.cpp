@@ -51,8 +51,15 @@ QString writePrivilegedScript(const QStringList& commands, const QString& direct
         content += command + u'\n';
     }
 
+    // Opened without QIODevice::Text on purpose. That flag turns every '\n'
+    // into "\r\n" on Windows, and which script this is - shell or PowerShell -
+    // is decided a few lines up by the operating system, not by Qt's idea of
+    // it. A shell script with carriage returns in it does not run: sh reads
+    // the '\r' as part of the interpreter's name and says the file is not
+    // there. The two decisions being made by different things is the shape of
+    // the bug, so the bytes written are the bytes built.
     QSaveFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    if (!file.open(QIODevice::WriteOnly)) {
         return {};
     }
     file.write(content.toUtf8());

@@ -12,6 +12,19 @@ constexpr std::array<std::string_view, 22> kReservedNames = {
     "con",  "prn",  "aux",  "nul",  "com1", "com2", "com3", "com4", "com5", "com6", "com7",
     "com8", "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9"};
 
+/// Records the first reason a name had to change, and only the first: what a
+/// person wants to read is why the name is not the one they had, and the rest
+/// is consequence.
+struct Note {
+    RenameReason* reason = nullptr;
+
+    void operator()(RenameReason value) const {
+        if (reason != nullptr && *reason == RenameReason::None) {
+            *reason = value;
+        }
+    }
+};
+
 char lowerAscii(char c) noexcept {
     return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
 }
@@ -35,6 +48,54 @@ std::size_t utf8SafeLength(std::string_view text, std::size_t limit) {
         --cut;
     }
     return cut;
+}
+
+/// The rules a name has to satisfy however it was arrived at.
+///
+/// "." and ".." are refused on every system, not as a Windows quirk: a restore
+/// joins this onto a known folder, and a component that climbs writes wherever
+/// the archive says rather than where the user pointed. "." is refused for a
+/// quieter reason - it names the folder it is in, so "a/./b" and "a/b" would
+/// become the same file, and one of them would be lost without a word.
+///
+/// Renamed rather than dropped. Dropping would silently change what the path
+/// means, and a rename shows up in the report, so a person can see it
+/// happened.
+///
+/// Written as a step of its own because it has to run again after the length
+/// cut. A name three hundred bytes long that begins ".." is not a parent
+/// reference; the same name cut to fit is. The fuzzer found exactly that, by
+/// growing a name until the cut landed just after the second dot - and the
+/// check for ".." had already run and passed.
+void applyRules(std::string& name, bool windowsRules, const Note& note) {
+    if (name == "..") {
+        note(RenameReason::ReservedName);
+        name = "__";
+    } else if (name == ".") {
+        note(RenameReason::ReservedName);
+        name = "_";
+    }
+
+    if (windowsRules) {
+        std::size_t end = name.size();
+        while (end > 0 && (name[end - 1] == '.' || name[end - 1] == ' ')) {
+            --end;
+        }
+        if (end != name.size()) {
+            note(RenameReason::TrailingDotOrSpace);
+            name.resize(end);
+        }
+    }
+
+    if (name.empty()) {
+        note(RenameReason::EmptyComponent);
+        name = "_";
+    }
+
+    if (windowsRules && isReserved(name)) {
+        note(RenameReason::ReservedName);
+        name.insert(name.begin(), '_');
+    }
 }
 
 }  // namespace
@@ -99,32 +160,9 @@ std::string NameSanitizer::foldCase(std::string_view text) {
 
 std::string NameSanitizer::sanitizeComponent(std::string_view component,
                                              RenameReason* reason) const {
-    const auto note = [reason](RenameReason value) {
-        if (reason != nullptr && *reason == RenameReason::None) {
-            *reason = value;
-        }
-    };
+    const Note note{reason};
     if (reason != nullptr) {
         *reason = RenameReason::None;
-    }
-
-    if (component.empty()) {
-        note(RenameReason::EmptyComponent);
-        return "_";
-    }
-
-    // ".." is a reserved name on every system, not a Windows quirk: a restore
-    // joins this onto a known folder, and a component that climbs out of it
-    // writes wherever the archive says rather than where the user pointed. An
-    // archive can claim any path it likes, so this has to be refused here even
-    // though nothing Transmit writes would produce one.
-    //
-    // Renamed rather than dropped. Dropping it would silently change what the
-    // path means - "a/../b" and "a/b" would become the same entry - and the
-    // rename shows up in the report, so a person can see it happened.
-    if (component == "..") {
-        note(RenameReason::ReservedName);
-        return "__";
     }
 
     std::string result;
@@ -144,31 +182,19 @@ std::string NameSanitizer::sanitizeComponent(std::string_view component,
         }
     }
 
-    if (windowsRules) {
-        std::size_t end = result.size();
-        while (end > 0 && (result[end - 1] == '.' || result[end - 1] == ' ')) {
-            --end;
-        }
-        if (end != result.size()) {
-            note(RenameReason::TrailingDotOrSpace);
-            result.resize(end);
-        }
-        if (result.empty()) {
-            note(RenameReason::EmptyComponent);
-            result = "_";
-        }
-        if (isReserved(result)) {
-            note(RenameReason::ReservedName);
-            result.insert(result.begin(), '_');
-        }
-    }
+    applyRules(result, windowsRules, note);
 
-    if (options_.maxComponentLength > 0 && result.size() > options_.maxComponentLength) {
+    // Two passes settle the length. Every rule shortens a name except the
+    // reserved-name prefix, and a name that has been given one starts with '_'
+    // and so is not reserved a second time - so the second pass cannot put the
+    // name back over the limit.
+    for (int pass = 0; pass < 2; ++pass) {
+        if (options_.maxComponentLength == 0 || result.size() <= options_.maxComponentLength) {
+            break;
+        }
         note(RenameReason::PathTooLong);
         result.resize(utf8SafeLength(result, options_.maxComponentLength));
-        if (result.empty()) {
-            result = "_";
-        }
+        applyRules(result, windowsRules, note);
     }
 
     return result;

@@ -168,5 +168,71 @@ TEST(Traversal, ANameThatMerelyContainsDotsIsLeftAlone) {
     EXPECT_EQ(sanitizer.sanitizeRelativePath("notes../file.txt"), "notes../file.txt");
 }
 
+/// The cut that makes a name fit can make it a parent reference.
+///
+/// Found by the fuzzer, and it is worth saying exactly how, because reading
+/// the code will not show it: the check for ".." runs on the name that came
+/// in, and the length cut runs afterwards. A name that begins ".." and
+/// carries on for three hundred bytes is not a parent reference and passes
+/// the check; cut to fit, it is one. The tail here is UTF-8 continuation
+/// bytes, which is what walks the cut backwards far enough to land on the
+/// second dot - so this is not a contrived string, it is what an archive
+/// written on a machine with a different encoding looks like.
+TEST(Traversal, ACutThatLandsOnDotDotDoesNotClimb) {
+    for (const OsFamily target : {OsFamily::Linux, OsFamily::MacOs, OsFamily::Windows}) {
+        NameSanitizer sanitizer(SanitizeOptions::forTarget(target));
+
+        const std::string tail(253, '\x80');
+        const std::string safe = sanitizer.sanitizeComponent("..\"" + tail);
+
+        EXPECT_NE(safe, "..") << "target " << static_cast<int>(target);
+        EXPECT_FALSE(safe.empty()) << "target " << static_cast<int>(target);
+    }
+}
+
+/// And the same cut landing on a single dot, which is quieter and still
+/// loses a file: "." names the folder it is already in, so two entries that
+/// were different files arrive as one and the second overwrites the first.
+TEST(Traversal, ACutThatLandsOnASingleDotDoesNotNameItsOwnFolder) {
+    for (const OsFamily target : {OsFamily::Linux, OsFamily::MacOs, OsFamily::Windows}) {
+        NameSanitizer sanitizer(SanitizeOptions::forTarget(target));
+
+        const std::string tail(254, '\x80');
+        EXPECT_NE(sanitizer.sanitizeComponent(".\"" + tail), ".")
+            << "target " << static_cast<int>(target);
+    }
+}
+
+/// Whatever the rules do to a name, they leave one that fits.
+///
+/// The reserved-name rule is the only one that makes a name longer, and it
+/// runs after the cut, so this is the pairing that could hand back a name a
+/// filesystem refuses - a failure that would arrive as a write error on
+/// somebody's restore rather than as a rename in the report.
+TEST(Traversal, ACutNameStillFits) {
+    for (const OsFamily target : {OsFamily::Linux, OsFamily::MacOs, OsFamily::Windows}) {
+        NameSanitizer sanitizer(SanitizeOptions::forTarget(target));
+        const std::size_t limit = sanitizer.options().maxComponentLength;
+
+        for (const std::string& name :
+             {std::string(600, 'a'), "con" + std::string(600, '.'), "nul." + std::string(600, 'x'),
+              std::string(600, ' '), std::string(600, '\x80')}) {
+            const std::string safe = sanitizer.sanitizeComponent(name);
+            EXPECT_LE(safe.size(), limit)
+                << "target " << static_cast<int>(target) << ", name of " << name.size() << " bytes";
+            EXPECT_FALSE(safe.empty()) << "target " << static_cast<int>(target);
+        }
+    }
+}
+
+/// A cut is a reason to tell the person about, and it used to be the only
+/// one recorded when the cut also made the name illegal.
+TEST(Traversal, ACutIsReported) {
+    NameSanitizer sanitizer(SanitizeOptions::forTarget(OsFamily::Linux));
+    RenameReason reason = RenameReason::None;
+    static_cast<void>(sanitizer.sanitizeComponent(std::string(600, 'a'), &reason));
+    EXPECT_EQ(reason, RenameReason::PathTooLong);
+}
+
 }  // namespace
 }  // namespace transmit::format

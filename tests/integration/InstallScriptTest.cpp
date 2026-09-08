@@ -49,6 +49,7 @@ private slots:
     void aNameCannotEscapeAComment();
     void aNameCannotBreakOutOfThePowerShellScript();
     void theScriptSaysItHasNotBeenRun();
+    void theLinesEndTheWayTheScriptNeedsThemTo();
 
 private:
     [[nodiscard]] std::unique_ptr<testing::PlatformWithDrives> platformUsing(
@@ -297,6 +298,36 @@ void InstallScriptTest::theScriptSaysItHasNotBeenRun() {
                                 {{QStringLiteral("winget"), QStringLiteral("Mozilla.Firefox")}})});
     QVERIFY(wrote(windowsWriter, windowsPlan, QStringLiteral("promise-windows"))
                 .contains(QStringLiteral("Nothing here has been run")));
+}
+
+/// A shell script with carriage returns in it does not run.
+///
+/// sh reads the '\r' as part of the interpreter's name and reports that
+/// /bin/sh is not there, which is a bewildering thing to be told. The bytes
+/// used to be written with QIODevice::Text, which turns every newline into
+/// "\r\n" on Windows - so which script gets written was decided by the
+/// operating system and how it gets written was decided by Qt, and only the
+/// first of those knew it was a shell script. Stated for both scripts,
+/// because the point is that the file is the bytes that were built.
+void InstallScriptTest::theLinesEndTheWayTheScriptNeedsThemTo() {
+    const auto posix =
+        platformUsing(platform::PackageSource::Apt, QStringLiteral("sudo apt install -y"));
+    const InstallScriptWriter shell(*posix);
+    const InstallPlan shellPlan = shell.plan(
+        {app(QStringLiteral("Firefox"), {{QStringLiteral("apt"), QStringLiteral("firefox")}})});
+    const QString script = wrote(shell, shellPlan, QStringLiteral("endings"));
+
+    QVERIFY2(script.startsWith(QStringLiteral("#!/bin/sh\n")), qPrintable(script.left(40)));
+    QVERIFY2(!script.contains(u'\r'), "a shell script may not carry a carriage return");
+
+    const auto windows = platformUsing(platform::PackageSource::Winget,
+                                       QStringLiteral("winget install"), format::OsFamily::Windows);
+    const InstallScriptWriter powerShell(*windows);
+    const InstallPlan windowsPlan =
+        powerShell.plan({app(QStringLiteral("Firefox"),
+                             {{QStringLiteral("winget"), QStringLiteral("Mozilla.Firefox")}})});
+
+    QVERIFY(!wrote(powerShell, windowsPlan, QStringLiteral("endings-windows")).contains(u'\r'));
 }
 
 }  // namespace transmit::core

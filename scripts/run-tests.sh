@@ -27,10 +27,20 @@ echo "::group::Re-running the failures verbosely"
 ctest --test-dir "$build" --rerun-failed --output-on-failure --verbose || true
 echo "::endgroup::"
 
+# Which suites to ask, taken from the run that just failed rather than from a
+# list written here. A fixed list is a list that is right until somebody adds
+# the four hundred and sixty-second test: InstallScript crashed on Windows,
+# was not on the list, and so arrived as a name, a number and nothing else.
+failures="$(sed -n '/The following tests FAILED:/,$p' "$log" \
+            | sed -n 's/^[[:space:]]*[0-9]\{1,\} - \([^ ]*\) .*/\1/p' \
+            | sort -u)"
+
 echo "::group::Reports written straight to a file"
-for suite in UiSmoke RestoreUndo ContinuityRoundTrip PathRewrite SecretStore Update; do
+for suite in $failures; do
     for binary in "$build/tests/ui/transmit_${suite}_test" \
                   "$build/tests/integration/transmit_${suite}_test" \
+                  "$build/tests/unit/transmit_${suite}_test" \
+                  "$build/tests/security/transmit_${suite}_test" \
                   "$build/transmit_${suite}_test"; do
         for candidate in "$binary" "$binary.exe"; do
             [ -x "$candidate" ] || continue
@@ -40,6 +50,13 @@ for suite in UiSmoke RestoreUndo ContinuityRoundTrip PathRewrite SecretStore Upd
             if [ -s "$report" ]; then
                 echo "----- $suite -----"
                 cat "$report"
+            else
+                # A report file that stayed empty is itself the answer: the
+                # binary died before QtTest could write a line. Run it again
+                # with the output going nowhere but the terminal, which is the
+                # one place a crash message survives.
+                echo "----- $suite (wrote no report - running it in the open) -----"
+                QT_QPA_PLATFORM=offscreen TRANSMIT_NO_UPDATE_CHECK=1 "$candidate" 2>&1 || true
             fi
             break 2
         done

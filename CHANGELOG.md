@@ -116,6 +116,21 @@ notes say so.
 
 ### Fixed
 
+- A file could be written outside the folder a restore was pointed at. A name
+  is refused if it is `..`, and then cut to fit the target filesystem's length
+  limit — in that order, so a name three hundred bytes long that began `..`
+  passed the check and became `..` when it was cut. The rules now run again
+  after the cut, and `.` is refused alongside `..`: it names the folder it is
+  already in, so two entries arrive as one file and the second overwrites the
+  first without a word. Found by the fuzzer; the input it found it with is
+  committed, and replays on every build from now on, fuzzer or no fuzzer.
+- The scripts a restore leaves behind are written byte for byte. All three were
+  opened in text mode, which on Windows turns every newline into a carriage
+  return and a newline — and a shell script with carriage returns in it does
+  not run: `sh` reads the `\r` as part of the interpreter's name and reports
+  that `/bin/sh` is not there. Which script gets written is decided by the
+  operating system and how it got written was decided by Qt's idea of the
+  operating system, which is two decisions where there should be one.
 - Undoing a rewritten settings file tries harder, and says where the file is
   when it cannot. Putting an original back has to clear what is in its place
   first, so if the move then fails the only copy is under a name the person has
@@ -203,6 +218,20 @@ notes say so.
 
 ### Testing
 
+- A fuzzer that crashes says which property it broke. Both of the path
+  fuzzer's properties ended in a bare `abort()`, and an optimising build folds
+  two identical calls into one — so the stack trace named whichever line the
+  compiler kept, and the crash could not say whether a path had climbed out of
+  its folder or merely failed to resolve. It now prints the property, the input
+  and what came out, before it stops.
+- A suite that dies is asked what happened, whichever suite it is. When ctest
+  reports a failure it loses the test's own output, so the run asks QtTest to
+  write its report to a file instead — but only for six suites named in the
+  script. `InstallScript` was the four hundred and sixty-second test, was not
+  among the six, and arrived from Windows as a name, a number and nothing at
+  all. The list is now the failures the run just had, and a suite that wrote no
+  report at all is run again in the open, because that is what a crash before
+  the first line looks like.
 - A security suite, checking the properties SECURITY.md states rather than
   leaving them as prose: every shape of path an archive could use to get out of
   the folder it was pointed at, on both path styles, and the refusals the

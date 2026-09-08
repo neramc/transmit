@@ -59,6 +59,18 @@ shell with `'\''` or for PowerShell by doubling the quote; a name that goes
 into a comment has its line breaks taken out, because a comment ends at the
 newline and what follows it is a command.
 
+**Nothing an archive names is written outside the folder you pointed at.** A
+path in an archive is a claim, not an instruction: a component that is `..`
+climbs out of the destination, and `.` names the folder it is already in, so
+two entries become one file and one of them is lost. Both are renamed rather
+than dropped, because dropping one silently changes what the path means. The
+rule is applied again after the name is cut to fit the target filesystem's
+length limit — the fuzzer found that a name three hundred bytes long beginning
+`..` passed the check and then became `..` when it was cut, which is the whole
+of the hole. `PathTokenMap::resolve` then refuses anything that still lands
+outside the destination, checking rather than assuming, because it is the layer
+that actually makes the promise.
+
 **The archive protects names as well as contents.** Encryption is AES-256-GCM
 with scrypt key derivation, and the manifest is encrypted too — a file list is
 not a small thing to leak. A wrong passphrase is rejected on the header rather

@@ -7,6 +7,7 @@
 /// including invalid UTF-8, which is where a length calculation goes
 /// wrong.
 
+#include <cstdio>
 #include <cstdlib>
 #include <string>
 #include <string_view>
@@ -15,6 +16,26 @@
 #include "format/PathToken.h"
 
 #include "fuzz/FuzzMain.h"
+
+namespace {
+
+/// Says what broke, then stops.
+///
+/// Both properties here used to end in a bare std::abort(), and an optimising
+/// build folds two identical calls into one - so the stack trace named
+/// whichever line the compiler kept, and the crash could not say which of the
+/// two properties it was. Printing first also puts the input's shape in the
+/// log beside the trace, where a person reading a failed job can see it
+/// without fetching the artifact.
+[[noreturn]] void broke(const char* property, const std::string& input,
+                        const std::string& produced) {
+    std::fprintf(stderr, "\nPROPERTY BROKEN: %s\n  in:  %s\n  out: %s\n", property, input.c_str(),
+                 produced.c_str());
+    std::fflush(stderr);
+    std::abort();
+}
+
+}  // namespace
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
     using namespace transmit::format;
@@ -32,13 +53,19 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
     NameSanitizer sanitizer(SanitizeOptions::forTarget(family));
     const std::string safe = sanitizer.sanitizeRelativePath(relative);
 
-    // No component may be a parent reference, whatever went in.
+    // No component may be a parent reference, whatever went in - nor a
+    // reference to the folder it is already in, which is quieter and still
+    // loses a file: "a/./b" and "a/b" name the same place, so two entries
+    // become one and the second overwrites the first.
     std::size_t start = 0;
     while (start <= safe.size()) {
         const std::size_t next = safe.find('/', start);
         const std::size_t end = (next == std::string::npos) ? safe.size() : next;
         if (safe.compare(start, end - start, "..") == 0) {
-            std::abort();
+            broke("a sanitised path still has a \"..\" component", relative, safe);
+        }
+        if (safe.compare(start, end - start, ".") == 0) {
+            broke("a sanitised path still has a \".\" component", relative, safe);
         }
         if (next == std::string::npos) {
             break;
@@ -53,7 +80,7 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
         if (const auto resolved = map.resolve(TokenizedPath{PathTokenId::Documents, safe})) {
             // Resolving must stay inside the folder it resolved against.
             if (resolved->rfind(*base, 0) != 0) {
-                std::abort();
+                broke("resolving landed outside the folder it resolved against", *base, *resolved);
             }
         }
     }
