@@ -128,8 +128,26 @@ int RewritePlan::revert(QStringList* errors) const {
         QFile::remove(path);
         if (QFile::rename(backup, path)) {
             ++restored;
-        } else if (errors != nullptr) {
-            *errors << QCoreApplication::translate("Rewrite", "Could not put back %1").arg(path);
+            continue;
+        }
+
+        // A rename can fail where a copy still works - across a filesystem
+        // boundary, or with something holding the name open - so that is tried
+        // before giving up.
+        if (QFile::copy(backup, path)) {
+            QFile::remove(backup);
+            ++restored;
+            continue;
+        }
+
+        // And if neither worked, say where the file is. The remove above has
+        // already happened, so the only copy of what the user had is under a
+        // name they have never heard of; a message that does not name it is
+        // the same as the file having vanished.
+        if (errors != nullptr) {
+            *errors << QCoreApplication::translate(
+                           "Rewrite", "Could not put back %1 - the original is still at %2")
+                           .arg(path, backup);
         }
     }
     return restored;

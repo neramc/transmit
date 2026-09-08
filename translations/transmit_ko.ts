@@ -2118,11 +2118,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Could not put back %1</source>
+        <source>Pointed at &quot;%1&quot; instead of &quot;%2&quot;.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Pointed at &quot;%1&quot; instead of &quot;%2&quot;.</source>
+        <source>Could not put back %1 - the original is still at %2</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

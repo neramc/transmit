@@ -116,6 +116,14 @@ notes say so.
 
 ### Fixed
 
+- Undoing a rewritten settings file tries harder, and says where the file is
+  when it cannot. Putting an original back has to clear what is in its place
+  first, so if the move then fails the only copy is under a name the person has
+  never heard of - and the message did not say that name. It now tries a copy
+  where the move failed, which works across a filesystem boundary and where
+  something holds the name open, and if neither works it says where the
+  original still is.
+
 - A program name out of an archive can no longer put a command into the install
   script. Three places pasted a name or a package identifier into the generated
   script without quoting it: the message printed when flatpak is missing, the
