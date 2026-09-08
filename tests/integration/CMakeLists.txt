@@ -5,7 +5,7 @@
 set(suites ContinuityRoundTrip PathRewrite SecretStore Catalog SelectionCodec
            VerifyService StageTimer ResumeCapture ResumeRestore Eject
            FormatCompatibility Update CloudFiles ScopeRule WrittenValues
-           SecretsDomain ConsistentCopy)
+           SecretsDomain ConsistentCopy InstallScript)
 
 # What a dpkg or a pacman listing means is read by code that is only compiled
 # on Linux, so a target for it anywhere else would have nothing to link

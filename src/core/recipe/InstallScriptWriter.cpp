@@ -42,6 +42,19 @@ QString escapeForPowerShell(const QString& text) {
     return u'\'' + escaped + u'\'';
 }
 
+/// Text that is safe to put after a `#`.
+///
+/// A comment ends at the newline, so a name with one in it does not stay a
+/// comment: everything after it is a line of the script. The names and
+/// identifiers here come out of the archive's application list, and an archive
+/// is the one thing in the room somebody else may have written.
+QString asComment(const QString& text) {
+    QString flat = text;
+    flat.replace(u'\r', u' ');
+    flat.replace(u'\n', u' ');
+    return flat;
+}
+
 }  // namespace
 
 InstallScriptWriter::InstallScriptWriter(const platform::PlatformService& platformService)
@@ -132,7 +145,7 @@ QString InstallScriptWriter::buildShellScript(const InstallPlan& plan) const {
     } else if (!nativePackages.isEmpty()) {
         script += QStringLiteral("# Install these with your package manager:\n");
         for (const QString& package : nativePackages) {
-            script += QStringLiteral("#   %1\n").arg(package);
+            script += QStringLiteral("#   %1\n").arg(asComment(package));
         }
         script += u'\n';
     }
@@ -146,8 +159,14 @@ QString InstallScriptWriter::buildShellScript(const InstallPlan& plan) const {
             script += u' ' + escapeForShell(package);
         }
         script += QStringLiteral("\nelse\n");
-        script += QStringLiteral("    echo 'Install flatpak first, or fetch these yourself:%1'\n")
-                      .arg(flatpakPackages.join(QStringLiteral(", ")));
+        // Quoted as one string rather than pasted inside one. Written the
+        // other way round, a package name with a single quote in it closed the
+        // echo and everything after it was a command - in a file whose whole
+        // point is that a person reads it and then runs it.
+        script += QStringLiteral("    echo %1\n")
+                      .arg(escapeForShell(QStringLiteral("Install flatpak first, or fetch these "
+                                                         "yourself: ") +
+                                          flatpakPackages.join(QStringLiteral(", "))));
         script += QStringLiteral("fi\n\n");
     }
 
@@ -164,7 +183,7 @@ QString InstallScriptWriter::buildShellScript(const InstallPlan& plan) const {
         script += QStringLiteral("# offers them. Their settings have already been restored, so\n");
         script += QStringLiteral("# installing them by hand should pick up where you left off.\n");
         for (const QString& name : plan.manual) {
-            script += QStringLiteral("#   %1\n").arg(name);
+            script += QStringLiteral("#   %1\n").arg(asComment(name));
         }
         script += u'\n';
     }
@@ -215,7 +234,8 @@ QString InstallScriptWriter::buildPowerShellScript(const InstallPlan& plan) cons
             "Write-Host 'Their settings are already restored, so installing them by hand'\n");
         script += QStringLiteral("Write-Host 'should pick up where you left off:'\n");
         for (const QString& name : plan.manual) {
-            script += QStringLiteral("Write-Host '  %1'\n").arg(name);
+            script += QStringLiteral("Write-Host %1\n")
+                          .arg(escapeForPowerShell(QStringLiteral("  ") + name));
         }
     }
     return script;

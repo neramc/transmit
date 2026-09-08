@@ -67,11 +67,23 @@ public:
         const QStringList& paths) const override {
         return real_->createSnapshot(paths);
     }
+    /// Answer with a package manager this machine does not have.
+    ///
+    /// The install script is written differently for each of them, and only
+    /// one of the nine can be exercised on any given machine - which is how a
+    /// script for a system nobody here runs comes to be written by code
+    /// nobody here has run.
+    void usePackageManager(platform::PackageSource source, QString installCommand) {
+        packageSource_ = source;
+        installCommand_ = std::move(installCommand);
+        chosenPackageManager_ = true;
+    }
+
     [[nodiscard]] QString packageInstallCommand() const override {
-        return real_->packageInstallCommand();
+        return chosenPackageManager_ ? installCommand_ : real_->packageInstallCommand();
     }
     [[nodiscard]] platform::PackageSource nativePackageSource() const override {
-        return real_->nativePackageSource();
+        return chosenPackageManager_ ? packageSource_ : real_->nativePackageSource();
     }
     [[nodiscard]] std::unique_ptr<platform::SettingsProvider> settingsProvider() const override {
         return real_->settingsProvider();
@@ -99,6 +111,9 @@ private:
     std::unique_ptr<platform::PlatformService> real_;
     format::OsFamily pretend_ = format::OsFamily::Unknown;
     std::function<std::unique_ptr<platform::SecretStore>()> makeStore_;
+    bool chosenPackageManager_ = false;
+    platform::PackageSource packageSource_ = platform::PackageSource::Unknown;
+    QString installCommand_;
     QList<platform::AccessObstacle> obstacles_;
     QList<platform::StorageVolume> volumes_;
 };

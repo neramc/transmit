@@ -116,6 +116,19 @@ notes say so.
 
 ### Fixed
 
+- A program name out of an archive can no longer put a command into the install
+  script. Three places pasted a name or a package identifier into the generated
+  script without quoting it: the message printed when flatpak is missing, the
+  list of programs to install by hand in the shell script, and the same list in
+  the PowerShell one. A name carrying an apostrophe closed the string it was
+  sitting in and everything after it was a line of a script; a name carrying a
+  newline ended the comment it was sitting in and did the same. Every name and
+  identifier is quoted now - `'\''` for the shell, a doubled quote for
+  PowerShell - and a name that goes into a comment has its line breaks taken
+  out. All of them come out of the archive's application list, which is the one
+  thing in the room somebody else may have written, and the script is a file a
+  person reads and then runs having just typed their password.
+
 - A NixOS machine no longer reports packages that are not packages. `nix
   profile list` prints several lines for each one, and the rule read the last
   word of every line - so an index of 0 became a package called "0", and the

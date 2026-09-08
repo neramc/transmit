@@ -49,6 +49,16 @@ privileged settings are your decision and your password. It writes
 `install-apps.sh` / `.ps1` and `apply-settings.sh` / `.ps1`, tells you they are
 there, and stops.
 
+That division is what makes the next rule necessary rather than optional.
+**Every program name and package identifier in a generated script is quoted,
+including the ones that only appear in a message or a comment.** All of them
+come out of the archive's application list, and an archive is the one thing in
+the room somebody else may have written — while the script is a file you read,
+trust, and then run having just typed your password. A name is quoted for the
+shell with `'\''` or for PowerShell by doubling the quote; a name that goes
+into a comment has its line breaks taken out, because a comment ends at the
+newline and what follows it is a command.
+
 **The archive protects names as well as contents.** Encryption is AES-256-GCM
 with scrypt key derivation, and the manifest is encrypted too — a file list is
 not a small thing to leak. A wrong passphrase is rejected on the header rather
