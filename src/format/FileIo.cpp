@@ -55,6 +55,27 @@ std::string describeErrno(int code) {
 #endif
 }
 
+/// The size of a whole filesystem block for an open file.
+///
+/// Every way of giving disk back works in whole blocks, so this is what a
+/// region has to be trimmed to. Where the system will not say, 4096 is the
+/// answer for every filesystem this program is likely to meet, and being
+/// wrong about it only means giving back less than was possible.
+std::uint64_t blockSizeFor(std::FILE* handle) {
+    constexpr std::uint64_t kAssumedBlockSize = 4096;
+#if defined(_WIN32)
+    (void)handle;
+    return kAssumedBlockSize;
+#else
+    const int descriptor = ::fileno(handle);
+    struct stat about {};
+    if (descriptor >= 0 && ::fstat(descriptor, &about) == 0 && about.st_blksize > 0) {
+        return static_cast<std::uint64_t>(about.st_blksize);
+    }
+    return kAssumedBlockSize;
+#endif
+}
+
 Error errnoError(const std::filesystem::path& path, const char* what) {
     const int code = errno;
     ErrorCode mapped = ErrorCode::IoError;
@@ -429,6 +450,19 @@ Status FileStream::punchHole(std::uint64_t offset, std::uint64_t length) {
     }
     TRANSMIT_CHECK(flush());
 
+    // Trimmed inward to whole filesystem blocks, on every system, so the three
+    // of them behave the same way. macOS refuses an unaligned region outright,
+    // while Linux and Windows accept one and zero the bytes at its edges -
+    // which would make the same call destroy data on two systems and not on
+    // the third. Nothing here needs that: the regions handed to this are ones
+    // that already read as zeroes.
+    const std::uint64_t blockSize = blockSizeFor(handle_);
+    const std::uint64_t first = ((offset + blockSize - 1) / blockSize) * blockSize;
+    const std::uint64_t last = ((offset + length) / blockSize) * blockSize;
+    if (last <= first) {
+        return ok();  // not a whole block of it, so there is nothing to give back
+    }
+
 #if defined(_WIN32)
     // Marked first, so this gives the region back rather than writing zeroes
     // over it. On a file that is already marked - which is every file the
@@ -445,52 +479,31 @@ Status FileStream::punchHole(std::uint64_t offset, std::uint64_t length) {
     }
 
     FILE_ZERO_DATA_INFORMATION zero{};
-    zero.FileOffset.QuadPart = static_cast<LONGLONG>(offset);
-    zero.BeyondFinalZero.QuadPart = static_cast<LONGLONG>(offset + length);
+    zero.FileOffset.QuadPart = static_cast<LONGLONG>(first);
+    zero.BeyondFinalZero.QuadPart = static_cast<LONGLONG>(last);
     DWORD returned = 0;
-    // Unchecked, like the other two: every way it fails leaves the file
-    // holding the right bytes, and NTFS trims the region to whole clusters by
-    // itself rather than refusing an offset that is not on one.
     (void)::DeviceIoControl(native, FSCTL_SET_ZERO_DATA, &zero, static_cast<DWORD>(sizeof(zero)),
                             nullptr, 0, &returned, nullptr);
-    return ok();
-#else
+#elif defined(__APPLE__)
     const int descriptor = ::fileno(handle_);
     if (descriptor < 0) {
         return ok();
     }
-
-    // Both calls want whole filesystem blocks, so the hole is trimmed inward
-    // to them. Trimming the other way would give back a block that holds real
-    // data at one end of it.
-    struct stat about {};
-    const auto blockSize =
-        static_cast<std::uint64_t>(::fstat(descriptor, &about) == 0 && about.st_blksize > 0
-                                       ? static_cast<std::uint64_t>(about.st_blksize)
-                                       : 4096U);
-
-    const std::uint64_t first = ((offset + blockSize - 1) / blockSize) * blockSize;
-    const std::uint64_t last = ((offset + length) / blockSize) * blockSize;
-    if (last <= first) {
-        return ok();  // not a whole block of it, so there is nothing to give back
-    }
-
-#if defined(__APPLE__)
     fpunchhole_t hole{};
     hole.fp_offset = static_cast<off_t>(first);
     hole.fp_length = static_cast<off_t>(last - first);
     (void)::fcntl(descriptor, F_PUNCHHOLE, &hole);
 #elif defined(__linux__)
+    const int descriptor = ::fileno(handle_);
+    if (descriptor < 0) {
+        return ok();
+    }
     (void)::fallocate(descriptor, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE,
                       static_cast<off_t>(first), static_cast<off_t>(last - first));
-#else
-    (void)first;
-    (void)last;
 #endif
     // Deliberately unchecked: see the header. Every way this fails leaves the
     // file holding exactly the bytes it should.
     return ok();
-#endif
 }
 
 Status FileStream::declareSparse() {

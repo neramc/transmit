@@ -113,6 +113,13 @@ public:
     /// has been marked sparse - but APFS fills the gap in, so on macOS the
     /// zeroes have to be handed back afterwards rather than never written.
     ///
+    /// Only whole filesystem blocks are given back; a region is trimmed inward
+    /// to them, so a request smaller than one block does nothing at all. That
+    /// keeps the three systems saying the same thing - macOS refuses an
+    /// unaligned region outright, while the other two accept one and zero the
+    /// bytes at its edges - and it means this can never take away data that
+    /// happened to share a block with the hole.
+    ///
     /// Refusals are success. A filesystem with no holes to give, a region too
     /// small to align, a network mount that will not: in every one of those
     /// the file already holds the right bytes, and failing a restore over how

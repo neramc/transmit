@@ -249,6 +249,39 @@ TEST_F(FileIoTest, GivesBackTheDiskUnderARegion) {
     }
 }
 
+TEST_F(FileIoTest, WhatSharesABlockWithAHoleIsLeftAlone) {
+    // The edges of a region are the case the three systems disagree about:
+    // macOS refuses an unaligned one outright, Linux and Windows accept it and
+    // zero the bytes at its ends. Trimmed inward, all three leave whatever
+    // else lives in those blocks exactly as it was.
+    constexpr std::uint64_t kLength = 2 * 1024 * 1024;
+    constexpr std::uint64_t kOffBy = 100;
+    const ByteBuffer data(kLength, Byte{0x4D});
+
+    const auto path = directory_ / "shared-block";
+    {
+        auto stream = FileStream::open(path, FileStream::Mode::Write);
+        ASSERT_TRUE(stream) << stream.error().toString();
+        ASSERT_TRUE(stream->write(data));
+        ASSERT_TRUE(stream->sync());
+    }
+    {
+        auto stream = FileStream::open(path, FileStream::Mode::ReadWrite);
+        ASSERT_TRUE(stream) << stream.error().toString();
+        ASSERT_TRUE(stream->punchHole(kLength / 4 + kOffBy, kLength / 2));
+    }
+
+    const auto readBack = readWholeFile(path);
+    ASSERT_TRUE(readBack) << readBack.error().toString();
+    ASSERT_EQ(readBack->size(), kLength);
+
+    // The byte the caller named is inside a block that also holds data, so it
+    // is untouched; well inside the region is a whole block and is gone.
+    EXPECT_EQ((*readBack)[kLength / 4 + kOffBy], Byte{0x4D});
+    EXPECT_EQ((*readBack)[kLength / 4 + kOffBy + kLength / 2 - 1], Byte{0x4D});
+    EXPECT_EQ((*readBack)[kLength / 4 + 8192], Byte{0});
+}
+
 TEST_F(FileIoTest, PunchingNothingIsNotAFailure) {
     const auto path = directory_ / "not-punched";
     ASSERT_TRUE(writeFileAtomically(path, textBytes("short")));
