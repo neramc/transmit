@@ -125,6 +125,15 @@ notes say so.
   catalogue's schema refuses `..` in a pattern, but a rule also arrives inside
   an archive and in an overlay in the user's own configuration folder, and
   neither goes past the schema.
+- An exclusion set for one application is applied. Merging a folder's rule with
+  the capture's handled every narrowing field except the pattern list, which it
+  dropped — while both the header and the function's own comment said "a root
+  may take less by size, date, type or pattern". So a per-application
+  `exclude` in a selection document was read, kept, and written back out when
+  the selection was saved, and did nothing to the capture; the person could
+  open their own file, read the exclusion in it, and find every one of those
+  files carried anyway. The scan also built its matcher from two of the three
+  places a pattern can come from, so both halves are one answer now.
 - The grade for a journey and the sentence explaining it now come from the same
   entry in the catalogue. The grade took the most specific entry, which is what
   lets a recipe say "adapted everywhere, except to Windows, where it is manual"

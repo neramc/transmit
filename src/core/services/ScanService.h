@@ -139,8 +139,7 @@ public:
                                   const ProgressCallback& progress = {}) const;
 
 private:
-    void scanRoot(const CaptureRoot& root, const CaptureSelection& selection,
-                  const ExcludeMatcher& globalExcludes, ScanResult& result,
+    void scanRoot(const CaptureRoot& root, const CaptureSelection& selection, ScanResult& result,
                   CancelToken& cancelToken, const ProgressCallback& progress) const;
 
     // Only the folder table is needed after construction; holding the whole

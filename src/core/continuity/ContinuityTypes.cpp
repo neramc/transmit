@@ -88,6 +88,18 @@ ScopeRule ScopeRule::narrowedBy(const ScopeRule& root) const {
     }
     merged.excludeExtensions |= root.excludeExtensions;
 
+    // And the patterns, which were the one narrowing rule this function did
+    // not apply - while its own comment, and the header's, said it did. A
+    // per-application "exclude *.log" in a selection document was decoded,
+    // stored, written back out again and then quietly dropped here, so the
+    // person saw their exclusion in the file they had saved and none of it in
+    // the capture.
+    for (const QString& pattern : root.excludePatterns) {
+        if (!merged.excludePatterns.contains(pattern)) {
+            merged.excludePatterns.push_back(pattern);
+        }
+    }
+
     if (root.modifiedSince.isValid() &&
         (!merged.modifiedSince.isValid() || root.modifiedSince > merged.modifiedSince)) {
         merged.modifiedSince = root.modifiedSince;

@@ -62,6 +62,7 @@ private slots:
     void aFolderThatCannotBeOpenedIsReportedRatherThanIgnored();
     void aSizeLimitLeavesTheBigFilesBehindAndSaysWhy();
     void anExtensionFilterTakesOnlyWhatWasAskedFor();
+    void aFoldersOwnExclusionIsHonoured();
     void aDateBoundLeavesTheOldFilesBehind();
     void theMoreSpecificRootKeepsTheApplicationItBelongsTo();
     void everyFileGetsItsOwnersNameNotJustTheFirst();
@@ -1390,6 +1391,50 @@ void ContinuityRoundTripTest::aSizeLimitLeavesTheBigFilesBehindAndSaysWhy() {
         if (item.type == format::EntryType::File) {
             QVERIFY2(item.size <= 10 * 1024, qPrintable(item.absolutePath));
         }
+    }
+}
+
+/// A rule carried by one folder rather than by the whole capture.
+///
+/// Every other narrowing a folder can do was checked; this one was not, and it
+/// did not work. The pattern list was the only field the merge left out, so an
+/// exclusion set for a single application - which is where a selection
+/// document puts one - was decoded, kept, saved back out, and then had no
+/// effect on anything. Stated end to end rather than on the merge alone,
+/// because the merge was only half of it: the scan built its matcher from two
+/// of the three places a pattern can come from.
+void ContinuityRoundTripTest::aFoldersOwnExclusionIsHonoured() {
+    core::ScanService scanner(*platform_);
+    core::CancelToken token;
+
+    core::CaptureSelection selection = documentsSelection();
+    const core::ScanResult everything = scanner.scan(selection, token, {});
+
+    const auto textFiles = [](const core::ScanResult& result) {
+        int count = 0;
+        for (const core::ScannedItem& item : result.items) {
+            if (item.absolutePath.endsWith(QStringLiteral(".txt"))) {
+                ++count;
+            }
+        }
+        return count;
+    };
+    QVERIFY2(textFiles(everything) > 0, "the fixture has no text files to leave out");
+
+    // Set on the folder's own rule, not on the capture's. "**/" so it reaches
+    // the ones in subfolders too: a bare "*" does not cross a directory
+    // boundary here, which is what .gitignore means by it.
+    for (core::CaptureRoot& root : selection.roots) {
+        root.scope.excludePatterns = QStringList{QStringLiteral("**/*.txt")};
+    }
+
+    const core::ScanResult narrowed = scanner.scan(selection, token, {});
+    QCOMPARE(textFiles(narrowed), 0);
+    QVERIFY2(narrowed.fileCount < everything.fileCount, "the exclusion changed nothing");
+
+    for (const core::ScannedItem& item : narrowed.items) {
+        QVERIFY2(!item.absolutePath.endsWith(QStringLiteral(".txt")),
+                 qPrintable(item.absolutePath));
     }
 }
 

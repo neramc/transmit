@@ -30,6 +30,7 @@ private slots:
     void theTypesAreIntersectedAndTheExclusionsAreAdded();
     void aFolderCanHideHiddenFilesButNotShowThem();
     void aPolicyForTheWholeCaptureIsNotOverruled();
+    void thePatternsFromBothSidesAreKept();
     void narrowingIsNeverWidening();
 };
 
@@ -165,6 +166,40 @@ void ScopeRuleTest::aPolicyForTheWholeCaptureIsNotOverruled() {
              "a folder widened a policy the capture did not ask for");
     QVERIFY2(!ScopeRule{}.narrowedBy(keen).fetchCloudFiles,
              "a folder widened a policy the capture did not ask for");
+}
+
+/// The one narrowing rule the merge did not apply.
+///
+/// "A root may take less by size, date, type or pattern" is what this file
+/// says at the top and what the header says beside the function, and the
+/// pattern half was not true: a per-application "exclude *.log" in a selection
+/// document was decoded, kept, written back out when the selection was saved -
+/// and dropped here. So the person could open the file they had saved, read
+/// their own exclusion in it, and find every one of those files in the
+/// capture.
+void ScopeRuleTest::thePatternsFromBothSidesAreKept() {
+    ScopeRule capture;
+    capture.excludePatterns = QStringList{QStringLiteral("*.iso")};
+
+    ScopeRule folder;
+    folder.excludePatterns = QStringList{QStringLiteral("*.log"), QStringLiteral("*.iso")};
+
+    const ScopeRule merged = capture.narrowedBy(folder);
+
+    QVERIFY2(merged.excludePatterns.contains(QStringLiteral("*.iso")),
+             "the capture's own exclusion may not be dropped");
+    QVERIFY2(merged.excludePatterns.contains(QStringLiteral("*.log")),
+             "the folder's exclusion may not be dropped");
+
+    // One entry each: a pattern both sides named is one exclusion, not two.
+    QCOMPARE(merged.excludePatterns.size(), 2);
+
+    // A folder that names patterns when the capture named none is narrowing,
+    // which is allowed.
+    QCOMPARE(ScopeRule{}.narrowedBy(folder).excludePatterns, folder.excludePatterns);
+
+    // And a folder with nothing to say leaves the capture's list alone.
+    QCOMPARE(capture.narrowedBy(ScopeRule{}).excludePatterns, capture.excludePatterns);
 }
 
 // The property behind all of the above, said once: whatever a folder carries,

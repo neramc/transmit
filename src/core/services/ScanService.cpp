@@ -363,8 +363,6 @@ ScanResult ScanService::scan(const CaptureSelection& selection, CancelToken& can
                              const ProgressCallback& progress) const {
     ScanResult result;
 
-    ExcludeMatcher globalExcludes(selection.scope.excludePatterns);
-
     // Most specific first. Roots overlap by design - a recipe names Firefox's
     // own directory, and a profile may also sweep the whole configuration tree
     // it sits inside - and the order they are visited in decides which one
@@ -387,7 +385,7 @@ ScanResult ScanService::scan(const CaptureSelection& selection, CancelToken& can
         if (cancelToken.isCancelled()) {
             break;
         }
-        scanRoot(root, selection, globalExcludes, result, cancelToken, progress);
+        scanRoot(root, selection, result, cancelToken, progress);
     }
 
     QHash<QString, qsizetype> firstAt;
@@ -428,8 +426,8 @@ ScanResult ScanService::scan(const CaptureSelection& selection, CancelToken& can
 }
 
 void ScanService::scanRoot(const CaptureRoot& root, const CaptureSelection& selection,
-                           const ExcludeMatcher& globalExcludes, ScanResult& result,
-                           CancelToken& cancelToken, const ProgressCallback& progress) const {
+                           ScanResult& result, CancelToken& cancelToken,
+                           const ProgressCallback& progress) const {
     const auto base = tokens_.base(root.token);
     if (!base.has_value()) {
         result.notes.push_back(ContinuityNote{
@@ -450,12 +448,18 @@ void ScanService::scanRoot(const CaptureRoot& root, const CaptureSelection& sele
         return;
     }
 
-    ExcludeMatcher rootExcludes(root.excludePatterns);
-
     // A root may narrow the selection but not widen it, so the two are merged
     // rather than one replacing the other: somebody who set a size limit for
     // the whole capture does not expect one application to ignore it.
     const ScopeRule scope = selection.scope.narrowedBy(root.scope);
+
+    // One matcher for everything that excludes a file here: what the capture
+    // as a whole named, what this root's own rule named - which the merge
+    // above now carries, and used to drop - and the list the recipe attached
+    // to the root. Two matchers built from two of the three was how the
+    // third came to do nothing.
+    ExcludeMatcher excludes(scope.excludePatterns);
+    excludes.add(root.excludePatterns);
 
     QElapsedTimer throttle;
     throttle.start();
@@ -466,7 +470,7 @@ void ScanService::scanRoot(const CaptureRoot& root, const CaptureSelection& sele
         const QString relativeToRoot = QDir(rootPath).relativeFilePath(absolute);
 
         if (!relativeToRoot.isEmpty() && relativeToRoot != QLatin1String(".") &&
-            (globalExcludes.matches(relativeToRoot) || rootExcludes.matches(relativeToRoot))) {
+            excludes.matches(relativeToRoot)) {
             ++result.skippedCount;
             return;
         }
