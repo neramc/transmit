@@ -122,6 +122,17 @@ void CatalogTest::noPathClimbsOutOfTheFolderItNames() {
                      qPrintable(QStringLiteral("%1: %2").arg(recipe.id, step.file)));
             QVERIFY2(!step.target.contains(QStringLiteral("..")),
                      qPrintable(QStringLiteral("%1: %2").arg(recipe.id, step.target)));
+            for (const core::RecipeRewriteRule& rule : step.rewrites) {
+                QVERIFY2(!rule.filePattern.contains(QStringLiteral("..")),
+                         qPrintable(QStringLiteral("%1: %2").arg(recipe.id, rule.filePattern)));
+            }
+        }
+        // The rewrite rules were the ones this walk did not reach, and they
+        // are the ones where a climbing path is worst: the file a rule names
+        // is not merely read, it is edited and swapped in.
+        for (const core::RecipeRewriteRule& rule : recipe.rewrites) {
+            QVERIFY2(!rule.filePattern.contains(QStringLiteral("..")),
+                     qPrintable(QStringLiteral("%1: %2").arg(recipe.id, rule.filePattern)));
         }
     }
 }

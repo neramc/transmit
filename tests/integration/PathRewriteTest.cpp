@@ -53,6 +53,10 @@ private slots:
     void relocatesApplicationStateToWhereTheTargetKeepsIt();
     void relocationLeavesUnknownPathsAlone();
 
+    void aRuleCannotNameAFileOutsideTheFolderItWasGiven();
+    void aWildcardCannotReachOutsideEither();
+    void aWildcardStillFindsWhatItIsFor();
+
 private:
     [[nodiscard]] core::PathTranslator windowsToLinux() const;
     void write(const QString& relative, const QByteArray& content);
@@ -719,6 +723,106 @@ void PathRewriteTest::relocationLeavesUnknownPathsAlone() {
     // A directory whose name merely begins the same way is a different place.
     const format::TokenizedPath lookalike{format::PathTokenId::Home, ".mozillax/notes"};
     QCOMPARE(relocator.relocate(lookalike), lookalike);
+}
+
+/// The file a rewrite rule names comes out of the archive.
+///
+/// Every other thing an archive says about a path is checked before it is
+/// used - a component that climbs is renamed, a token that resolves outside
+/// its folder is refused, a table name that is not an identifier is refused -
+/// and this one was joined to the state root and opened. What happens to a
+/// file this pass names is that it is read, edited, copied aside and swapped,
+/// so a rule reading "../../../.bashrc" is an edit to a file on the restoring
+/// machine that nobody asked for. The shipped catalogue's schema refuses
+/// "..", but a rule also arrives in an archive's application list and in an
+/// overlay in the user's own configuration folder, and neither of those goes
+/// past the schema.
+void PathRewriteTest::aRuleCannotNameAFileOutsideTheFolderItWasGiven() {
+    const QByteArray untouched = "[General]\nPath=C:\\Users\\Bob\\Documents\n";
+    write(QStringLiteral("state/inside.ini"), untouched);
+    write(QStringLiteral("outside.ini"), untouched);
+
+    core::AppRecipe recipe;
+    recipe.id = QStringLiteral("test.hostile");
+    recipe.rewrites.push_back(core::RecipeRewriteRule{QStringLiteral("../outside.ini"),
+                                                      QStringLiteral("ini"),
+                                                      {QStringLiteral("Path")},
+                                                      {},
+                                                      1,
+                                                      {},
+                                                      {}});
+
+    core::RewritePlan plan;
+    core::PathRewriter(windowsToLinux()).planFor(recipe, path(QStringLiteral("state")), plan);
+
+    QCOMPARE(plan.edits().size(), 0);
+    QCOMPARE(plan.apply(), 0);
+    QCOMPARE(read(QStringLiteral("outside.ini")), untouched);
+    QVERIFY2(!QFile::exists(path(QStringLiteral("outside.ini.transmit-staged"))),
+             "nothing may even be staged for a file outside the folder");
+}
+
+/// The other branch of the matcher walks the folder rather than joining a
+/// name to it, so a pattern full of ".." cannot reach out of it - but a
+/// symbolic link inside the folder can, and the archive being restored is
+/// what puts the links there. QDirIterator does not descend into one unless
+/// it is asked to, and this is what says so: adding FollowSymlinks for some
+/// other good reason would otherwise turn "the files this rule matched" into
+/// "any file on the machine the archive chose to point at".
+void PathRewriteTest::aWildcardCannotReachOutsideEither() {
+    const QByteArray untouched = "[General]\nPath=C:\\Users\\Bob\\Documents\n";
+    write(QStringLiteral("state/inside.ini"), untouched);
+    write(QStringLiteral("elsewhere/outside.ini"), untouched);
+
+    if (!QFile::link(path(QStringLiteral("elsewhere")), path(QStringLiteral("state/link")))) {
+        QSKIP("this system does not make symbolic links here");
+    }
+
+    core::AppRecipe recipe;
+    recipe.id = QStringLiteral("test.hostile");
+    recipe.rewrites.push_back(core::RecipeRewriteRule{QStringLiteral("**/*.ini"),
+                                                      QStringLiteral("ini"),
+                                                      {QStringLiteral("Path")},
+                                                      {},
+                                                      1,
+                                                      {},
+                                                      {}});
+
+    core::RewritePlan plan;
+    core::PathRewriter(windowsToLinux()).planFor(recipe, path(QStringLiteral("state")), plan);
+
+    // The one inside was found, so the pattern did work and the count means
+    // something.
+    QCOMPARE(plan.fileCount(), 1);
+    QCOMPARE(plan.apply(), 1);
+    QCOMPARE(read(QStringLiteral("elsewhere/outside.ini")), untouched);
+}
+
+/// A check that refuses everything is not a check, it is a broken feature, so
+/// the wildcards a recipe is meant to use are asked for too. "**" crosses
+/// folders and "*" does not - which is the whole reason there are two of them,
+/// and nothing had ever said so.
+void PathRewriteTest::aWildcardStillFindsWhatItIsFor() {
+    const QByteArray original = "[General]\nPath=C:\\Users\\Bob\\Documents\n";
+    write(QStringLiteral("state/one.ini"), original);
+    write(QStringLiteral("state/deep/two.ini"), original);
+
+    const auto matched = [this](const QString& pattern) {
+        core::AppRecipe recipe;
+        recipe.id = QStringLiteral("test.globs");
+        recipe.rewrites.push_back(core::RecipeRewriteRule{
+            pattern, QStringLiteral("ini"), {QStringLiteral("Path")}, {}, 1, {}, {}});
+
+        core::RewritePlan plan;
+        core::PathRewriter(windowsToLinux()).planFor(recipe, path(QStringLiteral("state")), plan);
+        return plan.fileCount();
+    };
+
+    QCOMPARE(matched(QStringLiteral("*.ini")), 1);
+    QCOMPARE(matched(QStringLiteral("**/*.ini")), 2);
+    QCOMPARE(matched(QStringLiteral("deep/two.ini")), 1);
+    QCOMPARE(matched(QStringLiteral("?.ini")), 0);
+    QCOMPARE(matched(QStringLiteral("one.ini")), 1);
 }
 
 QTEST_MAIN(PathRewriteTest)

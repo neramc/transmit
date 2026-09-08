@@ -1,14 +1,35 @@
 #include "core/rewrite/PathRewriter.h"
 
+#include <QDir>
 #include <QDirIterator>
 #include <QFileInfo>
 #include <QRegularExpression>
 
+#include <string>
+
 #include "core/rewrite/formats/Rewriters.h"
 #include "core/utils/Logging.h"
+#include "format/PathToken.h"
 
 namespace transmit::core {
 namespace {
+
+/// Whether a file a rule named is inside the folder the rule was given.
+///
+/// A rewrite rule's file pattern arrives in the archive's application list, so
+/// it is a claim made by whoever wrote the archive rather than a fact. Joined
+/// to the state root and opened, "../../../../.bashrc" is a real path on this
+/// machine - and what happens to a file this pass names is that it gets
+/// opened, edited and swapped in. The catalogue's schema refuses ".." in a
+/// pattern, but that is a check on the file this project ships: a rule can
+/// also come out of an archive, or out of an overlay in the user's own
+/// configuration folder, and neither goes past the schema. So the promise is
+/// kept where it is made, the way PathTokenMap::resolve keeps the same one.
+bool insideTheFolderItWasGiven(const QString& stateRoot, const QString& candidate) {
+    const std::string root = QDir::cleanPath(stateRoot).toStdString();
+    const std::string path = QDir::cleanPath(candidate).toStdString();
+    return format::isWithin(root, path, format::hostOsFamily());
+}
 
 /// Expands a rule's wildcard file pattern into the files that actually exist
 /// under the restored state directory.
@@ -18,16 +39,34 @@ QStringList matchFiles(const QString& stateRoot, const QString& pattern) {
         return found;
     }
 
+    const auto accept = [&found, &stateRoot](const QString& path) {
+        if (insideTheFolderItWasGiven(stateRoot, path)) {
+            found << path;
+        } else {
+            qCWarning(logRewrite) << "refusing a rewrite rule that names a file outside"
+                                  << stateRoot << ":" << path;
+        }
+    };
+
     // A pattern with no wildcard is the common case and needs no walking.
     if (!pattern.contains(u'*') && !pattern.contains(u'?')) {
         const QString direct = stateRoot + u'/' + pattern;
         if (QFileInfo::exists(direct)) {
-            found << direct;
+            accept(direct);
         }
         return found;
     }
 
     QString expression = QRegularExpression::escape(pattern);
+
+    // "**/" is any number of folders including none, which is what everything
+    // else that reads a glob means by it and what somebody writing
+    // "**/prefs.js" in a recipe is asking for. It used to become ".*/", which
+    // demands at least one folder - so a file sitting directly in the state
+    // root was not matched, the rule did nothing, and the restore reported
+    // success with the paths inside that file still pointing at the old
+    // machine. The order matters: this has to run before the plain "**".
+    expression.replace(QStringLiteral("\\*\\*\\/"), QStringLiteral("(?:.*/)?"));
     expression.replace(QStringLiteral("\\*\\*"), QStringLiteral(".*"));
     expression.replace(QStringLiteral("\\*"), QStringLiteral("[^/]*"));
     expression.replace(QStringLiteral("\\?"), QStringLiteral("[^/]"));
@@ -40,7 +79,7 @@ QStringList matchFiles(const QString& stateRoot, const QString& pattern) {
     while (iterator.hasNext()) {
         const QString path = iterator.next();
         if (matcher.match(path.mid(prefix)).hasMatch()) {
-            found << path;
+            accept(path);
         }
     }
     return found;

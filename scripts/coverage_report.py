@@ -68,14 +68,24 @@ def unreachable_base(base):
 
 
 def added_lines(base):
-    """The lines this branch adds, by file, from the merge base with `base`."""
+    """The lines this branch adds, by file, from the merge base with `base`.
+
+    The diff is asked for `src/` alone and decoded loosely on purpose. Only
+    this project's own sources are ever scored, so a diff of everything else is
+    work thrown away - and a repository picks up files that are not text: the
+    fuzzer's committed crashers are bytes chosen to break a parser, and one of
+    them is a byte no decoder will accept. Read strictly, the gate died on it
+    with a UnicodeDecodeError, which arrives looking exactly like a coverage
+    regression. The lines this function reads are the diff's own headers and
+    they are ASCII whatever the file contains.
+    """
     merge_base = subprocess.run(
         ["git", "merge-base", base, "HEAD"],
         capture_output=True, text=True, check=True).stdout.strip()
 
     diff = subprocess.run(
-        ["git", "diff", "--unified=0", "--no-color", f"{merge_base}...HEAD"],
-        capture_output=True, text=True, check=True).stdout
+        ["git", "diff", "--unified=0", "--no-color", f"{merge_base}...HEAD", "--", "src"],
+        capture_output=True, check=True).stdout.decode("utf-8", errors="replace")
 
     by_file = collections.defaultdict(set)
     current = None
@@ -147,8 +157,24 @@ def self_test():
 
             print("A base that can be diffed against:")
             check("unreachable_base says nothing is wrong", unreachable_base(first) is None)
+            pathlib.Path("src").mkdir()
+            pathlib.Path("src/a.txt").write_text("one\ntwo\n", encoding="utf-8")
+            subprocess.run(git + ["add", "-A"], check=True)
+            subprocess.run(git + ["commit", "-q", "-m", "a source file"], check=True)
             check("and the added line is found",
-                  added_lines(first).get("a.txt") == {2})
+                  added_lines(first).get("src/a.txt") == {1, 2})
+
+            print("A file whose bytes are not text:")
+            # The fuzzer's committed crashers are exactly this, and git calls a
+            # file text unless it finds a NUL, so the diff carries the bytes.
+            pathlib.Path("src/crasher").write_bytes(b"..\"" + bytes([0x80]) * 253)
+            subprocess.run(git + ["add", "-A"], check=True)
+            subprocess.run(git + ["commit", "-q", "-m", "a crasher"], check=True)
+            try:
+                found = added_lines(first).get("src/a.txt") == {1, 2}
+            except UnicodeDecodeError:
+                found = False
+            check("the gate still runs, and still finds the line", found)
         finally:
             os.chdir(here)
 

@@ -71,6 +71,15 @@ of the hole. `PathTokenMap::resolve` then refuses anything that still lands
 outside the destination, checking rather than assuming, because it is the layer
 that actually makes the promise.
 
+The same goes for the file a rewrite rule names. That name comes out of the
+archive's application list — or out of an overlay in your own configuration
+folder — and the file it names is not merely read: it is edited, copied aside
+and swapped in. So the rule's pattern is resolved and checked against the
+folder the rule was given, and a rule reaching outside it is refused and
+logged. The catalogue's schema refuses `..` in a pattern too, but that is a
+check on the file this project ships, and neither of the other two ways a rule
+arrives goes past it.
+
 **The archive protects names as well as contents.** Encryption is AES-256-GCM
 with scrypt key derivation, and the manifest is encrypted too — a file list is
 not a small thing to leak. A wrong passphrase is rejected on the header rather

@@ -16,5 +16,13 @@
 *.dmg  binary
 *.txa  binary
 
+# A committed crasher is bytes, not text. Under "text=auto" git decides for
+# itself what is text and rewrites the line endings of whatever it decides -
+# and a fuzzer's input is a byte sequence chosen to break a parser, so one
+# carrying a carriage return would arrive on a checkout as a different file and
+# stop reproducing the crash it was kept for. It is also not a thing to read in
+# a diff.
+tests/fuzz/corpus/** binary
+
 # Keeps the language bar describing the project rather than its packaging.
 packaging/** linguist-vendored

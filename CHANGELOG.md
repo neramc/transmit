@@ -116,6 +116,27 @@ notes say so.
 
 ### Fixed
 
+- A settings file outside the folder a restore was pointed at could be edited.
+  The file a rewrite rule names was joined to the folder the rule was given and
+  opened, and that name comes out of the archive — so a rule reading
+  `../../../.bashrc` was an edit to a file on the restoring machine that nobody
+  asked for. It is now resolved and checked against the folder it was given,
+  the way every other path an archive names already was. The shipped
+  catalogue's schema refuses `..` in a pattern, but a rule also arrives inside
+  an archive and in an overlay in the user's own configuration folder, and
+  neither goes past the schema.
+- The changed-line coverage gate no longer dies on a file that is not text.
+  It read the whole diff strictly, and the first committed fuzz crasher carries
+  a byte no decoder accepts - which arrived as a red Coverage job, looking
+  exactly like a coverage regression. It reads the diff of `src/` alone now,
+  which is all it ever scored, and decodes it loosely; the crashers are marked
+  binary so git stops calling them text and rewriting their line endings, which
+  would have quietly stopped one reproducing what it was kept for.
+- `**/` in a recipe's file pattern means any number of folders including none,
+  which is what it means everywhere else. It meant one or more, so a file
+  sitting directly in the folder the rule named was not matched, the rule did
+  nothing, and the restore reported success with the paths inside that file
+  still pointing at the old machine.
 - A file could be written outside the folder a restore was pointed at. A name
   is refused if it is `..`, and then cut to fit the target filesystem's length
   limit — in that order, so a name three hundred bytes long that began `..`
