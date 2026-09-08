@@ -141,6 +141,27 @@ if(TRANSMIT_BUILD_APP OR TRANSMIT_BUILD_CLI)
         find_package(Qt6 6.4 REQUIRED COMPONENTS Test)
     endif()
     qt_standard_project_setup(REQUIRES 6.4)
+
+    # Say out loud when this machine's Qt is older than the one CI builds
+    # against. Anything Qt deprecated between the two compiles cleanly here and
+    # fails there under -Werror, which is a whole round trip to find out
+    # something a line of text could have said first. The number is read from
+    # the workflow rather than written twice, so it cannot go stale; a source
+    # tree without the workflow in it simply says nothing.
+    set(_ci_workflow "${CMAKE_SOURCE_DIR}/.github/workflows/ci.yml")
+    if(EXISTS "${_ci_workflow}")
+        file(READ "${_ci_workflow}" _ci_text)
+        if(_ci_text MATCHES "version: '([0-9]+\\.[0-9]+\\.[0-9]+)'")
+            set(_ci_qt "${CMAKE_MATCH_1}")
+            if(Qt6_VERSION VERSION_LESS _ci_qt)
+                message(STATUS
+                    "Qt ${Qt6_VERSION} here, Qt ${_ci_qt} in CI. Anything Qt deprecated between "
+                    "the two builds cleanly here and fails there, because the warnings are errors.")
+            endif()
+        endif()
+        unset(_ci_text)
+    endif()
+    unset(_ci_workflow)
 endif()
 
 # ---------------------------------------------------------------- GoogleTest (tests only)

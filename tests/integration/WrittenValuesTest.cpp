@@ -27,9 +27,19 @@ private slots:
 private:
     /// A fixed point to measure the relative forms against, so these cases say
     /// the same thing tomorrow as today.
-    [[nodiscard]] static QDateTime fixedNow() {
-        return QDateTime(QDate(2026, 9, 8), QTime(12, 0, 0), Qt::UTC);
+    ///
+    /// Built by parsing rather than by handing a Qt::TimeSpec to a QDateTime
+    /// constructor: that overload is deprecated from Qt 6.9, its replacement
+    /// wants a QTimeZone and only exists from 6.5, and this has to build
+    /// against both. Parsing an ISO string with a Z on the end says the same
+    /// thing to every version of Qt there is.
+    [[nodiscard]] static QDateTime atUtc(const char* isoWithZone) {
+        const QDateTime when = QDateTime::fromString(QString::fromLatin1(isoWithZone), Qt::ISODate);
+        Q_ASSERT(when.isValid());
+        return when;
     }
+
+    [[nodiscard]] static QDateTime fixedNow() { return atUtc("2026-09-08T12:00:00Z"); }
 };
 
 void WrittenValuesTest::readsTheSizesPeopleWrite() {
@@ -84,7 +94,7 @@ void WrittenValuesTest::readsTheDatesPeopleWrite() {
     QCOMPARE(timeFromText(QStringLiteral("2024-01-15"), now),
              QDateTime(QDate(2024, 1, 15), QTime(0, 0, 0)));
     QCOMPARE(timeFromText(QStringLiteral("2024-05-06T12:00:00Z"), now),
-             QDateTime(QDate(2024, 5, 6), QTime(12, 0, 0), Qt::UTC));
+             atUtc("2024-05-06T12:00:00Z"));
 }
 
 void WrittenValuesTest::refusesWhatIsNotADate() {
