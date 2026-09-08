@@ -87,13 +87,11 @@ QList<RewriteEdit> rewriteIni(const QString& path, const QStringList& keys,
         return edits;
     }
 
-    QFile staged(path + QStringLiteral(".transmit-staged"));
-    if (!staged.open(QIODevice::WriteOnly)) {
+    const QString output = lines.join(u'\n');
+    Q_UNUSED(crlf);  // line endings are preserved per line, above
+    if (!writeStaged(path + QStringLiteral(".transmit-staged"), output.toUtf8())) {
         return {};
     }
-    QString output = lines.join(u'\n');
-    Q_UNUSED(crlf);  // line endings are preserved per line, above
-    staged.write(output.toUtf8());
     return edits;
 }
 

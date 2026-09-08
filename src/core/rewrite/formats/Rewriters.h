@@ -20,6 +20,18 @@ namespace transmit::core::rewriters {
 /// leave every other byte - including comments, ordering and encoding -
 /// exactly as it was.
 
+/// Writes the staged copy the plan will swap in, and says whether all of it
+/// landed.
+///
+/// A staged file is not scratch: RewritePlan::apply renames it over somebody's
+/// settings. Every rewriter here used to open it, call write() and let the
+/// destructor close it, so a write that stopped early - a full disk, a stick
+/// pulled out - left a truncated file that the swap then installed, while the
+/// plan reported the change as made. The write is checked and flushed while
+/// the file can still say it failed, and a staged file that did not come out
+/// whole is removed rather than left where apply() would find it.
+[[nodiscard]] bool writeStaged(const QString& stagedPath, const QByteArray& contents);
+
 /// Text with a regular expression naming the path in a capture group.
 QList<RewriteEdit> rewriteText(const QString& path, const QString& pattern, int captureGroup,
                                const PathTranslator& translator, const QString& appId);

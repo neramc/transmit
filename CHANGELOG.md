@@ -125,6 +125,18 @@ notes say so.
   catalogue's schema refuses `..` in a pattern, but a rule also arrives inside
   an archive and in an overlay in the user's own configuration folder, and
   neither goes past the schema.
+- A rewrite that cannot be written is no longer reported as made. Every
+  rewriter puts the new contents in `<file>.transmit-staged` and the plan
+  renames that over the original; all of them opened the file, called write and
+  let the destructor close it, so a write that stopped early — a full disk, a
+  stick pulled out — left a truncated file which the swap then installed. The
+  write is checked and flushed now, a staged file that did not come out whole
+  is removed rather than left where the next run would apply it, and the SQLite
+  rewriter checks its commit for the same reason.
+- A property list the reader gives up on partway through is not reported as
+  rewritten. Nothing was written for it — the reader hands back nothing — but
+  the changes collected before it gave up were still listed, so the plan said
+  those values would be repointed and the file was untouched.
 - An exclusion set for one application is applied. Merging a folder's rule with
   the capture's handled every narrowing field except the pattern list, which it
   dropped — while both the header and the function's own comment said "a root

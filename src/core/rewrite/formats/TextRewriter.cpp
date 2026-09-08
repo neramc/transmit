@@ -111,11 +111,9 @@ QList<RewriteEdit> rewriteText(const QString& path, const QString& pattern, int 
         text.replace(replacement.start, replacement.length, replacement.value);
     }
 
-    QFile staged(path + QStringLiteral(".transmit-staged"));
-    if (!staged.open(QIODevice::WriteOnly)) {
+    if (!writeStaged(path + QStringLiteral(".transmit-staged"), encode(text, form))) {
         return {};
     }
-    staged.write(encode(text, form));
     return edits;
 }
 

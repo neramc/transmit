@@ -136,7 +136,18 @@ QList<RewriteEdit> rewriteSqlite(const QString& path, const QString& table, cons
                                  QStringLiteral("%1.%2 row %3").arg(table, column).arg(row.rowId),
                                  row.oldValue, row.newValue, appId});
     }
-    sqlite3_exec(handle.get(), "COMMIT", nullptr, nullptr, nullptr);
+    // Checked, because a commit is where a full disk shows up. Unchecked, a
+    // database that never took the updates is left staged and reported as
+    // rewritten, and RewritePlan::apply then swaps it over the original - so
+    // the person is told their settings were repointed and is left with
+    // neither the new paths nor the file that still had the old ones.
+    if (sqlite3_exec(handle.get(), "COMMIT", nullptr, nullptr, nullptr) != SQLITE_OK) {
+        qCWarning(logRewrite) << "could not commit the rewritten rows of" << path
+                              << QString::fromUtf8(sqlite3_errmsg(handle.get()));
+        sqlite3_exec(handle.get(), "ROLLBACK", nullptr, nullptr, nullptr);
+        QFile::remove(stagedPath);
+        return {};
+    }
 
     return edits;
 }

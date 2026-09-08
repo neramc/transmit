@@ -131,12 +131,11 @@ QList<RewriteEdit> rewriteJson(const QString& path, const QStringList& keys,
     // and reflowing one would show up as a spurious change to anything
     // watching it.
     const bool wasIndented = raw.contains("\n  ");
-    QFile staged(path + QStringLiteral(".transmit-staged"));
-    if (!staged.open(QIODevice::WriteOnly)) {
+    const QByteArray output =
+        QJsonDocument(root).toJson(wasIndented ? QJsonDocument::Indented : QJsonDocument::Compact);
+    if (!writeStaged(path + QStringLiteral(".transmit-staged"), output)) {
         return {};
     }
-    staged.write(
-        QJsonDocument(root).toJson(wasIndented ? QJsonDocument::Indented : QJsonDocument::Compact));
     return edits;
 }
 

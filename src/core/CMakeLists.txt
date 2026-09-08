@@ -15,6 +15,7 @@ add_library(transmit_core STATIC
     rewrite/PathTranslator.cpp
     rewrite/RewritePlan.cpp
     rewrite/PathRewriter.cpp
+    rewrite/formats/StagedFile.cpp
     rewrite/formats/TextRewriter.cpp
     rewrite/formats/IniRewriter.cpp
     rewrite/formats/JsonRewriter.cpp

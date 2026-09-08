@@ -153,19 +153,24 @@ QList<RewriteEdit> rewritePlist(const QString& path, const QStringList& keys,
     }
 
     const QByteArray rewritten = rewriteXmlPlist(xml, keys, translator, path, appId, edits);
-    if (edits.isEmpty() || rewritten.isEmpty()) {
+    if (rewritten.isEmpty()) {
+        // The reader stopped on a malformed document partway through, so
+        // nothing is going to be written. The edits it had collected up to
+        // that point are dropped with it: reported, they are a promise that
+        // these values will be repointed, and RewritePlan::apply would pass
+        // over the file in silence because no staged copy exists.
+        return {};
+    }
+    if (edits.isEmpty()) {
         return edits;
     }
 
     const QString stagedPath = path + QStringLiteral(".transmit-staged");
     if (binary) {
         const QString xmlStaged = workspace.filePath(QStringLiteral("rewritten.xml"));
-        QFile intermediate(xmlStaged);
-        if (!intermediate.open(QIODevice::WriteOnly)) {
+        if (!writeStaged(xmlStaged, rewritten)) {
             return {};
         }
-        intermediate.write(rewritten);
-        intermediate.close();
 
         // Written back in the form it arrived in, so the application does not
         // suddenly find an XML plist where it expects a binary one.
@@ -175,11 +180,9 @@ QList<RewriteEdit> rewritePlist(const QString& path, const QStringList& keys,
         return edits;
     }
 
-    QFile staged(stagedPath);
-    if (!staged.open(QIODevice::WriteOnly)) {
+    if (!writeStaged(stagedPath, rewritten)) {
         return {};
     }
-    staged.write(rewritten);
     return edits;
 }
 

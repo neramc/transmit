@@ -53,6 +53,8 @@ private slots:
     void relocatesApplicationStateToWhereTheTargetKeepsIt();
     void relocationLeavesUnknownPathsAlone();
 
+    void aRewriterThatCannotStageReportsNothing();
+    void aMalformedPlistIsNotReportedAsRewritten();
     void aRuleCannotNameAFileOutsideTheFolderItWasGiven();
     void aWildcardCannotReachOutsideEither();
     void aWildcardStillFindsWhatItIsFor();
@@ -737,6 +739,101 @@ void PathRewriteTest::relocationLeavesUnknownPathsAlone() {
 /// "..", but a rule also arrives in an archive's application list and in an
 /// overlay in the user's own configuration folder, and neither of those goes
 /// past the schema.
+/// A change that cannot be staged is not a change.
+///
+/// Each rewriter writes the new contents to "<file>.transmit-staged" and
+/// RewritePlan::apply renames that over the original. All of them opened the
+/// file, called write() and let the destructor close it, so a write that
+/// stopped early - a full disk, a stick pulled out - left a truncated file
+/// which the swap then installed, and the plan reported the change as made.
+/// Asked here of every format, because the fix is one function and a format
+/// that stopped calling it would look exactly like one that never did.
+void PathRewriteTest::aRewriterThatCannotStageReportsNothing() {
+    struct Case {
+        QString file;
+        QString format;
+        QStringList keys;
+        QByteArray content;
+    };
+    const QList<Case> cases = {
+        {QStringLiteral("settings.ini"),
+         QStringLiteral("ini"),
+         {QStringLiteral("General/Path")},
+         "[General]\nPath=C:\\Users\\Bob\\Documents\n"},
+        {QStringLiteral("prefs.json"),
+         QStringLiteral("json"),
+         {QStringLiteral("home")},
+         "{\"home\": \"C:\\\\Users\\\\Bob\\\\Documents\"}"},
+        {QStringLiteral("notes.txt"),
+         QStringLiteral("text"),
+         {},
+         "look in C:\\Users\\Bob\\Documents for it\n"},
+        {QStringLiteral("prefs.plist"),
+         QStringLiteral("plist"),
+         {QStringLiteral("Path")},
+         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+         "<plist version=\"1.0\"><dict><key>Path</key>"
+         "<string>C:\\Users\\Bob\\Documents</string></dict></plist>\n"},
+    };
+
+    for (const Case& one : cases) {
+        write(one.file, one.content);
+
+        // A directory where the staged copy wants to go. QFile will not write
+        // over one, and it fails the same way for whoever runs this - a
+        // permission would not stop root.
+        QVERIFY(QDir().mkpath(path(one.file) + QStringLiteral(".transmit-staged")));
+
+        core::AppRecipe recipe;
+        recipe.id = QStringLiteral("test.staging");
+        recipe.rewrites.push_back(core::RecipeRewriteRule{
+            one.file, one.format, one.keys, QStringLiteral("(C:[\\\\/][^\\s\"']*)"), 1, {}, {}});
+
+        core::RewritePlan plan;
+        core::PathRewriter(windowsToLinux()).planFor(recipe, workspace_->path(), plan);
+
+        QVERIFY2(
+            plan.edits().isEmpty(),
+            qPrintable(QStringLiteral("%1 reported a change it could not stage").arg(one.file)));
+        QCOMPARE(read(one.file), one.content);
+    }
+}
+
+/// A property list the reader gives up on partway through.
+///
+/// The reader stops and hands back nothing, so no staged copy is written and
+/// apply() passes over the file in silence - but the edits collected before it
+/// gave up were still reported. So the plan said these values would be
+/// repointed, the restore said it had succeeded, and the file was untouched.
+void PathRewriteTest::aMalformedPlistIsNotReportedAsRewritten() {
+    // Well formed up to the point where it is not: the first value is a path
+    // this translator would rewrite, and then the document ends mid-element.
+    write(QStringLiteral("broken.plist"),
+          "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+          "<plist version=\"1.0\"><dict>\n"
+          "<key>Path</key><string>C:\\Users\\Bob\\Documents</string>\n"
+          "<key>Other</key><string>C:\\Users\\Bob\\Pictures</stri");
+
+    core::AppRecipe recipe;
+    recipe.id = QStringLiteral("test.plist");
+    recipe.rewrites.push_back(
+        core::RecipeRewriteRule{QStringLiteral("broken.plist"),
+                                QStringLiteral("plist"),
+                                {QStringLiteral("Path"), QStringLiteral("Other")},
+                                {},
+                                1,
+                                {},
+                                {}});
+
+    core::RewritePlan plan;
+    core::PathRewriter(windowsToLinux()).planFor(recipe, workspace_->path(), plan);
+
+    QVERIFY2(plan.edits().isEmpty(), "a plist that could not be rewritten reported changes");
+    QCOMPARE(plan.apply(), 0);
+    QVERIFY(
+        !QFile::exists(path(QStringLiteral("broken.plist")) + QStringLiteral(".transmit-staged")));
+}
+
 void PathRewriteTest::aRuleCannotNameAFileOutsideTheFolderItWasGiven() {
     const QByteArray untouched = "[General]\nPath=C:\\Users\\Bob\\Documents\n";
     write(QStringLiteral("state/inside.ini"), untouched);
