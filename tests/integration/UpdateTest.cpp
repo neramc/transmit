@@ -30,6 +30,7 @@
 #include "UpdateController.h"
 
 using namespace transmit::core;
+using transmit::format::OsFamily;
 
 namespace {
 
@@ -281,6 +282,10 @@ private slots:
     void handsOverAPortableCopyRatherThanReplacingIt();
 
     void noticesASandbox();
+    void readsTheShapeOfAnInstallOnEverySystem_data();
+    void readsTheShapeOfAnInstallOnEverySystem();
+    void aPackageManagedCopyIsNeverReplaceableOnAnySystem();
+    void namesTheRightThingToReplaceOnEverySystem();
     void describesTheMachineItIsRunningOn();
     void handsAWindowsUpdateToTheInstaller();
 
@@ -1378,6 +1383,155 @@ void UpdateTest::noticesASandbox() {
 
     // And with neither, this is a build tree again.
     QCOMPARE(detectInstallKind(), InstallKind::Development);
+}
+
+/// The shape of an install, asked of every system rather than of this one.
+///
+/// Which files may be replaced by the updater is decided here, and
+/// SECURITY.md's promise that nothing replaces a copy a package manager owns
+/// rests on it. The rules used to read the machine directly, so the Linux one
+/// could only ever be exercised on Linux - and only in whichever of its six
+/// cases that particular runner happened to be in. Two of the three systems
+/// were checked nowhere.
+void UpdateTest::readsTheShapeOfAnInstallOnEverySystem_data() {
+    QTest::addColumn<int>("os");
+    QTest::addColumn<QString>("path");
+    QTest::addColumn<QString>("appImage");
+    QTest::addColumn<int>("expected");
+
+    const auto row = [](const char* name, OsFamily os, const QString& path, const QString& appImage,
+                        InstallKind expected) {
+        QTest::newRow(name) << static_cast<int>(os) << path << appImage
+                            << static_cast<int>(expected);
+    };
+
+    row("an AppImage says so through AppRun", OsFamily::Linux,
+        QStringLiteral("/tmp/.mount_abc/usr/bin/transmit"), QStringLiteral("/home/bob/T.AppImage"),
+        InstallKind::AppImage);
+    row("a distribution package", OsFamily::Linux, QStringLiteral("/usr/bin/transmit"), {},
+        InstallKind::PackageManaged);
+    row("something under /opt", OsFamily::Linux, QStringLiteral("/opt/transmit/bin/transmit"), {},
+        InstallKind::PackageManaged);
+    row("a nix store path", OsFamily::Linux, QStringLiteral("/nix/store/abc-transmit/bin/transmit"),
+        {}, InstallKind::PackageManaged);
+    row("inside a flatpak's own prefix", OsFamily::Linux, QStringLiteral("/app/bin/transmit"), {},
+        InstallKind::PackageManaged);
+    // Somewhere in a home directory is not a shape anything can be told from,
+    // and Unknown is the answer that replaces nothing.
+    row("unpacked in a home directory", OsFamily::Linux,
+        QStringLiteral("/home/bob/transmit/transmit"), {}, InstallKind::Unknown);
+
+    row("a bundle dragged to Applications", OsFamily::MacOs,
+        QStringLiteral("/Applications/Transmit.app/Contents/MacOS/transmit"), {},
+        InstallKind::MacBundle);
+    row("a bundle homebrew installed", OsFamily::MacOs,
+        QStringLiteral("/opt/homebrew/Caskroom/transmit/1.0/Transmit.app/Contents/MacOS/transmit"),
+        {}, InstallKind::PackageManaged);
+    row("a bundle macports installed", OsFamily::MacOs,
+        QStringLiteral("/opt/local/Transmit.app/Contents/MacOS/transmit"), {},
+        InstallKind::PackageManaged);
+    row("a bare binary on a mac is not a bundle", OsFamily::MacOs,
+        QStringLiteral("/Users/bob/bin/transmit"), {}, InstallKind::Unknown);
+
+    row("installed by the setup program", OsFamily::Windows,
+        QStringLiteral("C:/Program Files/Transmit/transmit.exe"), {},
+        InstallKind::WindowsInstaller);
+    row("unpacked from the zip", OsFamily::Windows,
+        QStringLiteral("C:/Users/Bob/Downloads/transmit/transmit.exe"), {},
+        InstallKind::WindowsPortable);
+}
+
+void UpdateTest::readsTheShapeOfAnInstallOnEverySystem() {
+    QFETCH(int, os);
+    QFETCH(QString, path);
+    QFETCH(QString, appImage);
+    QFETCH(int, expected);
+
+    InstallFacts facts;
+    facts.os = static_cast<OsFamily>(os);
+    facts.programPath = path;
+    facts.appImagePath = appImage;
+    facts.programFiles = QStringLiteral("C:\\Program Files");
+    facts.programFilesX86 = QStringLiteral("C:\\Program Files (x86)");
+
+    QCOMPARE(static_cast<int>(installKindFor(facts)), expected);
+}
+
+/// The promise SECURITY.md makes, asked of every path this project knows a
+/// package manager to use, on all three systems at once.
+void UpdateTest::aPackageManagedCopyIsNeverReplaceableOnAnySystem() {
+    const QList<QPair<OsFamily, QString>> owned = {
+        {OsFamily::Linux, QStringLiteral("/usr/bin/transmit")},
+        {OsFamily::Linux, QStringLiteral("/usr/local/bin/transmit")},
+        {OsFamily::Linux, QStringLiteral("/opt/transmit/transmit")},
+        {OsFamily::Linux, QStringLiteral("/snap/transmit/current/bin/transmit")},
+        {OsFamily::Linux, QStringLiteral("/var/lib/flatpak/app/x/transmit")},
+        {OsFamily::Linux, QStringLiteral("/nix/store/abc/bin/transmit")},
+        {OsFamily::MacOs, QStringLiteral("/opt/homebrew/Caskroom/t/1/T.app/Contents/MacOS/t")},
+        {OsFamily::MacOs, QStringLiteral("/usr/local/Caskroom/t/1/T.app/Contents/MacOS/t")},
+    };
+
+    for (const auto& [os, path] : owned) {
+        InstallFacts facts;
+        facts.os = os;
+        facts.programPath = path;
+
+        const InstallKind kind = installKindFor(facts);
+        QVERIFY2(kind == InstallKind::PackageManaged, qPrintable(path));
+        QVERIFY2(!canReplaceItself(kind), qPrintable(path));
+        QVERIFY2(targetFor(kind, facts).isEmpty(), qPrintable(path));
+    }
+
+    // A sandbox says so outright, and it is answered before the path is even
+    // looked at - so it holds on a path that would otherwise be replaceable.
+    for (const OsFamily os : {OsFamily::Linux, OsFamily::MacOs, OsFamily::Windows}) {
+        InstallFacts facts;
+        facts.os = os;
+        facts.programPath = QStringLiteral("/home/bob/T.app/Contents/MacOS/t");
+        facts.sandboxed = true;
+        QCOMPARE(installKindFor(facts), InstallKind::PackageManaged);
+    }
+
+    // And a build tree is not an install, whatever it looks like.
+    InstallFacts building;
+    building.os = OsFamily::Windows;
+    building.programPath = QStringLiteral("C:/Program Files/Transmit/transmit.exe");
+    building.insideBuildTree = true;
+    QCOMPARE(installKindFor(building), InstallKind::Development);
+    QVERIFY(targetFor(InstallKind::Development, building).isEmpty());
+}
+
+/// Naming the wrong thing to replace is the same mistake as replacing the
+/// wrong thing, and it differs per system: the AppImage's own file, the .app
+/// rather than the binary inside it, the folder rather than the exe.
+void UpdateTest::namesTheRightThingToReplaceOnEverySystem() {
+    InstallFacts appImage;
+    appImage.os = OsFamily::Linux;
+    appImage.programPath = QStringLiteral("/tmp/.mount_abc/usr/bin/transmit");
+    appImage.appImagePath = QStringLiteral("/home/bob/Transmit-0.1.1.AppImage");
+    QCOMPARE(targetFor(InstallKind::AppImage, appImage), appImage.appImagePath);
+
+    InstallFacts bundle;
+    bundle.os = OsFamily::MacOs;
+    bundle.programPath = QStringLiteral("/Applications/Transmit.app/Contents/MacOS/transmit");
+    QCOMPARE(targetFor(InstallKind::MacBundle, bundle),
+             QStringLiteral("/Applications/Transmit.app"));
+
+    InstallFacts windows;
+    windows.os = OsFamily::Windows;
+    windows.programPath = QStringLiteral("C:/Program Files/Transmit/transmit.exe");
+    QCOMPARE(targetFor(InstallKind::WindowsInstaller, windows),
+             QStringLiteral("C:/Program Files/Transmit"));
+
+    // A bundle that is not one names nothing rather than the first four
+    // characters of a path.
+    InstallFacts notABundle;
+    notABundle.os = OsFamily::MacOs;
+    notABundle.programPath = QStringLiteral("/Users/bob/bin/transmit");
+    QVERIFY(targetFor(InstallKind::MacBundle, notABundle).isEmpty());
+
+    // And nothing at all is named when there is no program to speak of.
+    QVERIFY(targetFor(InstallKind::AppImage, InstallFacts{}).isEmpty());
 }
 
 void UpdateTest::describesTheMachineItIsRunningOn() {

@@ -125,6 +125,14 @@ notes say so.
   catalogue's schema refuses `..` in a pattern, but a rule also arrives inside
   an archive and in an overlay in the user's own configuration folder, and
   neither goes past the schema.
+- Two of the rules that decide whether the updater may replace the running
+  program consulted this machine rather than the one the path came from.
+  `QDir::fromNativeSeparators` only replaces backslashes when the program is
+  itself running on Windows, and `QFileInfo::absolutePath` decides a Windows
+  path is relative anywhere else and puts the working directory in front of it.
+  Neither could go wrong in the product, because the rule and the machine were
+  always the same system — which is exactly why neither could be checked
+  either. They are rules about the text now.
 - The keyboard layouts a Linux machine carries across are the ones it has. The
   reading deleted every bracket, quote and the words `xkb` and `ibus` from what
   gsettings printed and split what was left on commas, so two layouts became
@@ -254,6 +262,14 @@ notes say so.
 
 ### Testing
 
+- Which shape of install this is — an AppImage, a bundle, something a package
+  manager owns — is asked of every system rather than of this one. The decision
+  gates whether the updater may replace the running program, and SECURITY.md's
+  promise that nothing replaces a copy a package manager owns rests on it; the
+  rules read the machine directly, so two of the three systems were checked
+  nowhere and the third only in whichever of its cases that runner happened to
+  be in. Twelve cases across the three now, plus the promise itself asked of
+  every path this project knows a package manager to use.
 - What a Linux desktop's answer means is asked of the text rather than of the
   desktop. Seven rules — the theme, the layouts, a duration, a locale each way,
   the timezone, and the quoting — lived inside the function that shells out to
