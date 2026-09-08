@@ -430,10 +430,29 @@ Status FileStream::punchHole(std::uint64_t offset, std::uint64_t length) {
     TRANSMIT_CHECK(flush());
 
 #if defined(_WIN32)
-    // Nothing to do. A file marked sparse gets its holes from the seek itself,
-    // and on a filesystem that refused the mark this would write the zeroes
-    // out rather than take them back - the slow way round to the same bytes.
-    (void)offset;
+    // Marked first, so this gives the region back rather than writing zeroes
+    // over it. On a file that is already marked - which is every file the
+    // writer below produces - asking again costs nothing.
+    (void)declareSparse();
+
+    const int descriptor = ::_fileno(handle_);
+    if (descriptor < 0) {
+        return ok();
+    }
+    const auto native = reinterpret_cast<HANDLE>(::_get_osfhandle(descriptor));
+    if (native == INVALID_HANDLE_VALUE) {
+        return ok();
+    }
+
+    FILE_ZERO_DATA_INFORMATION zero{};
+    zero.FileOffset.QuadPart = static_cast<LONGLONG>(offset);
+    zero.BeyondFinalZero.QuadPart = static_cast<LONGLONG>(offset + length);
+    DWORD returned = 0;
+    // Unchecked, like the other two: every way it fails leaves the file
+    // holding the right bytes, and NTFS trims the region to whole clusters by
+    // itself rather than refusing an offset that is not on one.
+    (void)::DeviceIoControl(native, FSCTL_SET_ZERO_DATA, &zero, static_cast<DWORD>(sizeof(zero)),
+                            nullptr, 0, &returned, nullptr);
     return ok();
 #else
     const int descriptor = ::fileno(handle_);

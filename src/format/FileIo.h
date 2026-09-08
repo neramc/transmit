@@ -105,12 +105,13 @@ public:
     /// Gives back the disk behind a region, leaving a hole that reads as
     /// zeroes.
     ///
+    /// The same idea in three places under three names: fallocate on Linux,
+    /// F_PUNCHHOLE on macOS, FSCTL_SET_ZERO_DATA on Windows.
+    ///
     /// Needed because not every filesystem makes a hole out of a write that
     /// lands past the end of the file. Linux does, and NTFS does once the file
     /// has been marked sparse - but APFS fills the gap in, so on macOS the
-    /// zeroes have to be handed back afterwards rather than never written. It
-    /// is the one call of the three that is the same idea everywhere and a
-    /// different name in each place: fallocate, F_PUNCHHOLE, FSCTL_SET_ZERO_DATA.
+    /// zeroes have to be handed back afterwards rather than never written.
     ///
     /// Refusals are success. A filesystem with no holes to give, a region too
     /// small to align, a network mount that will not: in every one of those
