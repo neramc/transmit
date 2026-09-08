@@ -31,6 +31,21 @@ notes say so.
   desktop's own where it can be read without starting a process (Windows and
   Plasma); elsewhere the brand colour is used, because an accent guessed wrong
   is worse than one chosen on purpose.
+- A file that is mostly hole arrives as one. A disk image, a virtual machine or
+  a database that has been emptied has a length far larger than the data in it,
+  and the machine it came from was not storing those zeroes. Writing them out
+  is how a restore of three gigabytes needs forty gigabytes of disk and fails
+  at the very end, after everything else has already landed. The restore now
+  skips runs of zeroes of 64 KiB and over in any file of a megabyte or more,
+  seeking over them instead - which is the one approach all three systems
+  agree on, since a write past the end of a file leaves a hole behind it
+  wherever holes exist and zeroes wherever they do not. Windows is asked first,
+  because NTFS fills a seek unless the file has been marked sparse while it was
+  still empty, and a refusal there is not an error: FAT32 on a stick has no
+  holes to give and writes the zeroes, which reads back the same. The length is
+  set explicitly at the end, or a file that ends in zeroes would arrive short by
+  exactly that run.
+
 - The tags a filesystem keeps beside a file now travel with it: the colour
   label somebody set, the Finder tag, the comment a file manager wrote. Every
   system Transmit runs on has them and the archive had nowhere to put one, so

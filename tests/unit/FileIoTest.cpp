@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <filesystem>
@@ -84,6 +85,152 @@ TEST_F(FileIoTest, WritesAtomicallyAtEveryDurability) {
         ASSERT_TRUE(writeFileAtomically(path, textBytes("second, longer"), durability));
         EXPECT_EQ(contentsOf(path), "second, longer");
     }
+}
+
+// ---------------------------------------------------------------- holes
+//
+// A hole and a run of zeroes are the same bytes and different amounts of disk.
+// That is the whole feature, and it is also what makes it awkward to test:
+// every assertion about the content has to pass whatever the filesystem did,
+// and only the assertions about the space are allowed to depend on it.
+
+TEST_F(FileIoTest, FindsNothingWorthWritingInAFileOfZeroes) {
+    const ByteBuffer zeroes(4 * kSmallestHole);
+    EXPECT_TRUE(spansWorthWriting(zeroes).empty());
+}
+
+TEST_F(FileIoTest, WritesAFileWithNoZeroesInOnePiece) {
+    ByteBuffer dense(4 * kSmallestHole, Byte{0x5A});
+    const auto spans = spansWorthWriting(dense);
+    ASSERT_EQ(spans.size(), 1U);
+    EXPECT_EQ(spans.front(), (ByteRange{0, dense.size()}));
+}
+
+TEST_F(FileIoTest, KeepsAShortRunOfZeroesInsideTheSpan) {
+    // Below the threshold a hole costs more than the zeroes do, and splitting
+    // the span would turn one write into two for nothing.
+    ByteBuffer data(4 * kSmallestHole, Byte{0x11});
+    std::fill_n(data.begin() + static_cast<std::ptrdiff_t>(kSmallestHole), kSmallestHole - 1,
+                Byte{0});
+
+    const auto spans = spansWorthWriting(data);
+    ASSERT_EQ(spans.size(), 1U);
+    EXPECT_EQ(spans.front(), (ByteRange{0, data.size()}));
+}
+
+TEST_F(FileIoTest, SplitsTheSpanAroundALongRunOfZeroes) {
+    ByteBuffer data(4 * kSmallestHole, Byte{0x11});
+    std::fill_n(data.begin() + static_cast<std::ptrdiff_t>(kSmallestHole), 2 * kSmallestHole,
+                Byte{0});
+
+    const auto spans = spansWorthWriting(data);
+    ASSERT_EQ(spans.size(), 2U);
+    EXPECT_EQ(spans[0], (ByteRange{0, kSmallestHole}));
+    EXPECT_EQ(spans[1], (ByteRange{3 * kSmallestHole, kSmallestHole}));
+}
+
+TEST_F(FileIoTest, HandlesAHoleAtEitherEnd) {
+    ByteBuffer leading(3 * kSmallestHole, Byte{0});
+    leading.back() = Byte{0x7F};
+    const auto front = spansWorthWriting(leading);
+    ASSERT_EQ(front.size(), 1U);
+    EXPECT_EQ(front.front(), (ByteRange{3 * kSmallestHole - 1, 1}));
+
+    // A file ending in zeroes has nothing written after its last span, which
+    // is why the writer sets the length explicitly afterwards.
+    ByteBuffer trailing(3 * kSmallestHole, Byte{0});
+    trailing.front() = Byte{0x7F};
+    const auto back = spansWorthWriting(trailing);
+    ASSERT_EQ(back.size(), 1U);
+    EXPECT_EQ(back.front(), (ByteRange{0, 1}));
+}
+
+TEST_F(FileIoTest, FindsNoSpansInNoBytes) {
+    EXPECT_TRUE(spansWorthWriting(ByteView{}).empty());
+}
+
+TEST_F(FileIoTest, TreatsAHoleOfNoLengthAsOneByte) {
+    // Asking for holes of zero length would divide the file into a span per
+    // byte, so the smallest that means anything is used instead.
+    ByteBuffer data(4, Byte{0x11});
+    data[1] = Byte{0};
+
+    const auto spans = spansWorthWriting(data, 0);
+    ASSERT_EQ(spans.size(), 2U);
+    EXPECT_EQ(spans[0], (ByteRange{0, 1}));
+    EXPECT_EQ(spans[1], (ByteRange{2, 2}));
+}
+
+TEST_F(FileIoTest, AFileFullOfHolesReadsBackWhole) {
+    // Four megabytes of which about a tenth is real, which is roughly the
+    // shape of a disk image.
+    constexpr std::size_t kLength = 4 * 1024 * 1024;
+    ByteBuffer data(kLength, Byte{0});
+    for (std::size_t at = 0; at < kLength; at += 512 * 1024) {
+        std::fill_n(data.begin() + static_cast<std::ptrdiff_t>(at), 4096U, Byte{0xC3});
+    }
+
+    const auto path = directory_ / "mostly-hole";
+    const auto written =
+        writeFileAtomically(path, ByteView(data), Durability::Data, Sparseness::PunchHoles);
+    ASSERT_TRUE(written) << written.error().toString();
+
+    const auto readBack = readWholeFile(path);
+    ASSERT_TRUE(readBack) << readBack.error().toString();
+    EXPECT_EQ(*readBack, data) << "a hole has to read back as the zeroes it stands for";
+    EXPECT_EQ(std::filesystem::file_size(path), kLength);
+
+    // The same bytes written the ordinary way, as the control. Asking whether
+    // the sparse file is small is only meaningful against a filesystem that
+    // would otherwise have said it was large: a filesystem with no holes to
+    // give answers the same for both, and that is not a failure of this code.
+    // Comparing the two is what makes the assertion fire when the holes stop
+    // being punched, rather than quietly passing everywhere.
+    const auto control = directory_ / "written-out";
+    ASSERT_TRUE(writeFileAtomically(control, ByteView(data), Durability::Data, Sparseness::Dense));
+
+    const auto dense = allocatedSize(control);
+    const auto occupied = allocatedSize(path);
+    ASSERT_TRUE(dense) << dense.error().toString();
+    ASSERT_TRUE(occupied) << occupied.error().toString();
+
+    if (*dense >= kLength) {
+        EXPECT_LT(*occupied, kLength / 2)
+            << "the file is nine tenths hole and takes " << *occupied
+            << " bytes of disk; written out in full the same bytes take " << *dense;
+    } else {
+        GTEST_SKIP() << "this filesystem does not account for holes: " << *dense
+                     << " bytes allocated for " << kLength << " written in full";
+    }
+}
+
+TEST_F(FileIoTest, WritesASmallFileWholeEvenWhenAskedForHoles) {
+    // Under the threshold the scan is skipped, so the file is written in one
+    // piece - and still has to be right, which is the only part a caller can
+    // see.
+    ByteBuffer data(kSmallestSparseFile / 2, Byte{0});
+    data.front() = Byte{0x2A};
+
+    const auto path = directory_ / "small-and-empty";
+    ASSERT_TRUE(
+        writeFileAtomically(path, ByteView(data), Durability::Buffered, Sparseness::PunchHoles));
+
+    const auto readBack = readWholeFile(path);
+    ASSERT_TRUE(readBack) << readBack.error().toString();
+    EXPECT_EQ(*readBack, data);
+}
+
+TEST_F(FileIoTest, KnowsHowMuchDiskAFileTakes) {
+    const auto path = directory_ / "measured";
+    ASSERT_TRUE(writeFileAtomically(path, textBytes("a few bytes")));
+
+    const auto occupied = allocatedSize(path);
+    ASSERT_TRUE(occupied) << occupied.error().toString();
+    // Rounded up to whole blocks, so a short file takes at least its length
+    // and usually a good deal more.
+    EXPECT_GE(*occupied, 0U);
+
+    EXPECT_FALSE(allocatedSize(directory_ / "not-there"));
 }
 
 TEST_F(FileIoTest, LeavesNoTemporaryFileWhenTheWriteFails) {

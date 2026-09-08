@@ -123,11 +123,20 @@ void applyMetadata(const QString& path, const format::ManifestEntry& entry, OsFa
 /// folders it touched and syncs each once, because a restore commonly writes
 /// thousands of files into a handful of directories and one flush per file
 /// would be almost all of the cost for none of the benefit.
+///
+/// Holes are asked for. A disk image, a virtual machine or a database file is
+/// mostly zeroes, and the machine it came from was not storing them: writing
+/// them out here is how a restore of 3 GB of data comes to need 40 GB of disk
+/// and fails on a drive that was ample. The file that lands is the same either
+/// way - a hole reads as zeroes - so nothing about the restore changes except
+/// how much room it takes, and a filesystem with no holes to give simply
+/// writes them.
 bool writeFileContents(const QString& path, const format::ByteBuffer& content, QString& error,
                        bool durable) {
     const auto status = format::writeFileAtomically(
         format::toFsPath(path.toUtf8().toStdString()), format::ByteView(content),
-        durable ? format::Durability::Data : format::Durability::Buffered);
+        durable ? format::Durability::Data : format::Durability::Buffered,
+        format::Sparseness::PunchHoles);
     if (!status) {
         error = describeError(status.error());
         return false;

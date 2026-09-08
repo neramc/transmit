@@ -128,6 +128,14 @@ behind with the contents on their own servers; reading one downloads it. They
 are counted and reported instead — with the size, since that is what decides
 anything — and `--fetch-cloud-files` asks for them.
 
+Files whose length is mostly nothing arrive that way too. A disk image, a
+virtual machine or an emptied database is a hole with a little data in it, and
+the machine it came from was not storing the zeroes; a restore that writes them
+out needs forty gigabytes of disk for three gigabytes of data, and finds that
+out at the very end. Transmit leaves the long runs as holes — the file reads
+back byte for byte the same either way, and a filesystem with no holes to give
+simply writes them.
+
 **Desktop preferences** — appearance and accent colour, wallpaper (including
 the image itself), language, formats, time zone, keyboard layouts, default
 browser and mail program, sleep and screen timeouts, text scale, high contrast,

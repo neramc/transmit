@@ -22,6 +22,7 @@
 #include "core/services/RollbackWriter.h"
 #include "core/services/ScanService.h"
 #include "core/utils/Conversions.h"
+#include "format/FileIo.h"
 #include "format/FileTraits.h"
 #include "platform/PlatformService.h"
 
@@ -65,6 +66,7 @@ private slots:
     void aVolumeThatCallsItselfReadOnlyIsStillTriedIfTheFolderTakesFiles();
     void aDriveFarTooSmallIsRefusedBeforeAnythingIsWritten();
     void aDriveThatMightJustFitIsTriedAndSaysSo();
+    void aDiskImageArrivesWithItsHolesIntact();
     void cleanupTestCase();
 
 private:
@@ -329,6 +331,92 @@ void ContinuityRoundTripTest::aDriveThatMightJustFitIsTriedAndSaysSo() {
         warned = warned || note.detail.contains(QStringLiteral("It may still fit"));
     }
     QVERIFY2(warned, "the drive was nearly too small and the report did not mention it");
+}
+
+// A disk image, a virtual machine, a database that has been emptied: files
+// whose length is mostly nothing.
+//
+// The machine they came from was not storing those zeroes, and the machine
+// they arrive on should not have to either. Writing them out is how a restore
+// of three gigabytes of data comes to need forty gigabytes of disk and fails
+// on a drive that was ample - and the failure arrives at the end, after
+// everything else has already been written.
+//
+// Deliberately last in the file: it puts a large file into the fixture tree,
+// and the counts the earlier cases check are counts of what is in that tree.
+void ContinuityRoundTripTest::aDiskImageArrivesWithItsHolesIntact() {
+    constexpr qint64 kLength = 4 * 1024 * 1024;
+    const QString imagePath = sourceHome() + QStringLiteral("/Documents/disk.img");
+
+    {
+        QByteArray image(kLength, '\0');
+        // A little real data spread through it, the way a partition table and a
+        // few written blocks sit in an otherwise empty image.
+        for (qint64 at = 0; at < kLength; at += 512 * 1024) {
+            image.replace(static_cast<int>(at), 4096, QByteArray(4096, '\xC3'));
+        }
+        QFile file(imagePath);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QCOMPARE(file.write(image), kLength);
+    }
+
+    core::CancelToken token;
+    core::ExportService exporter(*platform_);
+    core::ExportRequest request;
+    request.destinationPath = archivePath("disk-image.txa");
+    request.selection = documentsSelection();
+    request.packaging.preset = format::CompressionPreset::Fast;
+
+    const core::ExportReport exported = exporter.run(request, token);
+    QVERIFY2(exported.succeeded, qPrintable(exported.errorMessage));
+
+    core::ImportService importer(*platform_);
+    core::ImportRequest restore;
+    restore.archivePath = request.destinationPath;
+    restore.destinationOverride = workspace_.filePath("restored-image");
+    const core::ImportReport imported = importer.run(restore, token);
+    QVERIFY2(imported.succeeded, qPrintable(imported.errorMessage));
+
+    const QString restoredPath =
+        findRestored(workspace_.filePath("restored-image"), QStringLiteral("disk.img"));
+    QVERIFY2(!restoredPath.isEmpty(), "the image did not arrive at all");
+
+    // First the part that has to hold everywhere: the bytes.
+    QFile restored(restoredPath);
+    QVERIFY(restored.open(QIODevice::ReadOnly));
+    const QByteArray arrived = restored.readAll();
+    QCOMPARE(arrived.size(), kLength);
+    QFile original(imagePath);
+    QVERIFY(original.open(QIODevice::ReadOnly));
+    QCOMPARE(arrived, original.readAll());
+
+    // Then the part that depends on the filesystem. The source file is the
+    // control: it was written in full, so if this filesystem accounts for
+    // holes at all it says so here, and only then is the restored file
+    // required to be smaller than its length.
+    const auto ofSource = format::allocatedSize(format::toFsPath(imagePath.toUtf8().toStdString()));
+    const auto ofRestored =
+        format::allocatedSize(format::toFsPath(restoredPath.toUtf8().toStdString()));
+    // QVERIFY2 evaluates its message whether or not the check passes, so the
+    // error can only be read once the failure is certain.
+    if (!ofSource) {
+        QFAIL(qPrintable(QString::fromStdString(ofSource.error().toString())));
+    }
+    if (!ofRestored) {
+        QFAIL(qPrintable(QString::fromStdString(ofRestored.error().toString())));
+    }
+
+    if (*ofSource >= static_cast<std::uint64_t>(kLength)) {
+        QVERIFY2(*ofRestored < static_cast<std::uint64_t>(kLength) / 2,
+                 qPrintable(QStringLiteral("the restored image takes %1 bytes of disk where the "
+                                           "original, written out in full, takes %2")
+                                .arg(*ofRestored)
+                                .arg(*ofSource)));
+    } else {
+        qInfo("this filesystem does not account for holes; only the bytes were checked");
+    }
+
+    QVERIFY(QFile::remove(imagePath));
 }
 
 void ContinuityRoundTripTest::cleanupTestCase() {

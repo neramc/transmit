@@ -9,6 +9,7 @@
 #include <string_view>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include "format/Bytes.h"
 #include "format/Result.h"
@@ -94,6 +95,24 @@ public:
     Result<std::uint64_t> size() const;
     Status flush();
 
+    /// Sets the file's length, growing it with a hole rather than with bytes.
+    ///
+    /// Needed because seeking past the end of a file and writing nothing does
+    /// not make it longer: a file that ends in a run of zeroes would otherwise
+    /// come back short by exactly that run.
+    Status truncate(std::uint64_t length);
+
+    /// Tells the filesystem this file is allowed to have holes in it.
+    ///
+    /// Only Windows needs asking: NTFS zero-fills a seek unless the file has
+    /// been marked sparse first, and the mark can only be set while the file
+    /// is empty. Every POSIX filesystem that supports holes makes one on its
+    /// own when a write lands past the end, so there this succeeds without
+    /// doing anything. A filesystem that has no holes to offer - FAT32 and
+    /// exFAT on a stick, most obviously - is not an error either: it writes
+    /// the zeroes, and the file reads back the same either way.
+    Status declareSparse();
+
     /// Pushes everything written so far all the way to the device, so it
     /// survives losing power - flush() only hands the bytes to the operating
     /// system, which may hold them in the page cache for half a minute.
@@ -123,6 +142,63 @@ Status syncDirectory(const std::filesystem::path& directory);
 /// twice cannot do any harm and once is not always enough on a USB stick.
 Result<ByteBuffer> readWholeFile(const std::filesystem::path& path, const RetryPolicy& retry = {});
 
+/// A run of bytes inside a file.
+struct ByteRange {
+    std::uint64_t offset = 0;
+    std::uint64_t length = 0;
+
+    [[nodiscard]] friend bool operator==(const ByteRange& a, const ByteRange& b) noexcept {
+        return a.offset == b.offset && a.length == b.length;
+    }
+};
+
+/// The shortest run of zeroes worth leaving as a hole.
+///
+/// A hole costs a seek and, on Windows, an entry in the file's allocated-range
+/// table; below a few filesystem blocks that is more expensive than writing
+/// the zeroes. 64 KiB is comfortably above the largest block size in ordinary
+/// use and small enough that the runs inside a disk image are all found.
+inline constexpr std::uint64_t kSmallestHole = 64 * 1024;
+
+/// Files below this are always written whole.
+///
+/// Scanning costs a pass over the bytes, and no file this small has enough
+/// hole in it to pay for one. Disk images, virtual machines and database files
+/// - the things that are mostly hole - are all far above it.
+inline constexpr std::uint64_t kSmallestSparseFile = 1024 * 1024;
+
+/// The parts of `data` worth writing, leaving out every run of zeroes at least
+/// `smallestHole` long.
+///
+/// The gaps between the returned ranges are the holes. A file made only of
+/// zeroes yields no ranges at all, which is correct and is why the caller
+/// still has to set the length afterwards.
+[[nodiscard]] std::vector<ByteRange> spansWorthWriting(ByteView data,
+                                                       std::uint64_t smallestHole = kSmallestHole);
+
+/// How many bytes the filesystem has actually put behind `path`.
+///
+/// Smaller than the file's length exactly when it has holes in it, which is
+/// what makes this the way to check that a hole survived rather than being
+/// quietly filled in. Rounded up to a whole number of blocks, so it is never
+/// exactly the length of the data either.
+[[nodiscard]] Result<std::uint64_t> allocatedSize(const std::filesystem::path& path);
+
+/// Whether a write may leave holes where the data is zeroes.
+enum class Sparseness {
+    /// Every byte is written. What a small file wants, and the default.
+    Dense,
+    /// Long runs of zeroes are skipped rather than written, where the file is
+    /// big enough for that to be worth doing.
+    ///
+    /// The file that arrives is byte for byte the same either way - a hole
+    /// reads as zeroes - so this is never a question of what the data is, only
+    /// of how much room it takes. It matters most on a restore: a disk image
+    /// that occupied 3 GB on the machine it came from needs its full 40 GB on
+    /// the far side otherwise, and the restore fails on a disk that was ample.
+    PunchHoles,
+};
+
 /// How far a write is pushed before it is called done.
 enum class Durability {
     /// Buffered. Survives this process dying, not the machine losing power.
@@ -141,6 +217,7 @@ enum class Durability {
 /// interrupted write cannot leave a half-written report or catalog behind.
 Status writeFileAtomically(const std::filesystem::path& path, ByteView data,
                            Durability durability = Durability::DataAndName,
+                           Sparseness sparseness = Sparseness::Dense,
                            const RetryPolicy& retry = {});
 
 /// Asks the operating system to forget its cached copy of a file.

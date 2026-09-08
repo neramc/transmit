@@ -16,6 +16,7 @@
 #include <io.h>
 #else
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -387,6 +388,126 @@ Status syncDirectory(const std::filesystem::path& directory) {
 #endif
 }
 
+Status FileStream::truncate(std::uint64_t length) {
+    if (handle_ == nullptr) {
+        return makeError(ErrorCode::IoError, "cannot resize a file that is not open");
+    }
+    // Anything still in the stdio buffer belongs to a position the resize is
+    // about to move, so it goes out first.
+    TRANSMIT_CHECK(flush());
+
+#if defined(_WIN32)
+    const int descriptor = ::_fileno(handle_);
+    if (descriptor < 0) {
+        return errnoError(path_, "could not resize");
+    }
+    if (::_chsize_s(descriptor, static_cast<__int64>(length)) != 0) {
+        return errnoError(path_, "could not resize");
+    }
+#else
+    const int descriptor = ::fileno(handle_);
+    if (descriptor < 0) {
+        return errnoError(path_, "could not resize");
+    }
+    if (::ftruncate(descriptor, static_cast<off_t>(length)) != 0) {
+        return errnoError(path_, "could not resize");
+    }
+#endif
+    return ok();
+}
+
+Status FileStream::declareSparse() {
+#if defined(_WIN32)
+    if (handle_ == nullptr) {
+        return makeError(ErrorCode::IoError, "cannot mark a file that is not open");
+    }
+    const int descriptor = ::_fileno(handle_);
+    if (descriptor < 0) {
+        return errnoError(path_, "could not mark as sparse");
+    }
+    const auto native = reinterpret_cast<HANDLE>(::_get_osfhandle(descriptor));
+    if (native == INVALID_HANDLE_VALUE) {
+        return errnoError(path_, "could not mark as sparse");
+    }
+    DWORD returned = 0;
+    if (::DeviceIoControl(native, FSCTL_SET_SPARSE, nullptr, 0, nullptr, 0, &returned, nullptr) ==
+        0) {
+        // FAT32 and exFAT have no holes to give, and a network redirector may
+        // refuse. Neither is a failure: the zeroes get written instead and the
+        // file reads back the same, which is the whole reason this is allowed
+        // to be a preference rather than a requirement.
+        const DWORD error = ::GetLastError();
+        if (error != ERROR_INVALID_FUNCTION && error != ERROR_NOT_SUPPORTED &&
+            error != ERROR_INVALID_PARAMETER) {
+            return makeError(ErrorCode::IoError, "could not mark '", fromFsPath(path_),
+                             "' as sparse");
+        }
+    }
+#endif
+    return ok();
+}
+
+std::vector<ByteRange> spansWorthWriting(ByteView data, std::uint64_t smallestHole) {
+    std::vector<ByteRange> spans;
+    if (data.empty()) {
+        return spans;
+    }
+    if (smallestHole == 0) {
+        smallestHole = 1;
+    }
+
+    const auto* bytes = reinterpret_cast<const unsigned char*>(data.data());
+    const std::size_t total = data.size();
+    const auto hole = static_cast<std::size_t>(
+        std::min<std::uint64_t>(smallestHole, static_cast<std::uint64_t>(total) + 1));
+
+    std::size_t spanStart = 0;
+    std::size_t at = 0;
+    while (at < total) {
+        if (bytes[at] != 0) {
+            ++at;
+            continue;
+        }
+        // A zero. Measure the run before deciding anything: a run shorter than
+        // a hole is cheaper to write than to skip, and skipping it would split
+        // one span into two for no gain.
+        std::size_t runEnd = at;
+        while (runEnd < total && bytes[runEnd] == 0) {
+            ++runEnd;
+        }
+        if (runEnd - at >= hole) {
+            if (at > spanStart) {
+                spans.push_back(ByteRange{spanStart, at - spanStart});
+            }
+            spanStart = runEnd;
+        }
+        at = runEnd;
+    }
+    if (total > spanStart) {
+        spans.push_back(ByteRange{spanStart, total - spanStart});
+    }
+    return spans;
+}
+
+Result<std::uint64_t> allocatedSize(const std::filesystem::path& path) {
+#if defined(_WIN32)
+    ULARGE_INTEGER size{};
+    size.LowPart = ::GetCompressedFileSizeW(path.c_str(), &size.HighPart);
+    if (size.LowPart == INVALID_FILE_SIZE && ::GetLastError() != NO_ERROR) {
+        return makeError(ErrorCode::IoError, "could not measure '", fromFsPath(path), "'");
+    }
+    return static_cast<std::uint64_t>(size.QuadPart);
+#else
+    struct stat info {};
+    if (::stat(path.c_str(), &info) != 0) {
+        return errnoError(path, "could not measure");
+    }
+    // st_blocks is in 512-byte units by definition, whatever the filesystem's
+    // own block size is.
+    return static_cast<std::uint64_t>(info.st_blocks) * 512U;
+#endif
+}
+
 Result<ByteBuffer> readWholeFile(const std::filesystem::path& path, const RetryPolicy& retry) {
     return withRetry(retry, [&path]() -> Result<ByteBuffer> {
         TRANSMIT_TRY(stream, FileStream::open(path, FileStream::Mode::Read));
@@ -402,7 +523,30 @@ namespace {
 /// One attempt at the swap. Separated so withRetry can repeat it whole: the
 /// temporary is created fresh each time, so a second attempt starts from the
 /// same place the first did.
-Status writeFileOnce(const std::filesystem::path& path, ByteView data, Durability durability) {
+/// Writes `data`, leaving the long runs of zeroes in it as holes.
+///
+/// The gaps are made by seeking rather than by punching afterwards, which is
+/// the one approach all three systems agree on: a write landing past the end
+/// of the file leaves a hole behind it on every filesystem that has them, and
+/// zeroes on every filesystem that does not. Either way the bytes read back
+/// the same, so this is safe to attempt anywhere.
+///
+/// The length is set at the end rather than trusted to the last write, because
+/// a file that ends in zeroes has nothing written after its final span and
+/// would otherwise arrive short by exactly that run.
+Status writeSpansWithHoles(FileStream& stream, ByteView data) {
+    TRANSMIT_CHECK(stream.declareSparse());
+
+    for (const ByteRange& span : spansWorthWriting(data)) {
+        TRANSMIT_CHECK(stream.seek(span.offset));
+        TRANSMIT_CHECK(stream.write(data.subspan(static_cast<std::size_t>(span.offset),
+                                                 static_cast<std::size_t>(span.length))));
+    }
+    return stream.truncate(static_cast<std::uint64_t>(data.size()));
+}
+
+Status writeFileOnce(const std::filesystem::path& path, ByteView data, Durability durability,
+                     Sparseness sparseness) {
     std::filesystem::path temporary = path;
     temporary += ".transmit-tmp";
 
@@ -412,7 +556,10 @@ Status writeFileOnce(const std::filesystem::path& path, ByteView data, Durabilit
             std::error_code ignored;
             std::filesystem::remove(temporary, ignored);
         };
-        if (auto status = stream.write(data); !status) {
+        const bool worthScanning = sparseness == Sparseness::PunchHoles &&
+                                   static_cast<std::uint64_t>(data.size()) >= kSmallestSparseFile;
+        if (auto status = worthScanning ? writeSpansWithHoles(stream, data) : stream.write(data);
+            !status) {
             cleanUp();
             return status;
         }
@@ -444,8 +591,9 @@ Status writeFileOnce(const std::filesystem::path& path, ByteView data, Durabilit
 }  // namespace
 
 Status writeFileAtomically(const std::filesystem::path& path, ByteView data, Durability durability,
-                           const RetryPolicy& retry) {
-    return withRetry(retry, [&]() -> Status { return writeFileOnce(path, data, durability); });
+                           Sparseness sparseness, const RetryPolicy& retry) {
+    return withRetry(retry,
+                     [&]() -> Status { return writeFileOnce(path, data, durability, sparseness); });
 }
 
 Result<bool> dropFromPageCache(const std::filesystem::path& path) {
