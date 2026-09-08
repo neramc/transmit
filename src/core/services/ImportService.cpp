@@ -1162,6 +1162,25 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
         report.renames.push_back({fromUtf8(rename.original), fromUtf8(rename.applied)});
     }
 
+    // One sentence with a number in it, rather than an entry per path. A tree
+    // deep enough to pass the target's limit passes it again at every folder
+    // below the one that did, so a single deep path used to arrive as seven
+    // records - each of them saying a file had been renamed to the name it
+    // already had. What a person can act on is the count and the two things
+    // they can do about it.
+    if (sanitizer.pathsTooLong() > 0) {
+        report.notes.push_back(ContinuityNote{
+            ContinuityGrade::Adapted, DomainId::UserData,
+            QCoreApplication::translate("Import", "Longer than this system usually allows"),
+            QCoreApplication::translate(
+                "Import",
+                "%n path(s) are longer than %1 characters. They will be written if long "
+                "paths are enabled on this machine, and can otherwise be restored into a "
+                "folder with a shorter name.",
+                nullptr, static_cast<int>(sanitizer.pathsTooLong()))
+                .arg(sanitizer.options().maxPathLength)});
+    }
+
     // ------------------------------------------- repoint restored settings
     // Restoring an application's settings verbatim leaves it pointing at
     // directories from the old machine. The archive carries the recipe that

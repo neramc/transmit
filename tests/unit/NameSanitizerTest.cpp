@@ -234,5 +234,50 @@ TEST(Traversal, ACutIsReported) {
     EXPECT_EQ(reason, RenameReason::PathTooLong);
 }
 
+/// A path too long for the target is not a rename.
+///
+/// It was recorded as one - and once per folder below the one that first
+/// passed the limit, each entry saying a file had been renamed to the name it
+/// already had. A single tree twelve folders deep produced seven of them, so a
+/// real restore onto Windows filled its report with thousands of changes that
+/// had not happened, burying the ones that had.
+TEST(Traversal, APathTooLongIsCountedRatherThanCalledARename) {
+    NameSanitizer sanitizer(SanitizeOptions::forTarget(OsFamily::Windows));
+
+    std::string deep;
+    for (int i = 0; i < 12; ++i) {
+        deep += "a-folder-with-a-perfectly-ordinary-name/";
+    }
+    deep += "notes.txt";
+
+    const std::string safe = sanitizer.sanitizeRelativePath(deep);
+
+    // Nothing about it needed changing: every name is legal on every system.
+    EXPECT_EQ(safe, deep);
+    EXPECT_TRUE(sanitizer.renames().empty());
+
+    // And it is still said, once, with a number a person can act on.
+    EXPECT_GT(sanitizer.pathsTooLong(), 0u);
+
+    for (const RenameRecord& record : sanitizer.renames()) {
+        EXPECT_NE(record.original, record.applied)
+            << "a path was reported as renamed to the name it already had";
+    }
+}
+
+/// And a path that really was renamed still says so.
+TEST(Traversal, ARealRenameIsStillRecorded) {
+    NameSanitizer sanitizer(SanitizeOptions::forTarget(OsFamily::Windows));
+
+    const std::string safe = sanitizer.sanitizeRelativePath("notes/inv<oi>ce.pdf");
+    EXPECT_EQ(safe, "notes/inv_oi_ce.pdf");
+
+    ASSERT_EQ(sanitizer.renames().size(), 1u);
+    EXPECT_EQ(sanitizer.renames().front().original, "notes/inv<oi>ce.pdf");
+    EXPECT_EQ(sanitizer.renames().front().applied, "notes/inv_oi_ce.pdf");
+    EXPECT_EQ(sanitizer.renames().front().reason, RenameReason::IllegalCharacter);
+    EXPECT_EQ(sanitizer.pathsTooLong(), 0u);
+}
+
 }  // namespace
 }  // namespace transmit::format

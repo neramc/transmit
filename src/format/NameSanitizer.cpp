@@ -150,6 +150,7 @@ void NameSanitizer::reset() {
     used_.clear();
     mapping_.clear();
     renames_.clear();
+    pathsTooLong_ = 0;
 }
 
 std::string NameSanitizer::foldCase(std::string_view text) {
@@ -265,11 +266,16 @@ std::string NameSanitizer::sanitizeRelativePath(std::string_view relativePath) {
                 const std::string appliedPath =
                     appliedPrefix.empty() ? safe : appliedPrefix + "/" + safe;
 
-                if (options_.maxPathLength > 0 && appliedPath.size() > options_.maxPathLength &&
-                    reason == RenameReason::None) {
-                    reason = RenameReason::PathTooLong;
+                if (options_.maxPathLength > 0 && appliedPath.size() > options_.maxPathLength) {
+                    ++pathsTooLong_;
                 }
-                if (reason != RenameReason::None || appliedPath != originalPrefix) {
+
+                // Only when the path actually changed. A path merely too long
+                // for the target is not a rename, and recording it as one put
+                // "X was renamed to X" in the report - once per folder below
+                // the one that first passed the limit, so a single deep tree
+                // filled the report with changes that had not happened.
+                if (appliedPath != originalPrefix) {
                     renames_.push_back(RenameRecord{
                         originalPrefix, appliedPath,
                         reason == RenameReason::None ? RenameReason::ExactCollision : reason});

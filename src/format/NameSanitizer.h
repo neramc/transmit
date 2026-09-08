@@ -71,6 +71,16 @@ public:
     [[nodiscard]] const std::string* appliedFor(std::string_view originalRelativePath) const;
 
     [[nodiscard]] const std::vector<RenameRecord>& renames() const noexcept { return renames_; }
+
+    /// How many paths came out longer than the target accepts.
+    ///
+    /// A count rather than a record each, because a tree deep enough to pass
+    /// Windows's 260 characters passes it at every folder below the one that
+    /// did - so a single deep path produced seven identical-looking entries,
+    /// and a real tree produces thousands. One sentence with a number in it is
+    /// the whole of what a person can act on: turn long paths on, or restore
+    /// somewhere shorter.
+    [[nodiscard]] std::size_t pathsTooLong() const noexcept { return pathsTooLong_; }
     [[nodiscard]] const SanitizeOptions& options() const noexcept { return options_; }
 
     void reset();
@@ -85,6 +95,7 @@ private:
     std::unordered_map<std::string, std::unordered_set<std::string>> used_;
     std::unordered_map<std::string, std::string> mapping_;
     std::vector<RenameRecord> renames_;
+    std::size_t pathsTooLong_ = 0;
 };
 
 }  // namespace transmit::format

@@ -125,6 +125,13 @@ notes say so.
   catalogue's schema refuses `..` in a pattern, but a rule also arrives inside
   an archive and in an overlay in the user's own configuration folder, and
   neither goes past the schema.
+- A restore onto Windows no longer fills its report with renames that did not
+  happen. A path longer than the 260 characters Windows accepts by default was
+  recorded as a rename — from a name to the same name — and once for every
+  folder below the one that first passed the limit, so a single tree twelve
+  deep produced seven of them and a real one produced thousands, burying the
+  renames that had actually occurred. It is one note with a count now, saying
+  the two things a person can do about it.
 - The updater flushes the new version to the disk before renaming it into
   place, and the folder afterwards. A rename is atomic about the name and says
   nothing about the contents, so a power cut between the copy and the page
