@@ -161,6 +161,14 @@ private:
 /// orders the metadata itself.
 Status syncDirectory(const std::filesystem::path& directory);
 
+/// Pushes a file that is already on disk all the way to the device.
+///
+/// For bytes something other than a FileStream put there - a copy, an unpack -
+/// where what happens next depends on them really being on the platter rather
+/// than in the page cache. A rename is atomic about the name and says nothing
+/// whatever about the contents.
+Status syncFile(const std::filesystem::path& path);
+
 /// Reads a whole file. Intended for small files (recipes, reports); the
 /// capture pipeline streams instead. Retried, because reading the same file
 /// twice cannot do any harm and once is not always enough on a USB stick.

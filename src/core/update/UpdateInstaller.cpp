@@ -5,7 +5,10 @@
 #include <QFileInfo>
 #include <QProcess>
 
+#include <filesystem>
+
 #include "core/utils/Logging.h"
+#include "format/FileIo.h"
 #include "format/hash/Blake2b.h"
 
 namespace transmit::core {
@@ -71,6 +74,11 @@ QByteArray digestOf(const QString& path) {
             static_cast<qsizetype>(computed.size())};
 }
 
+/// A Qt path as the file layer wants it.
+std::filesystem::path toPath(const QString& path) {
+    return format::toFsPath(path.toUtf8().toStdString());
+}
+
 InstallOutcome refuse(const QString& problem) {
     InstallOutcome outcome;
     outcome.problem = problem;
@@ -99,6 +107,20 @@ InstallOutcome replaceFile(const QString& staged, const QString& target) {
         return refuse(QStringLiteral("the new version could not be made runnable"));
     }
 
+    // The bytes have to be on the disk before the name points at them. A
+    // rename is atomic about the name and says nothing about the contents, so
+    // losing power between the copy and the moment the page cache is written
+    // back leaves the program's own name pointing at a file that is partly or
+    // entirely zeroes - and this is the one file whose being wrong means there
+    // is nothing left to run and nothing left to update with. The archive
+    // writer was given this rule in the same breath as fsync; the updater was
+    // not.
+    if (const auto synced = format::syncFile(toPath(incoming)); !synced) {
+        QFile::remove(incoming);
+        return refuse(QStringLiteral("the new version could not be written to the disk - %1")
+                          .arg(QString::fromStdString(synced.error().message)));
+    }
+
     if (!QFile::rename(target, previous)) {
         QFile::remove(incoming);
         return refuse(QStringLiteral("could not move the running version aside - %1 may be "
@@ -116,6 +138,16 @@ InstallOutcome replaceFile(const QString& staged, const QString& target) {
                           : QStringLiteral("the new version could not be moved into place and "
                                            "the old one could not be put back - it is at %1")
                                 .arg(previous));
+    }
+
+    // And the new name itself, which lives in the directory rather than in the
+    // file. Not a reason to fail: the program is in place and running it will
+    // work; this only decides whether it survives losing power in the next
+    // half minute, and there is nothing better to do about it than say so.
+    if (const auto synced = format::syncDirectory(toPath(QFileInfo(target).absolutePath()));
+        !synced) {
+        qCWarning(logApp) << "the update is in place but its directory could not be flushed -"
+                          << QString::fromStdString(synced.error().message);
     }
 
     InstallOutcome outcome;

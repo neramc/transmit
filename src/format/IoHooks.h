@@ -38,6 +38,16 @@ struct IoHooks {
     std::function<std::optional<Error>(const std::filesystem::path&, std::uint64_t offset,
                                        std::size_t size)>
         beforeRead;
+
+    /// Consulted before each sync, and the only way to check a durability rule
+    /// rather than assert it in a comment.
+    ///
+    /// "The bytes are on the disk before the name points at them" cannot be
+    /// observed from outside: a build that dropped the sync passes every test
+    /// there is and fails once, on somebody's machine, after a power cut.
+    /// Returning an error here is a drive that will not commit, which is also
+    /// what a stick pulled out mid-flush looks like.
+    std::function<std::optional<Error>(const std::filesystem::path&)> beforeSync;
 };
 
 /// Installs hooks for every thread. Test-only: nothing in the application ever

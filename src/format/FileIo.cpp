@@ -337,6 +337,11 @@ Status FileStream::sync() {
     if (handle_ == nullptr) {
         return ok();
     }
+    if (const IoHooks* hooks = ioHooks(); hooks != nullptr && hooks->beforeSync) {
+        if (auto injected = hooks->beforeSync(path_)) {
+            return *injected;
+        }
+    }
     // The stdio buffer has to go first: syncing the descriptor says nothing
     // about bytes still sitting in this process.
     TRANSMIT_CHECK(flush());
@@ -387,6 +392,11 @@ Status FileStream::sync() {
 }
 
 Status syncDirectory(const std::filesystem::path& directory) {
+    if (const IoHooks* hooks = ioHooks(); hooks != nullptr && hooks->beforeSync) {
+        if (auto injected = hooks->beforeSync(directory)) {
+            return *injected;
+        }
+    }
 #if defined(_WIN32)
     (void)directory;
     return ok();
@@ -414,6 +424,14 @@ Status syncDirectory(const std::filesystem::path& directory) {
     }
     return ok();
 #endif
+}
+
+Status syncFile(const std::filesystem::path& path) {
+    auto stream = FileStream::open(path, FileStream::Mode::ReadWrite);
+    if (!stream) {
+        return stream.error();
+    }
+    return stream->sync();
 }
 
 Status FileStream::truncate(std::uint64_t length) {

@@ -103,6 +103,14 @@ control that turns this off: an updater that installs what it cannot
 authenticate is a way to run arbitrary code on every machine that has this
 program.
 
+**An update is on the disk before its name points at it.** The new version is
+copied beside the old one, flushed all the way to the device, and only then
+renamed into place — a rename is atomic about the name and says nothing about
+the contents, so without the flush a power cut leaves the program's own name
+pointing at a file of zeroes, and there is then nothing left to run and nothing
+to update with. A drive that will not commit leaves the old version exactly
+where it was.
+
 **A download is checked against the signed feed, twice.** Once when it arrives,
 by reading it back off the disk rather than hashing it on the way past — so a
 file that arrived intact and failed to land intact is caught. Again at the

@@ -25,6 +25,7 @@
 #include "core/update/UpdateService.h"
 #include "core/update/UpdateSignature.h"
 #include "core/update/Version.h"
+#include "format/IoHooks.h"
 #include "format/hash/Blake2b.h"
 
 #include "UpdateController.h"
@@ -301,6 +302,8 @@ private slots:
 
     // Putting it in place
     void replacesAFileAndKeepsTheOldOne();
+    void theNewVersionIsOnTheDiskBeforeItsNameIs();
+    void aDriveThatWillNotCommitLeavesTheOldVersionInPlace();
     void putsTheOldOneBack();
     void refusesToInstallOverAPackageManagedCopy();
     void refusesAStagedFileThatIsNotThere();
@@ -1032,6 +1035,104 @@ void UpdateTest::signsAFeedThisBuildAccepts() {
 }
 
 // -------------------------------------------------------------- installer ---
+
+/// The rule that cannot be seen from outside.
+///
+/// A rename is atomic about the name and says nothing about the contents, so
+/// the new program's bytes have to reach the disk before its name points at
+/// them. A build that drops the sync passes every other test here and fails
+/// once, on somebody's machine, after a power cut - with the program's own
+/// name pointing at a file of zeroes and nothing left to update with. So the
+/// file layer is asked to say when it syncs, and this checks the order.
+void UpdateTest::theNewVersionIsOnTheDiskBeforeItsNameIs() {
+    const QString target = work_.filePath(QStringLiteral("Ordered.AppImage"));
+    const QString stagedPath = work_.filePath(QStringLiteral("ordered-staged.AppImage"));
+
+    const auto put = [](const QString& path, const QByteArray& bytes) {
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(bytes);
+    };
+    put(target,
+        "\x7f"
+        "ELF the old one");
+    put(stagedPath,
+        "\x7f"
+        "ELF the new one");
+
+    QStringList synced;
+    transmit::format::IoHooks hooks;
+    hooks.beforeSync = [&synced](const std::filesystem::path& path) {
+        synced << QString::fromStdString(path.string());
+        return std::nullopt;
+    };
+
+    InstallOutcome outcome;
+    {
+        const transmit::format::ScopedIoHooks installed(hooks);
+        outcome = UpdateInstaller::apply(stagedPath, target, InstallKind::AppImage);
+    }
+    QVERIFY2(outcome.applied, qPrintable(outcome.problem));
+
+    const QString incoming = target + QStringLiteral(".incoming");
+    QVERIFY2(synced.contains(incoming),
+             qPrintable(QStringLiteral("the new version was never flushed; synced: %1")
+                            .arg(synced.join(QStringLiteral(", ")))));
+
+    // And the folder afterwards, because the new name lives there rather than
+    // in the file.
+    QVERIFY2(synced.contains(QFileInfo(target).absolutePath()),
+             qPrintable(synced.join(QStringLiteral(", "))));
+    QVERIFY2(synced.indexOf(incoming) < synced.indexOf(QFileInfo(target).absolutePath()),
+             "the directory was flushed before the file it names");
+}
+
+/// A drive that accepts the bytes and will not commit them.
+///
+/// Which is a stick pulled out mid-flush, and the answer has to be that
+/// nothing was swapped: a program half replaced is worse than one not replaced
+/// at all, because there is then nothing to run the next update from.
+void UpdateTest::aDriveThatWillNotCommitLeavesTheOldVersionInPlace() {
+    const QString target = work_.filePath(QStringLiteral("Stubborn.AppImage"));
+    const QString stagedPath = work_.filePath(QStringLiteral("stubborn-staged.AppImage"));
+
+    const QByteArray was =
+        "\x7f"
+        "ELF the old one";
+    const auto put = [](const QString& path, const QByteArray& bytes) {
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(bytes);
+    };
+    put(target, was);
+    put(stagedPath,
+        "\x7f"
+        "ELF the new one");
+
+    transmit::format::IoHooks hooks;
+    hooks.beforeSync = [](const std::filesystem::path& path) {
+        return transmit::format::makeError(transmit::format::ErrorCode::IoError,
+                                           "the drive was pulled out of '", path.string(), "'");
+    };
+
+    InstallOutcome outcome;
+    {
+        const transmit::format::ScopedIoHooks installed(hooks);
+        outcome = UpdateInstaller::apply(stagedPath, target, InstallKind::AppImage);
+    }
+
+    QVERIFY2(!outcome.applied, "an update that could not be made durable said it was installed");
+    QVERIFY(!outcome.problem.isEmpty());
+
+    QFile still(target);
+    QVERIFY(still.open(QIODevice::ReadOnly));
+    QCOMPARE(still.readAll(), was);
+    still.close();
+
+    // And nothing left beside it for the next run to find and take for a newer
+    // version.
+    QVERIFY(!QFile::exists(target + QStringLiteral(".incoming")));
+}
 
 void UpdateTest::replacesAFileAndKeepsTheOldOne() {
     const QString target = work_.filePath(QStringLiteral("Transmit.AppImage"));

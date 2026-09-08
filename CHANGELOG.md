@@ -125,6 +125,13 @@ notes say so.
   catalogue's schema refuses `..` in a pattern, but a rule also arrives inside
   an archive and in an overlay in the user's own configuration folder, and
   neither goes past the schema.
+- The updater flushes the new version to the disk before renaming it into
+  place, and the folder afterwards. A rename is atomic about the name and says
+  nothing about the contents, so a power cut between the copy and the page
+  cache being written back left the program's own name pointing at a file of
+  zeroes — with nothing to run and nothing to update with. The archive writer
+  was given this rule when fsync went in; the updater was not. A drive that
+  will not commit now leaves the old version where it was.
 - A rewrite that cannot be written is no longer reported as made. Every
   rewriter puts the new contents in `<file>.transmit-staged` and the plan
   renames that over the original; all of them opened the file, called write and
@@ -305,6 +312,11 @@ notes say so.
   that desktop with those settings chosen, which is the same as saying none was
   exercised. Three of the seven were wrong. The same move the package listings
   got, for the same reason.
+- The file layer can be asked to say when it flushes, so a durability rule can
+  be checked rather than asserted in a comment. "The bytes are on the disk
+  before the name points at them" is invisible from outside: a build that drops
+  the flush passes every test there is and fails once, on somebody's machine,
+  after a power cut.
 - A fuzzer that crashes says which property it broke. Both of the path
   fuzzer's properties ended in a bare `abort()`, and an optimising build folds
   two identical calls into one — so the stack trace named whichever line the
