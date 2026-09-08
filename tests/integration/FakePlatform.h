@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <utility>
 
@@ -75,8 +76,20 @@ public:
     [[nodiscard]] std::unique_ptr<platform::SettingsProvider> settingsProvider() const override {
         return real_->settingsProvider();
     }
+    /// Answer secretStore() with one a test can look inside.
+    ///
+    /// The alternative is a real keyring, which means a session bus, an
+    /// unlocked login keyring and a machine that has one - so the part of
+    /// Transmit that handles passwords would be exercised on one platform, in
+    /// one configuration, if at all. The maker is called afresh each time
+    /// because the interface hands back an owned store; a fake that has to
+    /// remember anything keeps it somewhere both copies can see.
+    void keepCredentialsIn(std::function<std::unique_ptr<platform::SecretStore>()> maker) {
+        makeStore_ = std::move(maker);
+    }
+
     [[nodiscard]] std::unique_ptr<platform::SecretStore> secretStore() const override {
-        return real_->secretStore();
+        return makeStore_ ? makeStore_() : real_->secretStore();
     }
     [[nodiscard]] QList<platform::AccessObstacle> accessObstacles() const override {
         return obstacles_.isEmpty() ? real_->accessObstacles() : obstacles_;
@@ -85,6 +98,7 @@ public:
 private:
     std::unique_ptr<platform::PlatformService> real_;
     format::OsFamily pretend_ = format::OsFamily::Unknown;
+    std::function<std::unique_ptr<platform::SecretStore>()> makeStore_;
     QList<platform::AccessObstacle> obstacles_;
     QList<platform::StorageVolume> volumes_;
 };

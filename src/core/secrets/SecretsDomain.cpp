@@ -309,11 +309,16 @@ QList<ContinuityNote> SecretsDomain::restore(format::ByteView payload,
                 ? QCoreApplication::translate("Secrets",
                                               "These need administrator rights to add: %1")
                       .arg(needingPermission.join(QStringLiteral(", ")))
+                // Named here too, and not only inside the file. "The commands
+                // are in this script" leaves the person with the one question
+                // they actually have - which networks? - answerable only by
+                // opening it.
                 : QCoreApplication::translate(
                       "Secrets",
-                      "These need administrator rights to add. The commands are in \"%1\"; they "
-                      "ask for the password when you run them, and it is not written in the file.")
-                      .arg(path)});
+                      "These need administrator rights to add: %1. The commands are in \"%2\"; "
+                      "they ask for the password when you run them, and it is not written in the "
+                      "file.")
+                      .arg(needingPermission.join(QStringLiteral(", ")), path)});
     }
 
     if (!failed.isEmpty()) {

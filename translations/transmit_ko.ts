@@ -2161,7 +2161,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>These need administrator rights to add. The commands are in &quot;%1&quot;; they ask for the password when you run them, and it is not written in the file.</source>
+        <source>These need administrator rights to add: %1. The commands are in &quot;%2&quot;; they ask for the password when you run them, and it is not written in the file.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

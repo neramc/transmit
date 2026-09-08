@@ -32,6 +32,7 @@
 #include "core/update/UpdateService.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
+#include "core/utils/WrittenValues.h"
 #include "format/FileIo.h"
 #include "platform/PlatformService.h"
 
@@ -136,83 +137,6 @@ void printNotes(const QList<core::ContinuityNote>& notes) {
             << Qt::endl;
         out() << QStringLiteral("      ") << note.detail << Qt::endl;
     }
-}
-
-/// "512", "64K", "3584M", "2G". Returns nothing when it is not a size.
-std::optional<quint64> parseSize(const QString& text) {
-    const QString upper = text.trimmed().toUpper();
-    if (upper.isEmpty()) {
-        return std::nullopt;
-    }
-
-    quint64 multiplier = 1;
-    QString digits = upper;
-    if (upper.endsWith(u'K')) {
-        multiplier = 1024ULL;
-        digits.chop(1);
-    } else if (upper.endsWith(u'M')) {
-        multiplier = 1024ULL * 1024;
-        digits.chop(1);
-    } else if (upper.endsWith(u'G')) {
-        multiplier = 1024ULL * 1024 * 1024;
-        digits.chop(1);
-    }
-
-    bool valid = false;
-    const quint64 value = digits.toULongLong(&valid);
-    if (!valid) {
-        return std::nullopt;
-    }
-    return value * multiplier;
-}
-
-/// "30d", "6m", "2y", or an ISO date. Relative forms because that is how
-/// people think about it - "anything I have touched this year" - and the
-/// absolute one because a script wants a fixed boundary.
-std::optional<QDateTime> parseWhen(const QString& text) {
-    const QString trimmed = text.trimmed();
-    if (trimmed.isEmpty()) {
-        return std::nullopt;
-    }
-
-    const QChar unit = trimmed.back().toLower();
-    if (unit == u'd' || unit == u'w' || unit == u'm' || unit == u'y') {
-        bool valid = false;
-        const int count = QStringView(trimmed).chopped(1).toInt(&valid);
-        if (!valid || count < 0) {
-            return std::nullopt;
-        }
-        const QDateTime now = QDateTime::currentDateTime();
-        switch (unit.unicode()) {
-            case u'd':
-                return now.addDays(-count);
-            case u'w':
-                return now.addDays(-count * 7);
-            case u'm':
-                return now.addMonths(-count);
-            default:
-                return now.addYears(-count);
-        }
-    }
-
-    const QDateTime absolute = QDateTime::fromString(trimmed, Qt::ISODate);
-    return absolute.isValid() ? std::optional<QDateTime>(absolute) : std::nullopt;
-}
-
-/// The extensions in a comma-separated list, lowercase and without dots, so
-/// "--include-ext .TXT, md" means what it looks like it means.
-QSet<QString> parseExtensions(const QString& text) {
-    QSet<QString> extensions;
-    for (const QString& piece : text.split(u',', Qt::SkipEmptyParts)) {
-        QString extension = piece.trimmed().toLower();
-        while (extension.startsWith(u'.')) {
-            extension.remove(0, 1);
-        }
-        if (!extension.isEmpty()) {
-            extensions.insert(extension);
-        }
-    }
-    return extensions;
 }
 
 /// Where the time went, longest first, with what each stage is a share of.
@@ -444,7 +368,7 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
     }
 
     if (parser.isSet(splitOption)) {
-        const auto size = parseSize(parser.value(splitOption));
+        const auto size = core::sizeFromText(parser.value(splitOption));
         if (!size) {
             return reportError(QStringLiteral("could not read the split size '%1'")
                                    .arg(parser.value(splitOption)));
@@ -460,7 +384,7 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
         if (!parser.isSet(option)) {
             return {};
         }
-        const auto size = parseSize(parser.value(option));
+        const auto size = core::sizeFromText(parser.value(option));
         if (!size) {
             return QStringLiteral("could not read --%1 '%2'").arg(option, parser.value(option));
         }
@@ -485,7 +409,7 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
         if (!parser.isSet(option)) {
             continue;
         }
-        const auto when = parseWhen(parser.value(option));
+        const auto when = core::timeFromText(parser.value(option));
         if (!when) {
             return reportError(QStringLiteral("could not read --%1 '%2'; try 30d, 6m, 2y or a "
                                               "date like 2025-01-31")
@@ -495,10 +419,12 @@ int runExport(QCommandLineParser& parser, const QCommandLineOption& outputOption
     }
 
     if (parser.isSet(QStringLiteral("include-ext"))) {
-        scope.includeExtensions = parseExtensions(parser.value(QStringLiteral("include-ext")));
+        scope.includeExtensions =
+            core::extensionsFromText(parser.value(QStringLiteral("include-ext")));
     }
     if (parser.isSet(QStringLiteral("exclude-ext"))) {
-        scope.excludeExtensions = parseExtensions(parser.value(QStringLiteral("exclude-ext")));
+        scope.excludeExtensions =
+            core::extensionsFromText(parser.value(QStringLiteral("exclude-ext")));
     }
     scope.excludePatterns += parser.values(QStringLiteral("exclude"));
     if (parser.isSet(QStringLiteral("no-hidden"))) {

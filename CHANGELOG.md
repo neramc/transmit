@@ -116,6 +116,23 @@ notes say so.
 
 ### Fixed
 
+- A size too large to hold is refused rather than wrapped round. `--max-file-size
+  18446744073709551G` used to come back as a limit of about fourteen exabytes,
+  because the multiplication overflowed with nothing to notice it by: not what
+  anybody asked for, and it does not look wrong anywhere afterwards.
+
+- A date off the end of the calendar is refused rather than guessed at.
+  `--modified-since 400000000w` multiplied the count by seven inside an int,
+  which is undefined behaviour reached by typing a number, and
+  `--modified-since 2000000000y` came back as the first of January 1970 - a
+  date, before now, and nothing to do with what was asked for. Both are
+  refused, and the counting is done in 64 bits.
+
+- A report that names a script for the networks needing administrator rights
+  now names the networks too. It said where the commands were and left the one
+  question somebody actually has - which networks? - answerable only by opening
+  the file.
+
 - The coverage gate no longer fails a build because a commit was amended. Its
   changed-line check diffs against the commit the push event names as
   "before", and after a force-push that commit is orphaned on the server and
