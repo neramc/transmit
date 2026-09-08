@@ -20,6 +20,7 @@
 #include "core/utils/Conversions.h"
 #include "format/Container.h"
 #include "format/IoHooks.h"
+#include "format/crypto/ArchiveCipher.h"
 #include "format/hash/Blake2b.h"
 #include "platform/PlatformService.h"
 
@@ -47,6 +48,12 @@ private slots:
     void aFileThatHasChangedSinceTheCaptureIsNotUsedToRepairIt();
     void repairingASoundArchiveDoesNothingAndSaysSo();
     void repairingTwiceFindsNothingLeftToDo();
+    void anArchiveThatCannotBeReadAtAllIsNotCalledSound();
+    void aFileThatIsNoLongerThereSaysWhereItWasLookedFor();
+    void aFileOfADifferentLengthIsAChangeRatherThanAReadError();
+    void namingAFileTheArchiveDoesNotHoldIsAnError();
+    void anEncryptedArchiveWithNoPassphraseIsRefused();
+    void aCancelledRepairLeavesNothingBehind();
 
 private:
     /// Captures the fixture home and returns the archive path.
@@ -59,6 +66,10 @@ private:
 
     /// Flips one bit somewhere in the middle of a file.
     static void damage(const QString& path, qint64 offset);
+
+    /// The name the archive calls a file by, which is a token and a relative
+    /// path rather than anything this machine would recognise.
+    [[nodiscard]] static QString findEntryNamed(const QString& archive, const QString& fileName);
 
     /// The documents the captures in here are made of. Called again by the
     /// test that deliberately rewrites them, so the tests after it are not
@@ -144,6 +155,24 @@ void VerifyServiceTest::damage(const QString& path, qint64 offset) {
     QVERIFY(file.seek(offset));
     byte = static_cast<char>(byte ^ 0x01);
     QCOMPARE(file.write(&byte, 1), 1);
+}
+
+QString VerifyServiceTest::findEntryNamed(const QString& archive, const QString& fileName) {
+    auto reader = format::ArchiveReader::open(format::toFsPath(core::toUtf8(archive)));
+    if (!reader) {
+        return {};
+    }
+    const auto manifest = (*reader)->manifest();
+    if (!manifest) {
+        return {};
+    }
+    for (const format::ManifestEntry& entry : (*manifest)->entries) {
+        const QString named = core::fromUtf8(entry.path.toDisplayString());
+        if (entry.hasContent() && named.endsWith(fileName)) {
+            return named;
+        }
+    }
+    return {};
 }
 
 void VerifyServiceTest::anArchiveThatArrivedIntactVerifies() {
@@ -585,6 +614,147 @@ void VerifyServiceTest::repairingTwiceFindsNothingLeftToDo() {
     QVERIFY2(again.succeeded, qPrintable(again.errorMessage));
     QCOMPARE(again.filesNeedingRepair, 0ULL);
     QCOMPARE(again.filesRepaired, 0ULL);
+}
+
+// Nothing got far enough to make a list of damaged files, which is not the
+// same as there being none. Reporting it as "nothing to repair" would tell
+// somebody their archive is fine when it cannot be opened at all.
+void VerifyServiceTest::anArchiveThatCannotBeReadAtAllIsNotCalledSound() {
+    const QString archive = capture(QStringLiteral("unreadable.txa"));
+    QVERIFY(!archive.isEmpty());
+
+    // The footer is the last thing in the file and everything else is found
+    // through it, so this is the damage that stops the archive being read
+    // rather than one file in it.
+    const qint64 size = QFileInfo(archive).size();
+    for (qint64 at = size - 40; at < size; ++at) {
+        damage(archive, at);
+    }
+
+    core::CancelToken token;
+    core::RepairRequest request;
+    request.archivePath = archive;
+
+    const core::RepairReport report = core::RepairService().run(request, token, {});
+    QVERIFY2(!report.succeeded, "an archive that cannot be opened was reported as sound");
+    QVERIFY2(!report.errorMessage.isEmpty(), "it failed and said nothing about why");
+    QCOMPARE(report.filesRepaired, 0ULL);
+    QVERIFY(!QFileInfo::exists(archive + QStringLiteral(".repair")));
+}
+
+void VerifyServiceTest::aFileThatIsNoLongerThereSaysWhereItWasLookedFor() {
+    const QString archive = capture(QStringLiteral("gone.txa"));
+    QVERIFY(!archive.isEmpty());
+
+    const QString source = home() + QStringLiteral("/Documents/notes.txt");
+    QVERIFY(QFile::remove(source));
+
+    core::CancelToken token;
+    core::RepairRequest request;
+    request.archivePath = archive;
+    request.paths = QStringList{findEntryNamed(archive, QStringLiteral("notes.txt"))};
+    QVERIFY(!request.paths.first().isEmpty());
+
+    const core::RepairReport report = core::RepairService().run(request, token, {});
+    QVERIFY2(!report.succeeded, "a file that is not there was reported as recovered");
+    QCOMPARE(report.failures.size(), 1);
+    QCOMPARE(report.failures.first().obstacle, core::RepairObstacle::SourceMissing);
+
+    // Where it looked, so somebody can go and see for themselves - the archive
+    // records the folders of the machine that made it, and this is the one
+    // case where that matters to a person.
+    QVERIFY2(report.failures.first().sourcePath.contains(QStringLiteral("notes.txt")),
+             qPrintable(report.failures.first().sourcePath));
+    QVERIFY2(report.failures.first().detail.contains(report.failures.first().sourcePath),
+             qPrintable(report.failures.first().detail));
+
+    writeFixture();
+}
+
+void VerifyServiceTest::aFileOfADifferentLengthIsAChangeRatherThanAReadError() {
+    // A file that is now a different length is still perfectly readable, so
+    // "could not be read" would send somebody looking at their permissions
+    // instead of at their edits.
+    const QString archive = capture(QStringLiteral("longer.txa"));
+    QVERIFY(!archive.isEmpty());
+
+    {
+        QFile file(home() + QStringLiteral("/Documents/notes.txt"));
+        QVERIFY(file.open(QIODevice::Append));
+        file.write("and one line more\n");
+    }
+
+    core::CancelToken token;
+    core::RepairRequest request;
+    request.archivePath = archive;
+    request.paths = QStringList{findEntryNamed(archive, QStringLiteral("notes.txt"))};
+
+    const core::RepairReport report = core::RepairService().run(request, token, {});
+    QVERIFY(!report.succeeded);
+    QCOMPARE(report.failures.size(), 1);
+    QCOMPARE(report.failures.first().obstacle, core::RepairObstacle::SourceChanged);
+    QVERIFY2(report.failures.first().detail.contains(QStringLiteral("bytes when it was captured")),
+             qPrintable(report.failures.first().detail));
+
+    writeFixture();
+}
+
+void VerifyServiceTest::namingAFileTheArchiveDoesNotHoldIsAnError() {
+    const QString archive = capture(QStringLiteral("unknown-name.txa"));
+    QVERIFY(!archive.isEmpty());
+
+    core::CancelToken token;
+    core::RepairRequest request;
+    request.archivePath = archive;
+    request.paths = QStringList{QStringLiteral("{DOCUMENTS}/never-existed.txt")};
+
+    const core::RepairReport report = core::RepairService().run(request, token, {});
+    QVERIFY2(!report.succeeded, "a name the archive never held was accepted as work to do");
+    QVERIFY2(!report.errorMessage.isEmpty(), "it failed and said nothing about why");
+    QVERIFY(!QFileInfo::exists(archive + QStringLiteral(".repair")));
+}
+
+void VerifyServiceTest::anEncryptedArchiveWithNoPassphraseIsRefused() {
+    if (!format::ArchiveCipher::isAvailable()) {
+        QSKIP("this build has no OpenSSL, so it cannot make an encrypted archive to try");
+    }
+
+    core::ExportService exporter(*platform_);
+    core::CancelToken token;
+    core::ExportRequest request;
+    request.destinationPath = archivePath(QStringLiteral("sealed.txa"));
+    request.selection = core::ProfileService::profileById(QStringLiteral("documents")).selection;
+    request.packaging.preset = format::CompressionPreset::Fast;
+    request.packaging.verifyAfterWriting = false;
+    request.passphrase = QStringLiteral("open sesame");
+    QVERIFY2(exporter.run(request, token, {}).succeeded, "the encrypted fixture was not written");
+
+    core::RepairRequest repair;
+    repair.archivePath = request.destinationPath;
+    repair.paths = QStringList{QStringLiteral("{DOCUMENTS}/notes.txt")};
+
+    const core::RepairReport report = core::RepairService().run(repair, token, {});
+    QVERIFY2(!report.succeeded, "an encrypted archive was opened without its passphrase");
+    QVERIFY2(report.errorMessage.contains(QStringLiteral("passphrase")),
+             qPrintable(report.errorMessage));
+}
+
+void VerifyServiceTest::aCancelledRepairLeavesNothingBehind() {
+    const QString archive = capture(QStringLiteral("cancelled.txa"));
+    QVERIFY(!archive.isEmpty());
+    damage(archive, QFileInfo(archive).size() / 2);
+
+    core::CancelToken token;
+    token.cancel();
+
+    core::RepairRequest request;
+    request.archivePath = archive;
+    request.paths = QStringList{findEntryNamed(archive, QStringLiteral("notes.txt"))};
+
+    const core::RepairReport report = core::RepairService().run(request, token, {});
+    QVERIFY(!report.succeeded);
+    QVERIFY2(!QFileInfo::exists(archive + QStringLiteral(".repair")),
+             "a cancelled repair left a repair archive behind");
 }
 
 void VerifyServiceTest::repairingASoundArchiveDoesNothingAndSaysSo() {
