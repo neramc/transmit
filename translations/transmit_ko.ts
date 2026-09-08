@@ -1424,6 +1424,10 @@
         <source>What was restored has been noted, so running this again with &quot;carry on&quot; will settle only what is left rather than every file a second time.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Restored as another name for &quot;%1&quot;.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ImportPage</name>

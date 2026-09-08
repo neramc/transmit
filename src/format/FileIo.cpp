@@ -14,6 +14,10 @@
 #include <windows.h>
 
 #include <io.h>
+// The build defines WIN32_LEAN_AND_MEAN, which is what keeps windows.h down to
+// a reasonable size - and also what leaves FSCTL_SET_SPARSE undeclared, since
+// the device-control definitions live here rather than in windows.h itself.
+#include <winioctl.h>
 #else
 #include <fcntl.h>
 #include <sys/stat.h>

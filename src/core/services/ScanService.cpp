@@ -136,7 +136,11 @@ void fillPosixMetadata(const QFileInfo& info, ScannedItem& item) {
 void fillWindowsMetadata(const QFileInfo& info, ScannedItem& item) {
     format::WindowsMetadata& windows = item.windows;
 #ifdef Q_OS_WIN
-    const auto* native = reinterpret_cast<const wchar_t*>(info.absoluteFilePath().utf16());
+    // The string has to outlive the pointer into it. Written as one expression
+    // this was a temporary QString destroyed at the end of the statement, with
+    // `native` left pointing into freed memory for every call after the first.
+    const QString absolute = info.absoluteFilePath();
+    const auto* native = reinterpret_cast<const wchar_t*>(absolute.utf16());
     const DWORD attributes = ::GetFileAttributesW(native);
     if (attributes == INVALID_FILE_ATTRIBUTES) {
         return;
