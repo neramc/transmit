@@ -42,15 +42,36 @@ def executable_lines(entry):
     return counts
 
 
+def unreachable_base(base):
+    """Why `base` cannot be diffed against, or None if it can.
+
+    Two different things go wrong here and they deserve different sentences.
+    The commit may simply not be in this clone - the ordinary cause is a
+    force-push, after which the commit the push event names as "before" is
+    orphaned on the server and never arrives, however deep the fetch. Or it may
+    be present but share no history with HEAD, which is what an unrelated
+    branch looks like.
+
+    `git rev-parse --verify` answers neither question: given forty hex digits
+    it parses them and returns them, existing object or not, so it will happily
+    wave through the one case this is here to catch.
+    """
+    present = subprocess.run(["git", "cat-file", "-e", f"{base}^{{commit}}"],
+                             capture_output=True)
+    if present.returncode != 0:
+        return f"the commit '{base}' is not in this clone (a force-push leaves one behind)"
+
+    if subprocess.run(["git", "merge-base", base, "HEAD"], capture_output=True).returncode != 0:
+        return f"'{base}' shares no history with HEAD"
+
+    return None
+
+
 def added_lines(base):
     """The lines this branch adds, by file, from the merge base with `base`."""
-    try:
-        merge_base = subprocess.run(
-            ["git", "merge-base", base, "HEAD"],
-            capture_output=True, text=True, check=True).stdout.strip()
-    except subprocess.CalledProcessError:
-        print(f"cannot find a merge base with '{base}'", file=sys.stderr)
-        return None
+    merge_base = subprocess.run(
+        ["git", "merge-base", base, "HEAD"],
+        capture_output=True, text=True, check=True).stdout.strip()
 
     diff = subprocess.run(
         ["git", "diff", "--unified=0", "--no-color", f"{merge_base}...HEAD"],
@@ -71,14 +92,98 @@ def added_lines(base):
     return by_file
 
 
+def self_test():
+    """Check the two rules that decide whether this gate can be believed.
+
+    Both were wrong at once and neither showed as a wrong answer: the job
+    failed, which reads like a coverage regression, and the reason was a base
+    commit that a force-push had orphaned. So the rules are exercised here
+    against a repository built for the purpose, rather than left to be found
+    the next time somebody amends a commit.
+    """
+    import os
+    import pathlib
+    import tempfile
+
+    failures = []
+
+    def check(what, condition):
+        print(f"  {'ok  ' if condition else 'FAIL'}  {what}")
+        if not condition:
+            failures.append(what)
+
+    here = os.getcwd()
+    with tempfile.TemporaryDirectory() as work:
+        os.chdir(work)
+        try:
+            git = ["git", "-c", "user.email=t@t", "-c", "user.name=t"]
+            subprocess.run(["git", "init", "-q", "-b", "main", "."], check=True)
+            pathlib.Path("a.txt").write_text("one\n", encoding="utf-8")
+            subprocess.run(git + ["add", "-A"], check=True)
+            subprocess.run(git + ["commit", "-q", "-m", "first"], check=True)
+            first = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
+                                   text=True, check=True).stdout.strip()
+
+            pathlib.Path("a.txt").write_text("one\ntwo\n", encoding="utf-8")
+            subprocess.run(git + ["commit", "-qam", "second"], check=True)
+
+            print("A base commit that is not in the clone:")
+            absent = "0" * 40
+            check("git rev-parse --verify waves it through, so it cannot be the check",
+                  subprocess.run(["git", "rev-parse", "--verify", absent],
+                                 capture_output=True).returncode == 0)
+            check("unreachable_base names it",
+                  "not in this clone" in (unreachable_base(absent) or ""))
+
+            print("A base that shares no history:")
+            subprocess.run(git + ["checkout", "-q", "--orphan", "elsewhere"], check=True)
+            subprocess.run(git + ["commit", "-q", "--allow-empty", "-m", "unrelated"],
+                           check=True)
+            orphan = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
+                                    text=True, check=True).stdout.strip()
+            subprocess.run(git + ["checkout", "-q", "main"], check=True)
+            check("unreachable_base names that too",
+                  "shares no history" in (unreachable_base(orphan) or ""))
+
+            print("A base that can be diffed against:")
+            check("unreachable_base says nothing is wrong", unreachable_base(first) is None)
+            check("and the added line is found",
+                  added_lines(first).get("a.txt") == {2})
+        finally:
+            os.chdir(here)
+
+    print("\nA gap region is not code:")
+    entry = {"segments": [[10, 1, 3, True, True, False],
+                          [11, 1, 0, True, True, True],
+                          [12, 1, 0, True, True, False],
+                          [13, 1, 0, False, False, False]]}
+    counts = executable_lines(entry)
+    check("a line that ran is counted as covered", counts.get(10) == 3)
+    check("the gap region is left out entirely", 11 not in counts)
+    check("a real line that never ran is counted as missed", counts.get(12) == 0)
+    check("a line with no count at all is not code", 13 not in counts)
+
+    if failures:
+        print(f"\n{len(failures)} of these rules do not hold.")
+        return 1
+    print("\nEvery rule holds.")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--coverage", required=True)
+    parser.add_argument("--coverage")
+    parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--floor", type=float, default=0.0)
     parser.add_argument("--changed-floor", type=float, default=0.0)
     parser.add_argument("--base")
     parser.add_argument("--report-only", action="store_true")
     args = parser.parse_args()
+
+    if args.self_test:
+        return self_test()
+    if not args.coverage:
+        parser.error("--coverage is required")
 
     with open(args.coverage, encoding="utf-8") as handle:
         data = json.load(handle)
@@ -116,9 +221,17 @@ def main():
 
     # ------------------------------------------------------ changed lines
     if args.base and not args.report_only:
+        # A base that cannot be diffed against is not a coverage regression, and
+        # failing the job for one teaches people that a red Coverage means
+        # nothing. Say the gate did not run, loudly enough to be read, and let
+        # the overall floor decide the exit status on its own.
+        unreachable = unreachable_base(args.base)
+        if unreachable is not None:
+            print(f"\n::warning::The changed-line check did not run: {unreachable}. "
+                  f"Only the overall floor was enforced.")
+            return 1 if failed else 0
+
         added = added_lines(args.base)
-        if added is None:
-            return 1
 
         covered = 0
         total = 0

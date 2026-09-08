@@ -841,7 +841,12 @@ jobs:
           else
               base="${{ github.event.before }}"
           fi
-          git rev-parse --verify "$base" >/dev/null 2>&1 || base=""
+          # cat-file, not rev-parse: given forty hex digits rev-parse parses
+          # them and hands them back whether or not the object exists, so it
+          # says yes to exactly the case this guard is for - a force-push,
+          # after which the commit named as "before" is orphaned on the server
+          # and never arrives however deep the fetch.
+          git cat-file -e "$base^{commit}" 2>/dev/null || base=""
           scripts/coverage.sh ${base:+--base "$base"}
 
       - name: Keep the report

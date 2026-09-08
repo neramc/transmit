@@ -86,6 +86,19 @@ notes say so.
 
 ### Fixed
 
+- The coverage gate no longer fails a build because a commit was amended. Its
+  changed-line check diffs against the commit the push event names as
+  "before", and after a force-push that commit is orphaned on the server and
+  never arrives however deep the fetch - so the diff could not be taken and
+  the job failed, which reads like untested code rather than like a missing
+  commit. The guard meant to catch this used `git rev-parse --verify`, which
+  given forty hex digits parses them and hands them back whether or not the
+  object exists, so it said yes to precisely the case it was written for. Both
+  ends now check with `git cat-file -e`, a base that cannot be diffed against
+  is a stated skip of that one check rather than a failure, and the overall
+  floor still decides the exit status. The rules themselves are now a test:
+  `Coverage.rules` builds a repository, orphans a commit in it, and asks.
+
 - The .rpm was working and the check said it was not. The two lines that prove
   a launch reached a painted window went through a logging category, so whether
   the proof appeared depended on the machine's logging configuration rather

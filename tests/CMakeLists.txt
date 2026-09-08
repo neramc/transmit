@@ -44,6 +44,15 @@ if(Python3_Interpreter_FOUND)
         LABELS quality TIMEOUT 60
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 
+    # The coverage gate decides whether a change may land, so the rules it
+    # decides by are themselves tested. Both of them were wrong at once and the
+    # symptom was a failing Coverage job, which reads like untested code rather
+    # than like a base commit a force-push had orphaned.
+    add_test(NAME Coverage.rules
+             COMMAND "${Python3_EXECUTABLE}"
+                     "${CMAKE_SOURCE_DIR}/scripts/coverage_report.py" --self-test)
+    set_tests_properties(Coverage.rules PROPERTIES LABELS quality TIMEOUT 60)
+
     add_test(NAME Tree.tidy
              COMMAND "${Python3_EXECUTABLE}"
                      "${CMAKE_SOURCE_DIR}/scripts/check-hygiene.py")
