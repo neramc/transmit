@@ -249,23 +249,6 @@ bool isChromiumOsContainer() {
            QDir(QStringLiteral("/mnt/chromeos")).exists();
 }
 
-void appendPackages(QList<InstalledApp>& apps, const QString& output, PackageSource source,
-                    const QRegularExpression& pattern) {
-    const QStringList lines = output.split(u'\n', Qt::SkipEmptyParts);
-    for (const QString& line : lines) {
-        const auto match = pattern.match(line);
-        if (!match.hasMatch()) {
-            continue;
-        }
-        InstalledApp app;
-        app.id = match.captured(1);
-        app.displayName = app.id;
-        app.version = match.lastCapturedIndex() >= 2 ? match.captured(2) : QString();
-        app.source = source;
-        apps.push_back(app);
-    }
-}
-
 /// Pass-through "snapshot". Used when no volume-level snapshot is available;
 /// the capture pipeline still copies live databases consistently through
 /// SQLite's online backup API, so this is a degradation rather than a failure.
@@ -359,6 +342,100 @@ QHash<QString, QString> readOsRelease(const QString& path) {
         values.insert(line.left(separator).trimmed(), unquote(line.mid(separator + 1)));
     }
     return values;
+}
+
+std::optional<PackageQuery> packageQueryFor(PackageSource source) {
+    // One row per package manager, so adding a distribution is a row rather
+    // than a case. The patterns are the whole of what these listings mean, and
+    // every one of them has a case in the tests against real output.
+    switch (source) {
+        case PackageSource::Apt:
+            return PackageQuery{
+                QStringLiteral("dpkg-query"),
+                {QStringLiteral("-W"), QStringLiteral("-f=${Package}\\t${Version}\\n")},
+                QStringLiteral("^(\\S+)\\t(\\S*)$"),
+                0};
+        case PackageSource::Dnf:
+        case PackageSource::Zypper:
+            return PackageQuery{QStringLiteral("rpm"),
+                                {QStringLiteral("-qa"), QStringLiteral("--qf"),
+                                 QStringLiteral("%{NAME}\\t%{VERSION}-%{RELEASE}\\n")},
+                                QStringLiteral("^(\\S+)\\t(\\S*)$"),
+                                0};
+        case PackageSource::Pacman:
+            return PackageQuery{QStringLiteral("pacman"),
+                                {QStringLiteral("-Qe")},
+                                QStringLiteral("^(\\S+) (\\S+)$"),
+                                0};
+        case PackageSource::Portage:
+            // qlist prints category/name-version as one word, and splitting it
+            // would have to know which dashes belong to the name.
+            return PackageQuery{
+                QStringLiteral("qlist"), {QStringLiteral("-ICv")}, QStringLiteral("^(\\S+)$"), 0};
+        case PackageSource::Nix:
+            // Anchored on a store path, because `nix profile list` prints
+            // several lines per package and only one of them names anything.
+            // Taking the last word of every line - which is what this used to
+            // do - turned "Index:              0" into a package called 0, and
+            // put it in the list of things to reinstall.
+            return PackageQuery{QStringLiteral("nix"),
+                                {QStringLiteral("profile"), QStringLiteral("list")},
+                                QStringLiteral("(/nix/store/[^\\s#]+)$"),
+                                0};
+        case PackageSource::Apk:
+            return PackageQuery{
+                QStringLiteral("apk"), {QStringLiteral("info")}, QStringLiteral("^(\\S+)$"), 0};
+        case PackageSource::Xbps:
+            // bash-5.2.15_1: the version is the tail with no dash in it, so
+            // the name keeps every dash before that one.
+            return PackageQuery{QStringLiteral("xbps-query"),
+                                {QStringLiteral("-m")},
+                                QStringLiteral("^(\\S+?)-([^-]+)$"),
+                                0};
+        case PackageSource::Flatpak:
+            return PackageQuery{QStringLiteral("flatpak"),
+                                {QStringLiteral("list"), QStringLiteral("--app"),
+                                 QStringLiteral("--columns=application,version")},
+                                QStringLiteral("^(\\S+)\\t?(\\S*)$"),
+                                0};
+        case PackageSource::Snap:
+            // snap list prints a header before the packages, and its columns
+            // are separated by runs of spaces rather than by tabs.
+            return PackageQuery{QStringLiteral("snap"),
+                                {QStringLiteral("list")},
+                                QStringLiteral("^(\\S+) +(\\S+)"),
+                                1};
+        default:
+            // Slackware's packages are a directory listing rather than a
+            // command, and the rest are not Linux package managers at all.
+            return std::nullopt;
+    }
+}
+
+QList<InstalledApp> packagesFromListing(const QString& output, PackageSource source) {
+    QList<InstalledApp> apps;
+    const auto query = packageQueryFor(source);
+    if (!query) {
+        return apps;
+    }
+
+    const QRegularExpression pattern(query->pattern);
+    // Split without skipping the empty parts, so a header row is still a row
+    // to count past. Empty lines are dropped by the pattern instead.
+    const QStringList lines = output.split(u'\n');
+    for (qsizetype i = query->headerLines; i < lines.size(); ++i) {
+        const auto match = pattern.match(lines[i]);
+        if (!match.hasMatch()) {
+            continue;
+        }
+        InstalledApp app;
+        app.id = match.captured(1);
+        app.displayName = app.id;
+        app.version = match.lastCapturedIndex() >= 2 ? match.captured(2) : QString();
+        app.source = source;
+        apps.push_back(app);
+    }
+    return apps;
 }
 
 PackageSource packageSourceForDistro(const QString& id, const QString& idLike) {
@@ -548,90 +625,30 @@ QList<InstalledApp> LinuxPlatformService::installedApplications() const {
     const EnvironmentInfo info = environment();
     const PackageSource native = packageSourceForDistro(info.distroId, info.distroLike);
 
-    switch (native) {
-        case PackageSource::Apt: {
-            const QString output =
-                runCommand(QStringLiteral("dpkg-query"),
-                           {QStringLiteral("-W"), QStringLiteral("-f=${Package}\\t${Version}\\n")});
-            appendPackages(apps, output, PackageSource::Apt,
-                           QRegularExpression(QStringLiteral("^(\\S+)\\t(\\S*)$")));
-            break;
+    // What this distribution uses, and then the two cross-distribution formats
+    // that sit alongside whatever it is. Each is asked the same way: the table
+    // says what to run, and reading what came back is a separate rule that the
+    // tests can hand text to.
+    for (const PackageSource source : {native, PackageSource::Flatpak, PackageSource::Snap}) {
+        const auto query = packageQueryFor(source);
+        if (!query) {
+            continue;
         }
-        case PackageSource::Dnf:
-        case PackageSource::Zypper: {
-            const QString output = runCommand(
-                QStringLiteral("rpm"), {QStringLiteral("-qa"), QStringLiteral("--qf"),
-                                        QStringLiteral("%{NAME}\\t%{VERSION}-%{RELEASE}\\n")});
-            appendPackages(apps, output, native,
-                           QRegularExpression(QStringLiteral("^(\\S+)\\t(\\S*)$")));
-            break;
-        }
-        case PackageSource::Pacman: {
-            const QString output = runCommand(QStringLiteral("pacman"), {QStringLiteral("-Qe")});
-            appendPackages(apps, output, PackageSource::Pacman,
-                           QRegularExpression(QStringLiteral("^(\\S+) (\\S+)$")));
-            break;
-        }
-        case PackageSource::Portage: {
-            const QString output = runCommand(QStringLiteral("qlist"), {QStringLiteral("-ICv")});
-            appendPackages(apps, output, PackageSource::Portage,
-                           QRegularExpression(QStringLiteral("^(\\S+)$")));
-            break;
-        }
-        case PackageSource::Nix: {
-            const QString output = runCommand(QStringLiteral("nix"),
-                                              {QStringLiteral("profile"), QStringLiteral("list")});
-            appendPackages(apps, output, PackageSource::Nix,
-                           QRegularExpression(QStringLiteral("([^\\s#]+)$")));
-            break;
-        }
-        case PackageSource::Apk: {
-            const QString output = runCommand(QStringLiteral("apk"), {QStringLiteral("info")});
-            appendPackages(apps, output, PackageSource::Apk,
-                           QRegularExpression(QStringLiteral("^(\\S+)$")));
-            break;
-        }
-        case PackageSource::Xbps: {
-            const QString output = runCommand(QStringLiteral("xbps-query"), {QStringLiteral("-m")});
-            appendPackages(apps, output, PackageSource::Xbps,
-                           QRegularExpression(QStringLiteral("^(\\S+?)-([^-]+)$")));
-            break;
-        }
-        case PackageSource::Slackware: {
-            // Slackware has no package database beyond this directory listing.
-            const QDir packages(QStringLiteral("/var/log/packages"));
-            for (const QString& name : packages.entryList(QDir::Files)) {
-                InstalledApp app;
-                app.id = name;
-                app.displayName = name;
-                app.source = PackageSource::Slackware;
-                apps.push_back(app);
-            }
-            break;
-        }
-        default:
-            qCInfo(logPlatform) << "no native package manager recognised for distro"
-                                << info.distroId;
-            break;
+        apps += packagesFromListing(runCommand(query->program, query->arguments), source);
     }
 
-    // Cross-distribution formats sit alongside whatever the system uses.
-    const QString flatpak =
-        runCommand(QStringLiteral("flatpak"), {QStringLiteral("list"), QStringLiteral("--app"),
-                                               QStringLiteral("--columns=application,version")});
-    appendPackages(apps, flatpak, PackageSource::Flatpak,
-                   QRegularExpression(QStringLiteral("^(\\S+)\\t?(\\S*)$")));
+    if (native == PackageSource::Unknown) {
+        qCInfo(logPlatform) << "no native package manager recognised for distro" << info.distroId;
+    }
 
-    const QString snap = runCommand(QStringLiteral("snap"), {QStringLiteral("list")});
-    const QStringList snapLines = snap.split(u'\n', Qt::SkipEmptyParts);
-    for (qsizetype i = 1; i < snapLines.size(); ++i) {  // skip the header row
-        const QStringList columns = snapLines[i].split(u' ', Qt::SkipEmptyParts);
-        if (columns.size() >= 2) {
+    if (native == PackageSource::Slackware) {
+        // Slackware has no package database beyond this directory listing.
+        const QDir packages(QStringLiteral("/var/log/packages"));
+        for (const QString& name : packages.entryList(QDir::Files)) {
             InstalledApp app;
-            app.id = columns[0];
-            app.displayName = columns[0];
-            app.version = columns[1];
-            app.source = PackageSource::Snap;
+            app.id = name;
+            app.displayName = name;
+            app.source = PackageSource::Slackware;
             apps.push_back(app);
         }
     }

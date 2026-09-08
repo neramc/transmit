@@ -2,10 +2,20 @@
 # the cross-OS translation that the unit tests cannot reach from the format
 # layer alone.
 
-foreach(suite ContinuityRoundTrip PathRewrite SecretStore Catalog SelectionCodec
-              VerifyService StageTimer ResumeCapture ResumeRestore Eject
-              FormatCompatibility Update CloudFiles ScopeRule WrittenValues
-              SecretsDomain)
+set(suites ContinuityRoundTrip PathRewrite SecretStore Catalog SelectionCodec
+           VerifyService StageTimer ResumeCapture ResumeRestore Eject
+           FormatCompatibility Update CloudFiles ScopeRule WrittenValues
+           SecretsDomain)
+
+# What a dpkg or a pacman listing means is read by code that is only compiled
+# on Linux, so a target for it anywhere else would have nothing to link
+# against. CMAKE_SYSTEM_NAME rather than the LINUX variable, which only exists
+# from CMake 3.25 and this project asks for 3.21.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    list(APPEND suites LinuxPackages)
+endif()
+
+foreach(suite ${suites})
     add_executable(transmit_${suite}_test ${suite}Test.cpp)
     target_link_libraries(transmit_${suite}_test
         PRIVATE Transmit::Core Transmit::Warnings Qt6::Test SQLite::SQLite3)

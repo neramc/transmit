@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "platform/PlatformService.h"
 
 namespace transmit::platform {
@@ -35,5 +37,36 @@ QHash<QString, QString> readOsRelease(const QString& path = QStringLiteral("/etc
 /// manager. Derivatives fall back to their parent, so Mint resolves to apt and
 /// Rocky to dnf without needing an entry of their own.
 PackageSource packageSourceForDistro(const QString& id, const QString& idLike);
+
+/// How to ask one package manager what is installed, and how to read what it
+/// says back.
+///
+/// The asking and the reading were one function, which meant the reading could
+/// only ever be checked on a machine that had that package manager - so eight
+/// of the nine were checked nowhere. What a listing means is a rule about
+/// text, and a rule about text can be given text.
+struct PackageQuery {
+    QString program;
+    QStringList arguments;
+
+    /// Applied to each line. Group 1 is the package name; group 2, where the
+    /// listing has one, is the version.
+    QString pattern;
+
+    /// Listings that print a header row before the packages.
+    int headerLines = 0;
+};
+
+/// How to ask this package manager, or nothing when Transmit does not know how
+/// - which is the honest answer for Slackware, whose packages are a directory
+/// rather than a command.
+[[nodiscard]] std::optional<PackageQuery> packageQueryFor(PackageSource source);
+
+/// The packages one listing's output describes.
+///
+/// A line that does not match the rule is not a package: listings carry
+/// warnings, blank lines and continuation text, and inventing an entry from
+/// one of those puts a package that does not exist into the install script.
+[[nodiscard]] QList<InstalledApp> packagesFromListing(const QString& output, PackageSource source);
 
 }  // namespace transmit::platform

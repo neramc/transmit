@@ -116,6 +116,13 @@ notes say so.
 
 ### Fixed
 
+- A NixOS machine no longer reports packages that are not packages. `nix
+  profile list` prints several lines for each one, and the rule read the last
+  word of every line - so an index of 0 became a package called "0", and the
+  list of things to reinstall filled up with pieces of the listing. It now
+  takes the store path, which is the one thing on those lines that names
+  something, and which the older one-line-per-package format ends with too.
+
 - A size too large to hold is refused rather than wrapped round. `--max-file-size
   18446744073709551G` used to come back as a limit of about fourteen exabytes,
   because the multiplication overflowed with nothing to notice it by: not what
