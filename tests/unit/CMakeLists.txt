@@ -4,6 +4,7 @@
 add_executable(transmit_format_tests
     HashTest.cpp
     Md5Test.cpp
+    CipherTest.cpp
     SerializationTest.cpp
     PathTokenTest.cpp
     NameSanitizerTest.cpp
