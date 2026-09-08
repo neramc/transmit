@@ -42,8 +42,9 @@ private:
     [[nodiscard]] QString makeDatabase(const QString& name, int rows, bool writeAheadLog = false);
 
     /// The rows a database holds, read from bytes rather than from a path, so
-    /// what the copy produced can be asked directly.
-    [[nodiscard]] int rowsIn(const QByteArray& database) const;
+    /// what the copy produced can be asked directly. -1 when the bytes are not
+    /// a database this machine will open.
+    [[nodiscard]] int rowsIn(const QString& name, const QByteArray& database) const;
 
     QTemporaryDir workspace_;
 };
@@ -73,8 +74,8 @@ QString ConsistentCopyTest::makeDatabase(const QString& name, int rows, bool wri
     return file;
 }
 
-int ConsistentCopyTest::rowsIn(const QByteArray& database) const {
-    const QString scratch = path(QStringLiteral("asked-%1.sqlite").arg(database.size()));
+int ConsistentCopyTest::rowsIn(const QString& name, const QByteArray& database) const {
+    const QString scratch = path(name);
     {
         QFile file(scratch);
         if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
@@ -83,9 +84,15 @@ int ConsistentCopyTest::rowsIn(const QByteArray& database) const {
         file.write(database);
     }
 
+    // Read-write, deliberately. A database produced by the backup API keeps
+    // the write-ahead journal mode of the one it came from, and opening a
+    // database marked that way read-only needs a shared-memory file beside it
+    // that a read-only connection may not be allowed to create - which Linux
+    // lets pass and macOS and Windows do not. Nothing here is being protected
+    // from writes; the file is a copy of a copy in a temporary directory.
     sqlite3* handle = nullptr;
-    if (sqlite3_open_v2(scratch.toUtf8().constData(), &handle, SQLITE_OPEN_READONLY, nullptr) !=
-        SQLITE_OK) {
+    if (sqlite3_open_v2(scratch.toUtf8().constData(), &handle,
+                        SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr) != SQLITE_OK) {
         sqlite3_close(handle);
         return -1;
     }
@@ -133,7 +140,7 @@ void ConsistentCopyTest::aDatabaseComesBackAsADatabase() {
 
     // Not "it produced some bytes": the bytes have to be a database, and the
     // database has to hold what the original held.
-    QCOMPARE(rowsIn(*copied), 12);
+    QCOMPARE(rowsIn(QStringLiteral("read-back.sqlite"), *copied), 12);
 }
 
 void ConsistentCopyTest::whatIsOnlyInTheWriteAheadLogComesToo() {
@@ -144,7 +151,7 @@ void ConsistentCopyTest::whatIsOnlyInTheWriteAheadLogComesToo() {
     // then there would be nothing left to get wrong.
     const QString file = path(QStringLiteral("live.sqlite"));
     sqlite3* writer = nullptr;
-    QCOMPARE(sqlite3_open(file.toUtf8().constData(), &writer), SQLITE_OK);
+    QVERIFY2(sqlite3_open(file.toUtf8().constData(), &writer) == SQLITE_OK, sqlite3_errmsg(writer));
     sqlite3_exec(writer, "PRAGMA journal_mode=WAL", nullptr, nullptr, nullptr);
     sqlite3_exec(writer, "CREATE TABLE notes(id INTEGER PRIMARY KEY, body TEXT)", nullptr, nullptr,
                  nullptr);
@@ -155,7 +162,7 @@ void ConsistentCopyTest::whatIsOnlyInTheWriteAheadLogComesToo() {
 
     const auto copied = consistent_copy::readFile(file, 0);
     QVERIFY2(copied.operator bool(), "the copy of a live database failed");
-    const int carried = rowsIn(*copied);
+    const int carried = rowsIn(QStringLiteral("carried.sqlite"), *copied);
 
     // And the plain read, for the comparison that makes the point.
     QByteArray raw;
@@ -164,11 +171,14 @@ void ConsistentCopyTest::whatIsOnlyInTheWriteAheadLogComesToo() {
         QVERIFY(plain.open(QIODevice::ReadOnly));
         raw = plain.readAll();
     }
-    const int plainly = rowsIn(raw);
+    const int plainly = rowsIn(QStringLiteral("plainly.sqlite"), raw);
 
     sqlite3_close(writer);
 
-    QCOMPARE(carried, 40);
+    QVERIFY2(carried == 40,
+             qPrintable(QStringLiteral("the copy holds %1 of the 40 rows; the plain read holds %2")
+                            .arg(carried)
+                            .arg(plainly)));
     QVERIFY2(plainly < 40, qPrintable(QStringLiteral("a plain read of this database already had "
                                                      "all %1 rows, so it proves nothing")
                                           .arg(plainly)));
