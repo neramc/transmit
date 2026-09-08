@@ -125,6 +125,21 @@ notes say so.
   catalogue's schema refuses `..` in a pattern, but a rule also arrives inside
   an archive and in an overlay in the user's own configuration folder, and
   neither goes past the schema.
+- The keyboard layouts a Linux machine carries across are the ones it has. The
+  reading deleted every bracket, quote and the words `xkb` and `ibus` from what
+  gsettings printed and split what was left on commas, so two layouts became
+  three with an empty one wedged between them, and the empty list GNOME prints
+  as `@a(ss) []` became a layout called `@ass`. An input method is left behind
+  now rather than carried, because the writing side puts everything back as an
+  xkb layout and there is no such keyboard.
+- A locale with a modifier survives the journey. `sr_RS.UTF-8@latin` was put
+  back as `sr_RS@latin.UTF-8`, which names no locale, and a machine given one
+  that does not exist falls back to C — so the language, the date format and
+  the sort order all quietly reverted.
+- A sleep or screen-off delay is read whichever way gsettings prints it. There
+  were two rules, one per key, and which keys print as `uint32 900` rather than
+  `900` is a property of that key's type in that version of that schema; the
+  one that guessed wrong read as "this machine has no setting for it".
 - The changed-line coverage gate no longer dies on a file that is not text.
   It read the whole diff strictly, and the first committed fuzz crasher carries
   a byte no decoder accepts - which arrived as a red Coverage job, looking
@@ -239,6 +254,13 @@ notes say so.
 
 ### Testing
 
+- What a Linux desktop's answer means is asked of the text rather than of the
+  desktop. Seven rules — the theme, the layouts, a duration, a locale each way,
+  the timezone, and the quoting — lived inside the function that shells out to
+  `gsettings`, so none could be exercised without a machine already running
+  that desktop with those settings chosen, which is the same as saying none was
+  exercised. Three of the seven were wrong. The same move the package listings
+  got, for the same reason.
 - A fuzzer that crashes says which property it broke. Both of the path
   fuzzer's properties ended in a bare `abort()`, and an optimising build folds
   two identical calls into one — so the stack trace named whichever line the

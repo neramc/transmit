@@ -12,7 +12,7 @@ set(suites ContinuityRoundTrip PathRewrite SecretStore Catalog SelectionCodec
 # against. CMAKE_SYSTEM_NAME rather than the LINUX variable, which only exists
 # from CMake 3.25 and this project asks for 3.21.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    list(APPEND suites LinuxPackages)
+    list(APPEND suites LinuxPackages LinuxSettings)
 endif()
 
 foreach(suite ${suites})

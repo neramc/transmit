@@ -44,21 +44,9 @@ bool runSucceeds(const QString& program, const QStringList& arguments) {
     return process.waitForFinished(8000) && process.exitCode() == 0;
 }
 
-/// gsettings quotes strings and wraps lists; the values Transmit stores are
-/// plain, so the decoration is stripped on the way in and added on the way out.
-QString unquote(QString value) {
-    value = value.trimmed();
-    if (value.size() >= 2 && value.startsWith(u'\'') && value.endsWith(u'\'')) {
-        return value.mid(1, value.size() - 2);
-    }
-    if (value.size() >= 2 && value.startsWith(u'"') && value.endsWith(u'"')) {
-        return value.mid(1, value.size() - 2);
-    }
-    return value;
-}
-
 QString gsettingsGet(const QString& schema, const QString& key) {
-    return unquote(run(QStringLiteral("gsettings"), {QStringLiteral("get"), schema, key}));
+    return settings_text::unquote(
+        run(QStringLiteral("gsettings"), {QStringLiteral("get"), schema, key}));
 }
 
 bool gsettingsSet(const QString& schema, const QString& key, const QString& value) {
@@ -88,7 +76,21 @@ bool kdeWrite(const QString& file, const QString& group, const QString& key, con
     return settings.status() == QSettings::NoError;
 }
 
-/// GNOME writes "'prefer-dark'" or "'default'"; Transmit stores light/dark/auto.
+}  // namespace
+
+namespace settings_text {
+
+QString unquote(QString value) {
+    value = value.trimmed();
+    if (value.size() >= 2 && value.startsWith(u'\'') && value.endsWith(u'\'')) {
+        return value.mid(1, value.size() - 2);
+    }
+    if (value.size() >= 2 && value.startsWith(u'"') && value.endsWith(u'"')) {
+        return value.mid(1, value.size() - 2);
+    }
+    return value;
+}
+
 QString themeFromGnome(const QString& colorScheme, const QString& gtkTheme) {
     if (colorScheme == QLatin1String("prefer-dark")) {
         return QStringLiteral("dark");
@@ -103,22 +105,83 @@ QString themeFromGnome(const QString& colorScheme, const QString& gtkTheme) {
     return gtkTheme.isEmpty() ? QString() : QStringLiteral("light");
 }
 
+QString layoutsFromGnomeSources(const QString& sources) {
+    // Matched rather than deleted. This used to remove every bracket, quote
+    // and the words "xkb" and "ibus" from the string and split what was left
+    // on commas - which turned two layouts into three, the middle one empty,
+    // and turned the empty list GNOME prints as "@a(ss) []" into a layout
+    // called "@ass". Neither is a thing a person could have set.
+    static const QRegularExpression pair(QStringLiteral(R"(\(\s*'([^']*)'\s*,\s*'([^']*)'\s*\))"));
+
+    QStringList layouts;
+    auto matches = pair.globalMatch(sources);
+    while (matches.hasNext()) {
+        const QRegularExpressionMatch match = matches.next();
+        if (match.captured(1) == QLatin1String("xkb")) {
+            layouts << match.captured(2);
+        }
+    }
+    return layouts.join(u',');
+}
+
+QString minutesFromGnomeSeconds(const QString& seconds) {
+    // One rule for both, because which keys gsettings prints as "uint32 900"
+    // and which as "900" is a property of each key's type in each version of
+    // each schema, and getting that wrong reads as "this machine has no
+    // setting for it" rather than as an error.
+    QString text = seconds.trimmed();
+    for (const QString& prefix : {QStringLiteral("uint32 "), QStringLiteral("int32 "),
+                                  QStringLiteral("int64 "), QStringLiteral("uint64 ")}) {
+        if (text.startsWith(prefix)) {
+            text = text.mid(prefix.size()).trimmed();
+            break;
+        }
+    }
+
+    bool ok = false;
+    const qlonglong value = text.toLongLong(&ok);
+    if (!ok || value < 0) {
+        return {};
+    }
+    return QString::number(value / 60);
+}
+
 QString normaliseLocale(QString locale) {
     // "ko_KR.UTF-8" is the same thing as BCP-47 "ko-KR".
+    locale = locale.trimmed();
     const qsizetype dot = locale.indexOf(u'.');
     if (dot > 0) {
-        locale = locale.left(dot);
+        // A modifier sits after the encoding - "sr_RS.UTF-8@latin" - and it is
+        // part of which locale this is, so it survives the cut.
+        const qsizetype at = locale.indexOf(u'@', dot);
+        locale = at > 0 ? locale.left(dot) + locale.mid(at) : locale.left(dot);
     }
     return locale.replace(u'_', u'-');
 }
 
 QString toPosixLocale(const QString& bcp47) {
-    QString locale = bcp47;
+    QString locale = bcp47.trimmed();
+    if (locale.isEmpty()) {
+        return {};
+    }
+
+    QString modifier;
+    const qsizetype at = locale.indexOf(u'@');
+    if (at >= 0) {
+        modifier = locale.mid(at);
+        locale = locale.left(at);
+    }
+
     locale.replace(u'-', u'_');
-    return locale + QStringLiteral(".UTF-8");
+    return locale + QStringLiteral(".UTF-8") + modifier;
 }
 
-}  // namespace
+QString timezoneFromLink(const QString& linkTarget) {
+    const qsizetype marker = linkTarget.indexOf(QStringLiteral("/zoneinfo/"));
+    return marker >= 0 ? linkTarget.mid(marker + 10) : QString();
+}
+
+}  // namespace settings_text
 
 LinuxSettingsProvider::LinuxSettingsProvider() : desktop_(detectDesktop()) {
     desktopName_ = qEnvironmentVariable("XDG_CURRENT_DESKTOP");
@@ -168,10 +231,11 @@ QList<SettingValue> LinuxSettingsProvider::readAll() const {
     // ------------------------------------------------------- appearance
     if (usesGSettings()) {
         record(SettingKey::AppearanceTheme,
-               themeFromGnome(gsettingsGet(QStringLiteral("org.gnome.desktop.interface"),
-                                           QStringLiteral("color-scheme")),
-                              gsettingsGet(QStringLiteral("org.gnome.desktop.interface"),
-                                           QStringLiteral("gtk-theme"))));
+               settings_text::themeFromGnome(
+                   gsettingsGet(QStringLiteral("org.gnome.desktop.interface"),
+                                QStringLiteral("color-scheme")),
+                   gsettingsGet(QStringLiteral("org.gnome.desktop.interface"),
+                                QStringLiteral("gtk-theme"))));
         record(SettingKey::AppearanceAccent,
                gsettingsGet(QStringLiteral("org.gnome.desktop.interface"),
                             QStringLiteral("accent-color")));
@@ -206,30 +270,17 @@ QList<SettingValue> LinuxSettingsProvider::readAll() const {
                gsettingsGet(QStringLiteral("org.gtk.Settings.FileChooser"),
                             QStringLiteral("show-hidden")));
 
-        // gsettings stores these as "['us', 'kr']" style tuples.
-        QString sources = gsettingsGet(QStringLiteral("org.gnome.desktop.input-sources"),
-                                       QStringLiteral("sources"));
-        sources.remove(QRegularExpression(QStringLiteral(R"([\[\]\(\)'"]|xkb|ibus|,\s*(?=\)))")));
         record(SettingKey::KeyboardLayouts,
-               sources.split(u',', Qt::SkipEmptyParts).join(u',').simplified().remove(u' '));
+               settings_text::layoutsFromGnomeSources(gsettingsGet(
+                   QStringLiteral("org.gnome.desktop.input-sources"), QStringLiteral("sources"))));
 
-        record(SettingKey::PowerSleepMinutes, [] {
-            const QString seconds =
-                gsettingsGet(QStringLiteral("org.gnome.settings-daemon.plugins.power"),
-                             QStringLiteral("sleep-inactive-ac-timeout"));
-            bool ok = false;
-            const int value = seconds.toInt(&ok);
-            return ok ? QString::number(value / 60) : QString();
-        }());
-        record(SettingKey::PowerScreenOffMinutes, [] {
-            // gsettings prints this one as "uint32 900".
-            QString seconds = gsettingsGet(QStringLiteral("org.gnome.desktop.session"),
-                                           QStringLiteral("idle-delay"));
-            seconds.remove(QStringLiteral("uint32 "));
-            bool ok = false;
-            const int value = seconds.toInt(&ok);
-            return ok ? QString::number(value / 60) : QString();
-        }());
+        record(SettingKey::PowerSleepMinutes,
+               settings_text::minutesFromGnomeSeconds(
+                   gsettingsGet(QStringLiteral("org.gnome.settings-daemon.plugins.power"),
+                                QStringLiteral("sleep-inactive-ac-timeout"))));
+        record(SettingKey::PowerScreenOffMinutes,
+               settings_text::minutesFromGnomeSeconds(gsettingsGet(
+                   QStringLiteral("org.gnome.desktop.session"), QStringLiteral("idle-delay"))));
     } else if (desktop_ == Desktop::Kde) {
         const QString scheme = kdeRead(QStringLiteral("kdeglobals"), QStringLiteral("General"),
                                        QStringLiteral("ColorScheme"));
@@ -247,19 +298,17 @@ QList<SettingValue> LinuxSettingsProvider::readAll() const {
     if (language.isEmpty()) {
         language = QLocale::system().name();
     }
-    record(SettingKey::LocaleLanguage, normaliseLocale(language));
-    record(SettingKey::LocaleFormats, normaliseLocale(qEnvironmentVariable("LC_TIME", language)));
+    record(SettingKey::LocaleLanguage, settings_text::normaliseLocale(language));
+    record(SettingKey::LocaleFormats,
+           settings_text::normaliseLocale(qEnvironmentVariable("LC_TIME", language)));
 
     QString timezone = run(
         QStringLiteral("timedatectl"),
         {QStringLiteral("show"), QStringLiteral("--property=Timezone"), QStringLiteral("--value")});
     if (timezone.isEmpty()) {
         // Fall back to the symlink every systemd and non-systemd system keeps.
-        const QString link = QFile::symLinkTarget(QStringLiteral("/etc/localtime"));
-        const qsizetype marker = link.indexOf(QStringLiteral("/zoneinfo/"));
-        if (marker >= 0) {
-            timezone = link.mid(marker + 10);
-        }
+        timezone =
+            settings_text::timezoneFromLink(QFile::symLinkTarget(QStringLiteral("/etc/localtime")));
     }
     record(SettingKey::LocaleTimezone, timezone);
 
@@ -345,7 +394,7 @@ ApplyResult LinuxSettingsProvider::apply(const SettingValue& value) const {
             return {ApplyOutcome::NeedsPrivilege,
                     QStringLiteral("the display language is set for the whole system"),
                     QStringLiteral("sudo localectl set-locale LANG=%1")
-                        .arg(toPosixLocale(value.value))};
+                        .arg(settings_text::toPosixLocale(value.value))};
 
         case SettingKey::KeyboardLayouts: {
             QStringList entries;
@@ -460,7 +509,7 @@ ApplyResult LinuxSettingsProvider::apply(const SettingValue& value) const {
         case SettingKey::LocaleFormats:
             return {ApplyOutcome::NeedsPrivilege, QStringLiteral("format settings are system-wide"),
                     QStringLiteral("sudo localectl set-locale LC_TIME=%1")
-                        .arg(toPosixLocale(value.value))};
+                        .arg(settings_text::toPosixLocale(value.value))};
     }
     return {ApplyOutcome::Unsupported, {}, {}};
 }
