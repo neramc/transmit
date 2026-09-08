@@ -136,11 +136,7 @@ bool RecipeMoveStep::appliesTo(OsFamily from, OsFamily to) const {
     return osMatches(fromOs, from) && osMatches(toOs, to);
 }
 
-ContinuityGrade RecipePortability::gradeFor(OsFamily from, OsFamily to,
-                                            ContinuityGrade fallback) const {
-    // The most specific entry wins: an exact pair beats one with a wildcard,
-    // which is what lets a recipe say "adapted everywhere, except to Windows,
-    // where it is manual" without repeating itself for every other pair.
+const RecipePortability::Pair* RecipePortability::entryFor(OsFamily from, OsFamily to) const {
     const Pair* best = nullptr;
     int bestScore = -1;
     for (const Pair& pair : pairs) {
@@ -155,18 +151,23 @@ ContinuityGrade RecipePortability::gradeFor(OsFamily from, OsFamily to,
             best = &pair;
         }
     }
+    return best;
+}
+
+ContinuityGrade RecipePortability::gradeFor(OsFamily from, OsFamily to,
+                                            ContinuityGrade fallback) const {
+    const Pair* best = entryFor(from, to);
     return best != nullptr ? best->grade : fallback;
 }
 
 QString RecipePortability::reasonFor(OsFamily from, OsFamily to) const {
-    for (const Pair& pair : pairs) {
-        const bool fromAny = pair.from == OsFamily::Unknown;
-        const bool toAny = pair.to == OsFamily::Unknown;
-        if ((fromAny || pair.from == from) && (toAny || pair.to == to) && !pair.why.isEmpty()) {
-            return pair.why;
-        }
-    }
-    return {};
+    // The same entry the grade came from. This used to be the first row that
+    // matched at all and carried a reason, so a recipe saying "adapted
+    // everywhere, except to Windows, where it is manual" - which is the shape
+    // the wildcard exists for - showed the manual grade beside the sentence
+    // explaining the adapted one.
+    const Pair* best = entryFor(from, to);
+    return best != nullptr ? best->why : QString();
 }
 
 const RecipeStatePath* AppRecipe::rootById(const QString& rootId) const {

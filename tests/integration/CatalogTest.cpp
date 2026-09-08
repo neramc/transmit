@@ -40,6 +40,7 @@ private slots:
     void aSandboxedInstallIsFoundWhenItIsNotTheFirstCandidate();
     void theOldSchemaAndTheNewProduceTheSameRecipes();
     void theInventoryPayloadSurvivesTheJourney();
+    void theGradeAndTheReasonComeFromTheSameEntry();
 
 private:
     [[nodiscard]] static core::RecipeCatalog builtIn();
@@ -480,6 +481,57 @@ void CatalogTest::theInventoryPayloadSurvivesTheJourney() {
             QCOMPARE(back.moves[m].keys, sent.moves[m].keys);
         }
     }
+}
+
+/// A grade and the sentence explaining it have to be about the same journey.
+///
+/// The wildcard exists so a recipe can say "adapted everywhere, except to
+/// Windows, where it is manual" without writing out every other pair - and the
+/// grade honoured that while the reason did not: it was the first row that
+/// matched at all and carried a sentence, so the person was shown the manual
+/// grade beside the explanation of the adapted one. Nothing in the shipped
+/// catalogue is written that way yet, which is precisely why this is stated
+/// here rather than waiting to be noticed by whoever writes the first one.
+void CatalogTest::theGradeAndTheReasonComeFromTheSameEntry() {
+    using format::OsFamily;
+
+    core::RecipePortability portability;
+    portability.pairs.push_back(core::RecipePortability::Pair{
+        OsFamily::Unknown, OsFamily::Unknown, core::ContinuityGrade::Adapted,
+        QStringLiteral("the paths inside it are corrected on the way in")});
+    portability.pairs.push_back(core::RecipePortability::Pair{
+        OsFamily::Unknown, OsFamily::Windows, core::ContinuityGrade::Manual,
+        QStringLiteral("there is no Windows build, so it has to be set up by hand")});
+
+    QCOMPARE(portability.gradeFor(OsFamily::Linux, OsFamily::MacOs, core::ContinuityGrade::Full),
+             core::ContinuityGrade::Adapted);
+    QCOMPARE(portability.reasonFor(OsFamily::Linux, OsFamily::MacOs),
+             QStringLiteral("the paths inside it are corrected on the way in"));
+
+    QCOMPARE(portability.gradeFor(OsFamily::Linux, OsFamily::Windows, core::ContinuityGrade::Full),
+             core::ContinuityGrade::Manual);
+    QCOMPARE(portability.reasonFor(OsFamily::Linux, OsFamily::Windows),
+             QStringLiteral("there is no Windows build, so it has to be set up by hand"));
+
+    // A journey the catalogue says nothing about has no reason to give, and
+    // the grade falls back rather than being invented.
+    core::RecipePortability narrow;
+    narrow.pairs.push_back(core::RecipePortability::Pair{OsFamily::MacOs, OsFamily::Linux,
+                                                         core::ContinuityGrade::Manual,
+                                                         QStringLiteral("only that way round")});
+    QCOMPARE(narrow.gradeFor(OsFamily::Linux, OsFamily::MacOs, core::ContinuityGrade::Full),
+             core::ContinuityGrade::Full);
+    QCOMPARE(narrow.reasonFor(OsFamily::Linux, OsFamily::MacOs), QString());
+
+    // And an entry that gives a grade without a sentence is not a reason to
+    // reach for somebody else's sentence.
+    core::RecipePortability silent;
+    silent.pairs.push_back(core::RecipePortability::Pair{OsFamily::Unknown, OsFamily::Unknown,
+                                                         core::ContinuityGrade::Adapted,
+                                                         QStringLiteral("the general case")});
+    silent.pairs.push_back(core::RecipePortability::Pair{OsFamily::Unknown, OsFamily::Windows,
+                                                         core::ContinuityGrade::Manual, QString()});
+    QCOMPARE(silent.reasonFor(OsFamily::Linux, OsFamily::Windows), QString());
 }
 
 QTEST_MAIN(CatalogTest)

@@ -125,6 +125,13 @@ notes say so.
   catalogue's schema refuses `..` in a pattern, but a rule also arrives inside
   an archive and in an overlay in the user's own configuration folder, and
   neither goes past the schema.
+- The grade for a journey and the sentence explaining it now come from the same
+  entry in the catalogue. The grade took the most specific entry, which is what
+  lets a recipe say "adapted everywhere, except to Windows, where it is manual"
+  without writing out every pair; the reason took the first entry that matched
+  at all and carried a sentence. So a recipe written that way — the way the
+  wildcard exists for — would have shown the manual grade beside the
+  explanation of the adapted one.
 - Two of the rules that decide whether the updater may replace the running
   program consulted this machine rather than the one the path came from.
   `QDir::fromNativeSeparators` only replaces backslashes when the program is

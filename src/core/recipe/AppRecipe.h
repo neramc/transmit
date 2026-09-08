@@ -180,6 +180,17 @@ struct RecipePortability {
     };
     QList<Pair> pairs;
 
+    /// The entry that describes one journey, or nothing when the catalog says
+    /// nothing about it.
+    ///
+    /// The most specific entry wins: an exact pair beats one with a wildcard,
+    /// which is what lets a recipe say "adapted everywhere, except to Windows,
+    /// where it is manual" without repeating itself for every other pair. Both
+    /// answers below come from this one choice, because a grade taken from one
+    /// row and a reason taken from another is a sentence that explains
+    /// something the person is not being told.
+    [[nodiscard]] const Pair* entryFor(OsFamily from, OsFamily to) const;
+
     /// The grade for one journey, or `fallback` when the catalog says nothing
     /// about that particular pair.
     [[nodiscard]] ContinuityGrade gradeFor(OsFamily from, OsFamily to,
