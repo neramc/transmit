@@ -35,10 +35,10 @@
               "{APPCONFIG}/0ad"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/0ad"
+              "{APPCONFIG}/0ad"
             ],
             "linux": [
-              "{HOME}/.local/share/0ad",
+              "{APPDATA}/0ad",
               "{HOME}/.var/app/com.play0ad.zeroad/data/0ad"
             ]
           },
@@ -91,7 +91,7 @@
               "{HOME}/.config/alacritty"
             ],
             "linux": [
-              "{HOME}/.config/alacritty"
+              "{APPCONFIG}/alacritty"
             ]
           }
         }
@@ -114,10 +114,10 @@
               "{DOCUMENTS}/American Truck Simulator"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/American Truck Simulator"
+              "{APPCONFIG}/American Truck Simulator"
             ],
             "linux": [
-              "{HOME}/.local/share/American Truck Simulator"
+              "{APPDATA}/American Truck Simulator"
             ]
           },
           "exclude": [
@@ -166,10 +166,10 @@
               "{APPCONFIG}/Anki2"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Anki2"
+              "{APPCONFIG}/Anki2"
             ],
             "linux": [
-              "{HOME}/.local/share/Anki2",
+              "{APPDATA}/Anki2",
               "{HOME}/.var/app/net.ankiweb.Anki/data/Anki2"
             ]
           },
@@ -425,10 +425,10 @@
               "{APPDATA}/Aseprite"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Aseprite"
+              "{APPCONFIG}/Aseprite"
             ],
             "linux": [
-              "{HOME}/.config/aseprite"
+              "{APPCONFIG}/aseprite"
             ]
           },
           "exclude": [
@@ -477,10 +477,10 @@
               "{APPCONFIG}/audacity"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/audacity"
+              "{APPCONFIG}/audacity"
             ],
             "linux": [
-              "{HOME}/.config/audacity"
+              "{APPCONFIG}/audacity"
             ]
           },
           "exclude": [
@@ -648,10 +648,10 @@
               "{APPCONFIG}/Balatro"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Balatro"
+              "{APPCONFIG}/Balatro"
             ],
             "linux": [
-              "{HOME}/.local/share/Balatro"
+              "{APPDATA}/Balatro"
             ]
           }
         }
@@ -673,7 +673,7 @@
               "{APPCONFIG}/Larian Studios/Baldur's Gate 3"
             ],
             "macos": [
-              "{HOME}/Documents/Larian Studios/Baldur's Gate 3"
+              "{DOCUMENTS}/Larian Studios/Baldur's Gate 3"
             ]
           },
           "exclude": [
@@ -790,7 +790,7 @@
               "{APPCONFIG}/Battle.net"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Battle.net"
+              "{APPCONFIG}/Battle.net"
             ]
           },
           "exclude": [
@@ -839,10 +839,10 @@
               "{APPCONFIG}/Bitwarden"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Bitwarden"
+              "{APPCONFIG}/Bitwarden"
             ],
             "linux": [
-              "{HOME}/.config/Bitwarden",
+              "{APPCONFIG}/Bitwarden",
               "{HOME}/.var/app/com.bitwarden.desktop/config/Bitwarden"
             ]
           },
@@ -905,10 +905,10 @@
               "{APPDATA}/Blender Foundation/Blender"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Blender"
+              "{APPCONFIG}/Blender"
             ],
             "linux": [
-              "{HOME}/.config/blender"
+              "{APPCONFIG}/blender"
             ]
           },
           "exclude": [
@@ -941,7 +941,7 @@
           "role": "data",
           "paths": {
             "linux": [
-              "{HOME}/.local/share/bottles",
+              "{APPDATA}/bottles",
               "{HOME}/.var/app/com.usebottles.bottles/data/bottles"
             ]
           },
@@ -1014,10 +1014,10 @@
               "{APPDATA}/BraveSoftware/Brave-Browser/User Data"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/BraveSoftware/Brave-Browser"
+              "{APPCONFIG}/BraveSoftware/Brave-Browser"
             ],
             "linux": [
-              "{HOME}/.config/BraveSoftware/Brave-Browser"
+              "{APPCONFIG}/BraveSoftware/Brave-Browser"
             ]
           },
           "exclude": [
@@ -1275,7 +1275,7 @@
               "{HOME}/Library/Preferences/calibre"
             ],
             "linux": [
-              "{HOME}/.config/calibre"
+              "{APPCONFIG}/calibre"
             ]
           },
           "exclude": [
@@ -1404,10 +1404,10 @@
               "{APPDATA}/Chromium/User Data"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Chromium"
+              "{APPCONFIG}/Chromium"
             ],
             "linux": [
-              "{HOME}/.config/chromium",
+              "{APPCONFIG}/chromium",
               "{HOME}/.var/app/org.chromium.Chromium/config/chromium"
             ]
           },
@@ -1641,10 +1641,10 @@
               "{DOCUMENTS}/Colossal Order/Cities_Skylines"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Colossal Order/Cities_Skylines"
+              "{APPCONFIG}/Colossal Order/Cities_Skylines"
             ],
             "linux": [
-              "{HOME}/.local/share/Colossal Order/Cities_Skylines"
+              "{APPDATA}/Colossal Order/Cities_Skylines"
             ]
           },
           "exclude": [
@@ -1711,7 +1711,7 @@
               "{HOME}/.composer"
             ],
             "linux": [
-              "{HOME}/.config/composer"
+              "{APPCONFIG}/composer"
             ]
           },
           "exclude": [
@@ -1803,7 +1803,7 @@
               "{HOME}/.config/darktable"
             ],
             "linux": [
-              "{HOME}/.config/darktable",
+              "{APPCONFIG}/darktable",
               "{HOME}/.var/app/org.darktable.Darktable/config/darktable"
             ]
           },
@@ -1880,7 +1880,7 @@
               "{HOME}/Library/DBeaverData/workspace6/General/.dbeaver"
             ],
             "linux": [
-              "{HOME}/.local/share/DBeaverData/workspace6/General/.dbeaver"
+              "{APPDATA}/DBeaverData/workspace6/General/.dbeaver"
             ]
           }
         }
@@ -1932,7 +1932,7 @@
               "{HOME}/.config/deluge"
             ],
             "linux": [
-              "{HOME}/.config/deluge",
+              "{APPCONFIG}/deluge",
               "{HOME}/.var/app/org.deluge_torrent.deluge/config/deluge"
             ]
           },
@@ -2005,10 +2005,10 @@
               "{APPDATA}/digikam"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/digikam"
+              "{APPCONFIG}/digikam"
             ],
             "linux": [
-              "{HOME}/.local/share/digikam",
+              "{APPDATA}/digikam",
               "{HOME}/.var/app/org.kde.digikam/data/digikam"
             ]
           },
@@ -2065,7 +2065,7 @@
               "{HOME}/.config/direnv"
             ],
             "linux": [
-              "{HOME}/.config/direnv"
+              "{APPCONFIG}/direnv"
             ]
           }
         }
@@ -2109,10 +2109,10 @@
               "{APPCONFIG}/discord"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/discord"
+              "{APPCONFIG}/discord"
             ],
             "linux": [
-              "{HOME}/.config/discord"
+              "{APPCONFIG}/discord"
             ]
           },
           "exclude": [
@@ -2215,10 +2215,10 @@
               "{DOCUMENTS}/Dolphin Emulator"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Dolphin"
+              "{APPCONFIG}/Dolphin"
             ],
             "linux": [
-              "{HOME}/.local/share/dolphin-emu",
+              "{APPDATA}/dolphin-emu",
               "{HOME}/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu"
             ]
           },
@@ -2283,7 +2283,7 @@
               "{DOCUMENTS}/Klei/DoNotStarveTogether"
             ],
             "macos": [
-              "{HOME}/Documents/Klei/DoNotStarveTogether"
+              "{DOCUMENTS}/Klei/DoNotStarveTogether"
             ],
             "linux": [
               "{HOME}/.klei/DoNotStarveTogether"
@@ -2329,10 +2329,10 @@
               "{DOCUMENTS}/DuckStation"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/DuckStation"
+              "{APPCONFIG}/DuckStation"
             ],
             "linux": [
-              "{HOME}/.local/share/duckstation",
+              "{APPDATA}/duckstation",
               "{HOME}/.var/app/org.duckstation.DuckStation/data/duckstation"
             ]
           },
@@ -2452,10 +2452,10 @@
               "{APPCONFIG}/Element"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Element"
+              "{APPCONFIG}/Element"
             ],
             "linux": [
-              "{HOME}/.config/Element"
+              "{APPCONFIG}/Element"
             ]
           },
           "exclude": [
@@ -2569,7 +2569,7 @@
               "{APPDATA}/EpicGamesLauncher/Saved/Config"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Epic/EpicGamesLauncher/Saved/Config"
+              "{APPCONFIG}/Epic/EpicGamesLauncher/Saved/Config"
             ]
           },
           "contents": [
@@ -2619,10 +2619,10 @@
               "{APPCONFIG}/espanso"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/espanso"
+              "{APPCONFIG}/espanso"
             ],
             "linux": [
-              "{HOME}/.config/espanso"
+              "{APPCONFIG}/espanso"
             ]
           }
         }
@@ -2644,10 +2644,10 @@
               "{DOCUMENTS}/Euro Truck Simulator 2"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Euro Truck Simulator 2"
+              "{APPCONFIG}/Euro Truck Simulator 2"
             ],
             "linux": [
-              "{HOME}/.local/share/Euro Truck Simulator 2"
+              "{APPDATA}/Euro Truck Simulator 2"
             ]
           },
           "exclude": [
@@ -2730,7 +2730,7 @@
           "role": "config",
           "paths": {
             "linux": [
-              "{HOME}/.config/evolution"
+              "{APPCONFIG}/evolution"
             ]
           }
         },
@@ -2739,7 +2739,7 @@
           "role": "data",
           "paths": {
             "linux": [
-              "{HOME}/.local/share/evolution"
+              "{APPDATA}/evolution"
             ]
           },
           "exclude": [
@@ -2767,7 +2767,7 @@
               "{APPCONFIG}/Factorio"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/factorio"
+              "{APPCONFIG}/factorio"
             ],
             "linux": [
               "{HOME}/.factorio"
@@ -2886,10 +2886,10 @@
               "{APPCONFIG}/Ferdium"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Ferdium"
+              "{APPCONFIG}/Ferdium"
             ],
             "linux": [
-              "{HOME}/.config/Ferdium",
+              "{APPCONFIG}/Ferdium",
               "{HOME}/.var/app/org.ferdium.Ferdium/config/Ferdium"
             ]
           },
@@ -2936,10 +2936,10 @@
               "{APPDATA}/Figma/settings.json"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Figma/settings.json"
+              "{APPCONFIG}/Figma/settings.json"
             ],
             "linux": [
-              "{HOME}/.config/figma-linux/settings.json"
+              "{APPCONFIG}/figma-linux/settings.json"
             ]
           }
         }
@@ -2972,7 +2972,7 @@
           "role": "config",
           "paths": {
             "linux": [
-              "{HOME}/.config/gtk-3.0/bookmarks"
+              "{APPCONFIG}/gtk-3.0/bookmarks"
             ]
           }
         }
@@ -3029,7 +3029,7 @@
               "{HOME}/.config/filezilla"
             ],
             "linux": [
-              "{HOME}/.config/filezilla"
+              "{APPCONFIG}/filezilla"
             ]
           },
           "exclude": [
@@ -3082,7 +3082,7 @@
               "{APPCONFIG}/Mozilla/Firefox"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Firefox"
+              "{APPCONFIG}/Firefox"
             ],
             "linux": [
               "{HOME}/.mozilla/firefox",
@@ -3372,7 +3372,7 @@
               "{HOME}/.config/fish"
             ],
             "linux": [
-              "{HOME}/.config/fish"
+              "{APPCONFIG}/fish"
             ]
           },
           "exclude": [
@@ -3415,7 +3415,7 @@
               "{HOME}/.config/flameshot"
             ],
             "linux": [
-              "{HOME}/.config/flameshot",
+              "{APPCONFIG}/flameshot",
               "{HOME}/.var/app/org.flameshot.Flameshot/config/flameshot"
             ]
           }
@@ -3458,7 +3458,7 @@
               "{APPCONFIG}/Floorp"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Floorp"
+              "{APPCONFIG}/Floorp"
             ],
             "linux": [
               "{HOME}/.floorp",
@@ -3713,7 +3713,7 @@
               "{HOME}/Library/Preferences/FreeCAD"
             ],
             "linux": [
-              "{HOME}/.config/FreeCAD",
+              "{APPCONFIG}/FreeCAD",
               "{HOME}/.var/app/org.freecad.FreeCAD/config/FreeCAD"
             ]
           }
@@ -3726,10 +3726,10 @@
               "{APPDATA}/FreeCAD"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/FreeCAD"
+              "{APPCONFIG}/FreeCAD"
             ],
             "linux": [
-              "{HOME}/.local/share/FreeCAD",
+              "{APPDATA}/FreeCAD",
               "{HOME}/.var/app/org.freecad.FreeCAD/data/FreeCAD"
             ]
           },
@@ -3788,10 +3788,10 @@
               "{APPCONFIG}/geany"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/geany"
+              "{APPCONFIG}/geany"
             ],
             "linux": [
-              "{HOME}/.config/geany",
+              "{APPCONFIG}/geany",
               "{HOME}/.var/app/org.geany.Geany/config/geany"
             ]
           }
@@ -3827,10 +3827,10 @@
           "role": "config",
           "paths": {
             "macos": [
-              "{HOME}/Library/Application Support/com.mitchellh.ghostty"
+              "{APPCONFIG}/com.mitchellh.ghostty"
             ],
             "linux": [
-              "{HOME}/.config/ghostty",
+              "{APPCONFIG}/ghostty",
               "{HOME}/.var/app/com.mitchellh.ghostty/config/ghostty"
             ]
           }
@@ -3878,10 +3878,10 @@
               "{APPCONFIG}/GIMP"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/GIMP"
+              "{APPCONFIG}/GIMP"
             ],
             "linux": [
-              "{HOME}/.config/GIMP"
+              "{APPCONFIG}/GIMP"
             ]
           },
           "exclude": [
@@ -3957,7 +3957,7 @@
               "{HOME}/.config/git"
             ],
             "linux": [
-              "{HOME}/.config/git"
+              "{APPCONFIG}/git"
             ]
           },
           "contents": [
@@ -4082,7 +4082,7 @@
               "{HOME}/.config/gh"
             ],
             "linux": [
-              "{HOME}/.config/gh"
+              "{APPCONFIG}/gh"
             ]
           }
         }
@@ -4127,10 +4127,10 @@
               "{APPDATA}/GnuCash"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Gnucash"
+              "{APPCONFIG}/Gnucash"
             ],
             "linux": [
-              "{HOME}/.local/share/gnucash",
+              "{APPDATA}/gnucash",
               "{HOME}/.var/app/org.gnucash.GnuCash/data/gnucash"
             ]
           },
@@ -4250,10 +4250,10 @@
               "{APPCONFIG}/Godot"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Godot"
+              "{APPCONFIG}/Godot"
             ],
             "linux": [
-              "{HOME}/.config/godot",
+              "{APPCONFIG}/godot",
               "{HOME}/.var/app/org.godotengine.Godot/config/godot"
             ]
           },
@@ -4315,7 +4315,7 @@
               "{APPDATA}/GOG.com/Galaxy/storage"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/GOG.com/Galaxy/storage"
+              "{APPCONFIG}/GOG.com/Galaxy/storage"
             ]
           },
           "exclude": [
@@ -4365,10 +4365,10 @@
               "{APPDATA}/Google/Chrome/User Data"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Google/Chrome"
+              "{APPCONFIG}/Google/Chrome"
             ],
             "linux": [
-              "{HOME}/.config/google-chrome"
+              "{APPCONFIG}/google-chrome"
             ]
           },
           "exclude": [
@@ -4637,7 +4637,7 @@
               "{HOME}/.config/gcloud"
             ],
             "linux": [
-              "{HOME}/.config/gcloud"
+              "{APPCONFIG}/gcloud"
             ]
           },
           "exclude": [
@@ -4787,7 +4787,7 @@
               "{DOCUMENTS}/Saved Games/Hades"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Supergiant Games/Hades"
+              "{APPCONFIG}/Supergiant Games/Hades"
             ]
           }
         }
@@ -4832,10 +4832,10 @@
               "{APPCONFIG}/HandBrake"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/HandBrake"
+              "{APPCONFIG}/HandBrake"
             ],
             "linux": [
-              "{HOME}/.config/ghb",
+              "{APPCONFIG}/ghb",
               "{HOME}/.var/app/fr.handbrake.ghb/config/ghb"
             ]
           },
@@ -4898,7 +4898,7 @@
               "{HOME}/.config/helix"
             ],
             "linux": [
-              "{HOME}/.config/helix"
+              "{APPCONFIG}/helix"
             ]
           }
         }
@@ -4941,7 +4941,7 @@
               "{HOME}/Library/Preferences/helm"
             ],
             "linux": [
-              "{HOME}/.config/helm"
+              "{APPCONFIG}/helm"
             ]
           },
           "contents": [
@@ -4999,10 +4999,10 @@
               "{APPCONFIG}/heroic"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/heroic"
+              "{APPCONFIG}/heroic"
             ],
             "linux": [
-              "{HOME}/.config/heroic",
+              "{APPCONFIG}/heroic",
               "{HOME}/.var/app/com.heroicgameslauncher.hgl/config/heroic"
             ]
           },
@@ -5083,10 +5083,10 @@
               "{APPDATA}/HexChat"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/HexChat"
+              "{APPCONFIG}/HexChat"
             ],
             "linux": [
-              "{HOME}/.config/hexchat"
+              "{APPCONFIG}/hexchat"
             ]
           },
           "exclude": [
@@ -5112,10 +5112,10 @@
               "{HOME}/AppData/LocalLow/Team Cherry/Hollow Knight"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/unity.Team Cherry.Hollow Knight"
+              "{APPCONFIG}/unity.Team Cherry.Hollow Knight"
             ],
             "linux": [
-              "{HOME}/.config/unity3d/Team Cherry/Hollow Knight"
+              "{APPCONFIG}/unity3d/Team Cherry/Hollow Knight"
             ]
           },
           "contents": [
@@ -5174,10 +5174,10 @@
               "{APPCONFIG}/inkscape"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/org.inkscape.Inkscape/config/inkscape"
+              "{APPCONFIG}/org.inkscape.Inkscape/config/inkscape"
             ],
             "linux": [
-              "{HOME}/.config/inkscape"
+              "{APPCONFIG}/inkscape"
             ]
           }
         }
@@ -5219,10 +5219,10 @@
               "{APPCONFIG}/Insomnia"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Insomnia"
+              "{APPCONFIG}/Insomnia"
             ],
             "linux": [
-              "{HOME}/.config/Insomnia"
+              "{APPCONFIG}/Insomnia"
             ]
           },
           "exclude": [
@@ -5267,10 +5267,10 @@
               "{APPCONFIG}/itch"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/itch"
+              "{APPCONFIG}/itch"
             ],
             "linux": [
-              "{HOME}/.config/itch",
+              "{APPCONFIG}/itch",
               "{HOME}/.var/app/io.itch.itch/config/itch"
             ]
           },
@@ -5325,10 +5325,10 @@
               "{APPCONFIG}/JetBrains"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/JetBrains"
+              "{APPCONFIG}/JetBrains"
             ],
             "linux": [
-              "{HOME}/.config/JetBrains"
+              "{APPCONFIG}/JetBrains"
             ]
           },
           "exclude": [
@@ -5388,7 +5388,7 @@
               "{HOME}/.config/joplin-desktop"
             ],
             "linux": [
-              "{HOME}/.config/joplin-desktop"
+              "{APPCONFIG}/joplin-desktop"
             ]
           },
           "exclude": [
@@ -5503,10 +5503,10 @@
               "{APPDATA}/kate"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/kate"
+              "{APPCONFIG}/kate"
             ],
             "linux": [
-              "{HOME}/.local/share/kate",
+              "{APPDATA}/kate",
               "{HOME}/.var/app/org.kde.kate/data/kate"
             ]
           },
@@ -5543,7 +5543,7 @@
           "role": "config",
           "paths": {
             "linux": [
-              "{HOME}/.config/kdeconnect"
+              "{APPCONFIG}/kdeconnect"
             ]
           }
         }
@@ -5589,10 +5589,10 @@
               "{APPDATA}/kdenlive"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/kdenlive"
+              "{APPCONFIG}/kdenlive"
             ],
             "linux": [
-              "{HOME}/.local/share/kdenlive",
+              "{APPDATA}/kdenlive",
               "{HOME}/.var/app/org.kde.kdenlive/data/kdenlive"
             ]
           },
@@ -5661,10 +5661,10 @@
               "{APPCONFIG}/KeePassXC"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/KeePassXC"
+              "{APPCONFIG}/KeePassXC"
             ],
             "linux": [
-              "{HOME}/.config/keepassxc"
+              "{APPCONFIG}/keepassxc"
             ]
           }
         }
@@ -5729,7 +5729,7 @@
               "{HOME}/Library/Preferences/kicad"
             ],
             "linux": [
-              "{HOME}/.config/kicad",
+              "{APPCONFIG}/kicad",
               "{HOME}/.var/app/org.kicad.KiCad/config/kicad"
             ]
           },
@@ -5792,7 +5792,7 @@
               "{HOME}/.config/kitty"
             ],
             "linux": [
-              "{HOME}/.config/kitty"
+              "{APPCONFIG}/kitty"
             ]
           }
         }
@@ -5837,7 +5837,7 @@
               "{APPCONFIG}/Kodi"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Kodi"
+              "{APPCONFIG}/Kodi"
             ],
             "linux": [
               "{HOME}/.kodi",
@@ -5911,7 +5911,7 @@
           "role": "data",
           "paths": {
             "linux": [
-              "{HOME}/.local/share/konsole",
+              "{APPDATA}/konsole",
               "{HOME}/.var/app/org.kde.konsole/data/konsole"
             ]
           },
@@ -5975,7 +5975,7 @@
               "{HOME}/Library/Preferences/kritarc"
             ],
             "linux": [
-              "{HOME}/.config/kritarc"
+              "{APPCONFIG}/kritarc"
             ]
           }
         },
@@ -5987,10 +5987,10 @@
               "{APPDATA}/krita"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/krita"
+              "{APPCONFIG}/krita"
             ],
             "linux": [
-              "{HOME}/.local/share/krita"
+              "{APPDATA}/krita"
             ]
           }
         }
@@ -6096,10 +6096,10 @@
               "{APPDATA}/lazygit"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/lazygit"
+              "{APPCONFIG}/lazygit"
             ],
             "linux": [
-              "{HOME}/.config/lazygit"
+              "{APPCONFIG}/lazygit"
             ]
           }
         }
@@ -6148,10 +6148,10 @@
               "{APPCONFIG}/LibreOffice/4/user"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/LibreOffice/4/user"
+              "{APPCONFIG}/LibreOffice/4/user"
             ],
             "linux": [
-              "{HOME}/.config/libreoffice/4/user"
+              "{APPCONFIG}/libreoffice/4/user"
             ]
           },
           "exclude": [
@@ -6214,7 +6214,7 @@
               "{APPCONFIG}/librewolf"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/librewolf"
+              "{APPCONFIG}/librewolf"
             ],
             "linux": [
               "{HOME}/.librewolf",
@@ -6464,10 +6464,10 @@
               "{APPCONFIG}/Logseq"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Logseq"
+              "{APPCONFIG}/Logseq"
             ],
             "linux": [
-              "{HOME}/.config/Logseq"
+              "{APPCONFIG}/Logseq"
             ]
           },
           "exclude": [
@@ -6504,7 +6504,7 @@
           "role": "config",
           "paths": {
             "linux": [
-              "{HOME}/.config/lutris",
+              "{APPCONFIG}/lutris",
               "{HOME}/.var/app/net.lutris.Lutris/config/lutris"
             ]
           },
@@ -6528,7 +6528,7 @@
           "role": "data",
           "paths": {
             "linux": [
-              "{HOME}/.local/share/lutris",
+              "{APPDATA}/lutris",
               "{HOME}/.var/app/net.lutris.Lutris/data/lutris"
             ]
           },
@@ -6599,10 +6599,10 @@
               "{APPCONFIG}/Mattermost"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Mattermost"
+              "{APPCONFIG}/Mattermost"
             ],
             "linux": [
-              "{HOME}/.config/Mattermost",
+              "{APPCONFIG}/Mattermost",
               "{HOME}/.var/app/com.mattermost.Desktop/config/Mattermost"
             ]
           },
@@ -6654,7 +6654,7 @@
               "{HOME}/.config/micro"
             ],
             "linux": [
-              "{HOME}/.config/micro"
+              "{APPCONFIG}/micro"
             ]
           }
         }
@@ -6697,10 +6697,10 @@
               "{APPDATA}/Microsoft/Edge/User Data"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Microsoft Edge"
+              "{APPCONFIG}/Microsoft Edge"
             ],
             "linux": [
-              "{HOME}/.config/microsoft-edge"
+              "{APPCONFIG}/microsoft-edge"
             ]
           },
           "exclude": [
@@ -6951,7 +6951,7 @@
               "{APPCONFIG}/.minecraft"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/minecraft"
+              "{APPCONFIG}/minecraft"
             ],
             "linux": [
               "{HOME}/.minecraft",
@@ -7087,7 +7087,7 @@
               "{HOME}/.config/mise"
             ],
             "linux": [
-              "{HOME}/.config/mise"
+              "{APPCONFIG}/mise"
             ]
           }
         },
@@ -7102,7 +7102,7 @@
               "{HOME}/.local/share/mise"
             ],
             "linux": [
-              "{HOME}/.local/share/mise"
+              "{APPDATA}/mise"
             ]
           },
           "exclude": [
@@ -7164,7 +7164,7 @@
               "{HOME}/.config/mpv"
             ],
             "linux": [
-              "{HOME}/.config/mpv"
+              "{APPCONFIG}/mpv"
             ]
           }
         }
@@ -7209,10 +7209,10 @@
               "{APPDATA}/MuseScore"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/MuseScore"
+              "{APPCONFIG}/MuseScore"
             ],
             "linux": [
-              "{HOME}/.local/share/MuseScore",
+              "{APPDATA}/MuseScore",
               "{HOME}/.var/app/org.musescore.MuseScore/data/MuseScore"
             ]
           },
@@ -7283,7 +7283,7 @@
               "{HOME}/Library/Preferences/MusicBrainz/Picard"
             ],
             "linux": [
-              "{HOME}/.config/MusicBrainz/Picard",
+              "{APPCONFIG}/MusicBrainz/Picard",
               "{HOME}/.var/app/org.musicbrainz.Picard/config/MusicBrainz/Picard"
             ]
           }
@@ -7335,7 +7335,7 @@
               "{HOME}/.config/nvim"
             ],
             "linux": [
-              "{HOME}/.config/nvim"
+              "{APPCONFIG}/nvim"
             ]
           }
         },
@@ -7350,7 +7350,7 @@
               "{HOME}/.local/share/nvim"
             ],
             "linux": [
-              "{HOME}/.local/share/nvim"
+              "{APPDATA}/nvim"
             ]
           },
           "exclude": [
@@ -7407,7 +7407,7 @@
               "{HOME}/Library/Preferences/Nextcloud"
             ],
             "linux": [
-              "{HOME}/.config/Nextcloud",
+              "{APPCONFIG}/Nextcloud",
               "{HOME}/.var/app/com.nextcloud.desktopclient.nextcloud/config/Nextcloud"
             ]
           },
@@ -7470,10 +7470,10 @@
               "{APPCONFIG}/nicotine"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/nicotine"
+              "{APPCONFIG}/nicotine"
             ],
             "linux": [
-              "{HOME}/.config/nicotine",
+              "{APPCONFIG}/nicotine",
               "{HOME}/.var/app/org.nicotine_plus.Nicotine/config/nicotine"
             ]
           },
@@ -7586,10 +7586,10 @@
               "{APPCONFIG}/Notion"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Notion"
+              "{APPCONFIG}/Notion"
             ],
             "linux": [
-              "{HOME}/.config/Notion"
+              "{APPCONFIG}/Notion"
             ]
           },
           "exclude": [
@@ -7687,10 +7687,10 @@
               "{APPCONFIG}/nushell"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/nushell"
+              "{APPCONFIG}/nushell"
             ],
             "linux": [
-              "{HOME}/.config/nushell"
+              "{APPCONFIG}/nushell"
             ]
           },
           "contents": [
@@ -7755,10 +7755,10 @@
               "{APPCONFIG}/obs-studio"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/obs-studio"
+              "{APPCONFIG}/obs-studio"
             ],
             "linux": [
-              "{HOME}/.config/obs-studio"
+              "{APPCONFIG}/obs-studio"
             ]
           },
           "exclude": [
@@ -7821,10 +7821,10 @@
               "{APPCONFIG}/obsidian"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/obsidian"
+              "{APPCONFIG}/obsidian"
             ],
             "linux": [
-              "{HOME}/.config/obsidian"
+              "{APPCONFIG}/obsidian"
             ]
           },
           "exclude": [
@@ -7956,10 +7956,10 @@
               "{APPCONFIG}/ONLYOFFICE/DesktopEditors"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/ONLYOFFICE/DesktopEditors"
+              "{APPCONFIG}/ONLYOFFICE/DesktopEditors"
             ],
             "linux": [
-              "{HOME}/.config/onlyoffice/DesktopEditors",
+              "{APPCONFIG}/onlyoffice/DesktopEditors",
               "{HOME}/.var/app/org.onlyoffice.desktopeditors/config/onlyoffice/DesktopEditors"
             ]
           },
@@ -8009,10 +8009,10 @@
               "{DOCUMENTS}/OpenSCAD"
             ],
             "macos": [
-              "{HOME}/Documents/OpenSCAD"
+              "{DOCUMENTS}/OpenSCAD"
             ],
             "linux": [
-              "{HOME}/.local/share/OpenSCAD",
+              "{APPDATA}/OpenSCAD",
               "{HOME}/.var/app/org.openscad.OpenSCAD/data/OpenSCAD"
             ]
           },
@@ -8070,10 +8070,10 @@
               "{DOCUMENTS}/OpenTTD"
             ],
             "macos": [
-              "{HOME}/Documents/OpenTTD"
+              "{DOCUMENTS}/OpenTTD"
             ],
             "linux": [
-              "{HOME}/.local/share/openttd",
+              "{APPDATA}/openttd",
               "{HOME}/.var/app/org.openttd.OpenTTD/data/openttd"
             ]
           },
@@ -8142,10 +8142,10 @@
               "{APPCONFIG}/Opera Software/Opera Stable"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/com.operasoftware.Opera"
+              "{APPCONFIG}/com.operasoftware.Opera"
             ],
             "linux": [
-              "{HOME}/.config/opera",
+              "{APPCONFIG}/opera",
               "{HOME}/.var/app/com.opera.Opera/config/opera"
             ]
           },
@@ -8379,10 +8379,10 @@
               "{APPCONFIG}/osu"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/osu"
+              "{APPCONFIG}/osu"
             ],
             "linux": [
-              "{HOME}/.local/share/osu",
+              "{APPDATA}/osu",
               "{HOME}/.var/app/sh.ppy.osu/data/osu"
             ]
           },
@@ -8433,10 +8433,10 @@
               "{DOCUMENTS}/Paradox Interactive"
             ],
             "macos": [
-              "{HOME}/Documents/Paradox Interactive"
+              "{DOCUMENTS}/Paradox Interactive"
             ],
             "linux": [
-              "{HOME}/.local/share/Paradox Interactive"
+              "{APPDATA}/Paradox Interactive"
             ]
           },
           "exclude": [
@@ -8561,10 +8561,10 @@
               "{DOCUMENTS}/PCSX2"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/PCSX2"
+              "{APPCONFIG}/PCSX2"
             ],
             "linux": [
-              "{HOME}/.config/PCSX2",
+              "{APPCONFIG}/PCSX2",
               "{HOME}/.var/app/net.pcsx2.PCSX2/config/PCSX2"
             ]
           },
@@ -8717,7 +8717,7 @@
               "{HOME}/.config/containers"
             ],
             "linux": [
-              "{HOME}/.config/containers"
+              "{APPCONFIG}/containers"
             ]
           },
           "contents": [
@@ -8781,10 +8781,10 @@
               "{APPCONFIG}/pypoetry"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/pypoetry"
+              "{APPCONFIG}/pypoetry"
             ],
             "linux": [
-              "{HOME}/.config/pypoetry"
+              "{APPCONFIG}/pypoetry"
             ]
           },
           "contents": [
@@ -8842,10 +8842,10 @@
               "{APPCONFIG}/Postman"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Postman"
+              "{APPCONFIG}/Postman"
             ],
             "linux": [
-              "{HOME}/.config/Postman"
+              "{APPCONFIG}/Postman"
             ]
           },
           "exclude": [
@@ -8901,7 +8901,7 @@
               "{HOME}/.config/powershell"
             ],
             "linux": [
-              "{HOME}/.config/powershell"
+              "{APPCONFIG}/powershell"
             ]
           },
           "exclude": [
@@ -9007,10 +9007,10 @@
               "{DOCUMENTS}/PPSSPP"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/ppsspp"
+              "{APPCONFIG}/ppsspp"
             ],
             "linux": [
-              "{HOME}/.config/ppsspp",
+              "{APPCONFIG}/ppsspp",
               "{HOME}/.var/app/org.ppsspp.PPSSPP/config/ppsspp"
             ]
           },
@@ -9058,10 +9058,10 @@
               "{APPCONFIG}/PrismLauncher"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/PrismLauncher"
+              "{APPCONFIG}/PrismLauncher"
             ],
             "linux": [
-              "{HOME}/.local/share/PrismLauncher",
+              "{APPDATA}/PrismLauncher",
               "{HOME}/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher"
             ]
           },
@@ -9188,7 +9188,7 @@
               "{HOME}/.config/pip"
             ],
             "linux": [
-              "{HOME}/.config/pip"
+              "{APPCONFIG}/pip"
             ]
           }
         },
@@ -9249,10 +9249,10 @@
               "{APPCONFIG}/qBittorrent"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/qBittorrent"
+              "{APPCONFIG}/qBittorrent"
             ],
             "linux": [
-              "{HOME}/.config/qBittorrent"
+              "{APPCONFIG}/qBittorrent"
             ]
           }
         }
@@ -9312,10 +9312,10 @@
               "{APPDATA}/QGIS/QGIS3"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/QGIS/QGIS3"
+              "{APPCONFIG}/QGIS/QGIS3"
             ],
             "linux": [
-              "{HOME}/.local/share/QGIS/QGIS3",
+              "{APPDATA}/QGIS/QGIS3",
               "{HOME}/.var/app/org.qgis.qgis/data/QGIS/QGIS3"
             ]
           },
@@ -9378,10 +9378,10 @@
               "{APPCONFIG}/RawTherapee"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/RawTherapee"
+              "{APPCONFIG}/RawTherapee"
             ],
             "linux": [
-              "{HOME}/.config/RawTherapee",
+              "{APPCONFIG}/RawTherapee",
               "{HOME}/.var/app/com.rawtherapee.RawTherapee/config/RawTherapee"
             ]
           },
@@ -9433,7 +9433,7 @@
               "{HOME}/.config/rclone"
             ],
             "linux": [
-              "{HOME}/.config/rclone"
+              "{APPCONFIG}/rclone"
             ]
           }
         }
@@ -9466,7 +9466,7 @@
           "role": "config",
           "paths": {
             "linux": [
-              "{HOME}/.config/remmina"
+              "{APPCONFIG}/remmina"
             ]
           }
         },
@@ -9475,7 +9475,7 @@
           "role": "data",
           "paths": {
             "linux": [
-              "{HOME}/.local/share/remmina"
+              "{APPDATA}/remmina"
             ]
           }
         }
@@ -9520,10 +9520,10 @@
               "{APPCONFIG}/RetroArch"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/RetroArch"
+              "{APPCONFIG}/RetroArch"
             ],
             "linux": [
-              "{HOME}/.config/retroarch",
+              "{APPCONFIG}/retroarch",
               "{HOME}/.var/app/org.libretro.RetroArch/config/retroarch"
             ]
           },
@@ -9598,10 +9598,10 @@
               "{HOME}/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/RimWorld by Ludeon Studios"
+              "{APPCONFIG}/RimWorld by Ludeon Studios"
             ],
             "linux": [
-              "{HOME}/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios"
+              "{APPCONFIG}/unity3d/Ludeon Studios/RimWorld by Ludeon Studios"
             ]
           },
           "contents": [
@@ -9677,10 +9677,10 @@
           "role": "config",
           "paths": {
             "macos": [
-              "{HOME}/Library/Application Support/rpcs3"
+              "{APPCONFIG}/rpcs3"
             ],
             "linux": [
-              "{HOME}/.config/rpcs3",
+              "{APPCONFIG}/rpcs3",
               "{HOME}/.var/app/net.rpcs3.RPCS3/config/rpcs3"
             ]
           },
@@ -9781,7 +9781,7 @@
               "{HOME}/Library/Preferences/com.carriez.RustDesk"
             ],
             "linux": [
-              "{HOME}/.config/rustdesk",
+              "{APPCONFIG}/rustdesk",
               "{HOME}/.var/app/com.rustdesk.RustDesk/config/rustdesk"
             ]
           },
@@ -9845,10 +9845,10 @@
               "{APPCONFIG}/ScummVM"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/ScummVM"
+              "{APPCONFIG}/ScummVM"
             ],
             "linux": [
-              "{HOME}/.config/scummvm",
+              "{APPCONFIG}/scummvm",
               "{HOME}/.var/app/org.scummvm.ScummVM/config/scummvm"
             ]
           }
@@ -9858,10 +9858,10 @@
           "role": "data",
           "paths": {
             "macos": [
-              "{HOME}/Documents/ScummVM Savegames"
+              "{DOCUMENTS}/ScummVM Savegames"
             ],
             "linux": [
-              "{HOME}/.local/share/scummvm/saves",
+              "{APPDATA}/scummvm/saves",
               "{HOME}/.var/app/org.scummvm.ScummVM/data/scummvm/saves"
             ]
           }
@@ -9946,10 +9946,10 @@
               "{DOCUMENTS}/My Games/Sid Meier's Civilization VI"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Sid Meier's Civilization VI"
+              "{APPCONFIG}/Sid Meier's Civilization VI"
             ],
             "linux": [
-              "{HOME}/.local/share/aspyr-media/Sid Meier's Civilization VI"
+              "{APPDATA}/aspyr-media/Sid Meier's Civilization VI"
             ]
           },
           "exclude": [
@@ -9997,10 +9997,10 @@
               "{APPCONFIG}/Signal"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Signal"
+              "{APPCONFIG}/Signal"
             ],
             "linux": [
-              "{HOME}/.config/Signal"
+              "{APPCONFIG}/Signal"
             ]
           },
           "exclude": [
@@ -10090,10 +10090,10 @@
               "{APPCONFIG}/Slack"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Slack"
+              "{APPCONFIG}/Slack"
             ],
             "linux": [
-              "{HOME}/.config/Slack"
+              "{APPCONFIG}/Slack"
             ]
           },
           "exclude": [
@@ -10151,10 +10151,10 @@
               "{APPDATA}/Spotify"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Spotify"
+              "{APPCONFIG}/Spotify"
             ],
             "linux": [
-              "{HOME}/.config/spotify"
+              "{APPCONFIG}/spotify"
             ]
           },
           "exclude": [
@@ -10294,7 +10294,7 @@
               "{HOME}/.config/StardewValley"
             ],
             "linux": [
-              "{HOME}/.config/StardewValley"
+              "{APPCONFIG}/StardewValley"
             ]
           },
           "contents": [
@@ -10379,7 +10379,7 @@
               "{HOME}/.config/starship.toml"
             ],
             "linux": [
-              "{HOME}/.config/starship.toml"
+              "{APPCONFIG}/starship.toml"
             ]
           }
         }
@@ -10424,10 +10424,10 @@
               "{APPDATA}/Steam/userdata"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Steam/userdata"
+              "{APPCONFIG}/Steam/userdata"
             ],
             "linux": [
-              "{HOME}/.local/share/Steam/userdata"
+              "{APPDATA}/Steam/userdata"
             ]
           },
           "exclude": [
@@ -10481,10 +10481,10 @@
               "{APPDATA}/strawberry/strawberry"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Strawberry"
+              "{APPCONFIG}/Strawberry"
             ],
             "linux": [
-              "{HOME}/.local/share/strawberry/strawberry",
+              "{APPDATA}/strawberry/strawberry",
               "{HOME}/.var/app/org.strawberrymusicplayer.strawberry/data/strawberry/strawberry"
             ]
           },
@@ -10543,10 +10543,10 @@
               "{APPCONFIG}/Sublime Merge"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Sublime Merge"
+              "{APPCONFIG}/Sublime Merge"
             ],
             "linux": [
-              "{HOME}/.config/sublime-merge"
+              "{APPCONFIG}/sublime-merge"
             ]
           },
           "exclude": [
@@ -10594,10 +10594,10 @@
               "{APPCONFIG}/Sublime Text/Packages/User"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Sublime Text/Packages/User"
+              "{APPCONFIG}/Sublime Text/Packages/User"
             ],
             "linux": [
-              "{HOME}/.config/sublime-text/Packages/User"
+              "{APPCONFIG}/sublime-text/Packages/User"
             ]
           },
           "exclude": [
@@ -10646,10 +10646,10 @@
               "{APPCONFIG}/supertuxkart"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/supertuxkart"
+              "{APPCONFIG}/supertuxkart"
             ],
             "linux": [
-              "{HOME}/.config/supertuxkart",
+              "{APPCONFIG}/supertuxkart",
               "{HOME}/.var/app/net.supertuxkart.SuperTuxKart/config/supertuxkart"
             ]
           }
@@ -10695,10 +10695,10 @@
               "{APPDATA}/Syncthing"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Syncthing"
+              "{APPCONFIG}/Syncthing"
             ],
             "linux": [
-              "{HOME}/.local/state/syncthing"
+              "{APPSTATE}/syncthing"
             ]
           },
           "exclude": [
@@ -10761,10 +10761,10 @@
               "{APPDATA}/Telegram Desktop/tdata"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Telegram Desktop/tdata"
+              "{APPCONFIG}/Telegram Desktop/tdata"
             ],
             "linux": [
-              "{HOME}/.local/share/TelegramDesktop/tdata"
+              "{APPDATA}/TelegramDesktop/tdata"
             ]
           },
           "exclude": [
@@ -10859,10 +10859,10 @@
               "{DOCUMENTS}/My Games/Terraria"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Terraria"
+              "{APPCONFIG}/Terraria"
             ],
             "linux": [
-              "{HOME}/.local/share/Terraria"
+              "{APPDATA}/Terraria"
             ]
           },
           "contents": [
@@ -10902,7 +10902,7 @@
               "{DOCUMENTS}/Electronic Arts/The Sims 4"
             ],
             "macos": [
-              "{HOME}/Documents/Electronic Arts/The Sims 4"
+              "{DOCUMENTS}/Electronic Arts/The Sims 4"
             ]
           },
           "exclude": [
@@ -11326,7 +11326,7 @@
               "{HOME}/.config/tmux"
             ],
             "linux": [
-              "{HOME}/.config/tmux"
+              "{APPCONFIG}/tmux"
             ]
           }
         }
@@ -11365,7 +11365,7 @@
           "role": "config",
           "paths": {
             "linux": [
-              "{HOME}/.local/share/torbrowser"
+              "{APPDATA}/torbrowser"
             ]
           }
         }
@@ -11410,10 +11410,10 @@
               "{APPDATA}/Transmission"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Transmission"
+              "{APPCONFIG}/Transmission"
             ],
             "linux": [
-              "{HOME}/.config/transmission"
+              "{APPCONFIG}/transmission"
             ]
           }
         }
@@ -11463,10 +11463,10 @@
               "{APPCONFIG}/trilium-data"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/trilium-data"
+              "{APPCONFIG}/trilium-data"
             ],
             "linux": [
-              "{HOME}/.local/share/trilium-data",
+              "{APPDATA}/trilium-data",
               "{HOME}/.var/app/com.github.zadam.trilium/data/trilium-data"
             ]
           },
@@ -11563,10 +11563,10 @@
               "{APPCONFIG}/UnityHub"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/UnityHub"
+              "{APPCONFIG}/UnityHub"
             ],
             "linux": [
-              "{HOME}/.config/UnityHub"
+              "{APPCONFIG}/UnityHub"
             ]
           },
           "exclude": [
@@ -11673,7 +11673,7 @@
               "{HOME}/AppData/LocalLow/IronGate/Valheim"
             ],
             "linux": [
-              "{HOME}/.config/unity3d/IronGate/Valheim"
+              "{APPCONFIG}/unity3d/IronGate/Valheim"
             ]
           },
           "contents": [
@@ -11788,10 +11788,10 @@
               "{APPCONFIG}/VintagestoryData"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/VintagestoryData"
+              "{APPCONFIG}/VintagestoryData"
             ],
             "linux": [
-              "{HOME}/.config/VintagestoryData"
+              "{APPCONFIG}/VintagestoryData"
             ]
           },
           "exclude": [
@@ -11865,7 +11865,7 @@
               "{HOME}/Library/VirtualBox"
             ],
             "linux": [
-              "{HOME}/.config/VirtualBox"
+              "{APPCONFIG}/VirtualBox"
             ]
           },
           "exclude": [
@@ -11917,10 +11917,10 @@
               "{APPCONFIG}/Code/User"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Code/User"
+              "{APPCONFIG}/Code/User"
             ],
             "linux": [
-              "{HOME}/.config/Code/User"
+              "{APPCONFIG}/Code/User"
             ]
           },
           "exclude": [
@@ -12095,10 +12095,10 @@
               "{APPDATA}/Vivaldi/User Data"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Vivaldi"
+              "{APPCONFIG}/Vivaldi"
             ],
             "linux": [
-              "{HOME}/.config/vivaldi"
+              "{APPCONFIG}/vivaldi"
             ]
           },
           "exclude": [
@@ -12348,7 +12348,7 @@
               "{HOME}/Library/Preferences/org.videolan.vlc"
             ],
             "linux": [
-              "{HOME}/.config/vlc"
+              "{APPCONFIG}/vlc"
             ]
           },
           "exclude": [
@@ -12389,10 +12389,10 @@
           "role": "data",
           "paths": {
             "macos": [
-              "{HOME}/Library/Application Support/Vorta"
+              "{APPCONFIG}/Vorta"
             ],
             "linux": [
-              "{HOME}/.local/share/Vorta",
+              "{APPDATA}/Vorta",
               "{HOME}/.var/app/com.borgbase.Vorta/data/Vorta"
             ]
           },
@@ -12445,7 +12445,7 @@
               "{APPCONFIG}/Waterfox"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Waterfox"
+              "{APPCONFIG}/Waterfox"
             ],
             "linux": [
               "{HOME}/.waterfox",
@@ -12712,7 +12712,7 @@
               "{HOME}/.config/wezterm"
             ],
             "linux": [
-              "{HOME}/.config/wezterm"
+              "{APPCONFIG}/wezterm"
             ]
           }
         }
@@ -12789,7 +12789,7 @@
               "{HOME}/.config/wireshark"
             ],
             "linux": [
-              "{HOME}/.config/wireshark"
+              "{APPCONFIG}/wireshark"
             ]
           }
         }
@@ -12834,7 +12834,7 @@
               "{HOME}/.config/zed"
             ],
             "linux": [
-              "{HOME}/.config/zed",
+              "{APPCONFIG}/zed",
               "{HOME}/.var/app/dev.zed.Zed/config/zed"
             ]
           },
@@ -12896,7 +12896,7 @@
               "{APPCONFIG}/zen"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/zen"
+              "{APPCONFIG}/zen"
             ],
             "linux": [
               "{HOME}/.zen",
@@ -13144,10 +13144,10 @@
               "{APPCONFIG}/Zettlr"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Zettlr"
+              "{APPCONFIG}/Zettlr"
             ],
             "linux": [
-              "{HOME}/.config/Zettlr",
+              "{APPCONFIG}/Zettlr",
               "{HOME}/.var/app/com.zettlr.Zettlr/config/Zettlr"
             ]
           },
@@ -13203,7 +13203,7 @@
               "{APPCONFIG}/Zoom/data"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/zoom.us/data"
+              "{APPCONFIG}/zoom.us/data"
             ],
             "linux": [
               "{HOME}/.zoom/data"
@@ -13376,10 +13376,10 @@
               "{APPCONFIG}/Zulip"
             ],
             "macos": [
-              "{HOME}/Library/Application Support/Zulip"
+              "{APPCONFIG}/Zulip"
             ],
             "linux": [
-              "{HOME}/.config/Zulip",
+              "{APPCONFIG}/Zulip",
               "{HOME}/.var/app/org.zulip.Zulip/config/Zulip"
             ]
           },

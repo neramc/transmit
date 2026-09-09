@@ -226,17 +226,37 @@ QString PathTranslator::translateWithin(const QString& text, int* replacements) 
     auto pathMatches = pathPattern_.globalMatch(working);
     while (pathMatches.hasNext()) {
         const auto match = pathMatches.next();
-        // Skip anything already covered by a URI edit.
-        const bool overlaps = std::any_of(edits.begin(), edits.end(), [&match](const auto& edit) {
-            return match.capturedStart(0) >= edit.first &&
-                   match.capturedStart(0) < edit.first + edit.second.first;
-        });
-        if (overlaps) {
+
+        // A path can run straight into a file:// URI that follows it: "file:"
+        // is made of characters a path may contain, and the slash after it
+        // reads as the next component, so one match covers both. Two edits
+        // over the same stretch are applied one on top of the other, and what
+        // came out was a URI with its slashes eaten and its own path left
+        // naming the old machine.
+        //
+        // So a path that begins inside a URI is left to the URI, and one that
+        // merely runs into a URI stops where it starts.
+        qsizetype start = match.capturedStart(0);
+        qsizetype end = match.capturedEnd(0);
+        bool insideAUri = false;
+        for (const auto& [editStart, edit] : edits) {
+            if (start >= editStart && start < editStart + edit.first) {
+                insideAUri = true;
+                break;
+            }
+            if (editStart > start && editStart < end) {
+                end = editStart;
+            }
+        }
+        if (insideAUri) {
             continue;
         }
-        const auto translated = translate(match.captured(0));
+
+        // Any space left on the end came between the two and is carried
+        // through as it stands, the same as the text on either side.
+        const auto translated = translate(working.mid(start, end - start));
         if (translated.has_value()) {
-            edits.append({match.capturedStart(0), {match.capturedLength(0), *translated}});
+            edits.append({start, {end - start, *translated}});
         }
     }
 

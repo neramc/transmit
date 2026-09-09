@@ -76,6 +76,61 @@ RecipeContent readContent(const QJsonObject& object) {
     return content;
 }
 
+/// The name a folder has to be written under, for the system named.
+///
+/// On macOS "{HOME}/Library/Application Support/Firefox" and
+/// "{APPCONFIG}/Firefox" are the same directory, and only one of them works.
+/// A captured file is filed under the longest known folder containing it -
+/// always {APPCONFIG} - while a restore looks for that application's state
+/// wherever the recipe says, and a restore into a folder of the user's
+/// choosing gives every token a directory of its own. Written the long way
+/// round, the files land under one and the rewrite pass searches the other,
+/// finds nothing, and every path inside that application's settings keeps
+/// naming the machine it came from, with nothing said about it.
+///
+/// So it is settled on the way in, where a user overlay and a file written
+/// against the old schema get it as well - neither of which this program can
+/// go and correct.
+QString underItsMostSpecificFolder(const QString& tokenised, const QString& os) {
+    static const QHash<QString, format::OsFamily> kFamilies = {
+        {QStringLiteral("windows"), format::OsFamily::Windows},
+        {QStringLiteral("macos"), format::OsFamily::MacOs},
+        {QStringLiteral("linux"), format::OsFamily::Linux},
+    };
+    const auto family = kFamilies.constFind(os);
+    if (family == kFamilies.constEnd()) {
+        return tokenised;
+    }
+
+    // Any home will do: which folder contains which is a property of the
+    // layout, not of whose machine it is. Built once, because this is asked of
+    // every candidate of every root of every recipe as the catalogue loads.
+    static const QHash<format::OsFamily, format::PathTokenMap> kLayouts = {
+        {format::OsFamily::Windows,
+         format::PathTokenMap::defaultsFor(format::OsFamily::Windows, "C:/Users/u")},
+        {format::OsFamily::MacOs,
+         format::PathTokenMap::defaultsFor(format::OsFamily::MacOs, "/Users/u")},
+        {format::OsFamily::Linux,
+         format::PathTokenMap::defaultsFor(format::OsFamily::Linux, "/home/u")},
+    };
+    const format::PathTokenMap& folders = kLayouts[*family];
+
+    const QString absolute = RecipeCatalog::resolveStatePath(tokenised, folders);
+    if (absolute.isEmpty()) {
+        return tokenised;  // a token this system has no folder for
+    }
+
+    const format::TokenizedPath read = folders.tokenize(toUtf8(absolute));
+    if (read.isAbsoluteFallback()) {
+        return tokenised;
+    }
+
+    const std::string_view name = format::tokenName(read.token);
+    const QString token =
+        u'{' + QString::fromUtf8(name.data(), static_cast<qsizetype>(name.size())) + u'}';
+    return read.relative.empty() ? token : token + u'/' + fromUtf8(read.relative);
+}
+
 /// Reads a state root in either schema.
 ///
 /// Version 1 wrote one path per system directly on the object; version 2 puts
@@ -96,6 +151,9 @@ RecipeStatePath readStatePath(const QJsonObject& object) {
             candidates = toStringList(object.value(os));  // version 1
         }
         if (!candidates.isEmpty()) {
+            for (QString& candidate : candidates) {
+                candidate = underItsMostSpecificFolder(candidate, os);
+            }
             state.candidatesByOs.insert(os, candidates);
         }
     }

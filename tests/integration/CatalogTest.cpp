@@ -29,6 +29,8 @@ private slots:
     void everyStateRootIdIsUniqueWithinItsRecipe();
     void noPathClimbsOutOfTheFolderItNames();
     void everyStatePathStartsWithAKnownToken();
+    void everyStatePathIsWrittenWithTheTokenItWouldBeReadAs();
+    void aFolderNamedTheLongWayRoundIsReadAsTheShortOne();
     void everyMoveStepNamesARootThatExists();
     void everyMoveStepUsesAnActionWeImplement();
     void noTwoApplicationsClaimTheSameFolder();
@@ -161,6 +163,117 @@ void CatalogTest::everyStatePathStartsWithAKnownToken() {
             }
         }
     }
+}
+
+/// A folder has one name here, and it is the most specific one.
+///
+/// On macOS "{HOME}/Library/Application Support/Firefox" and
+/// "{APPCONFIG}/Firefox" are the same directory, so a recipe can be written
+/// either way and look right. They are not the same to Transmit. A captured
+/// file is filed under the longest known folder that contains it - always
+/// {APPCONFIG} - while a restore looks for that application's state wherever
+/// the recipe says, and a restore into a folder of the user's choosing gives
+/// every token a directory of its own. The two then name different places:
+/// the files land under APPCONFIG and the rewrite pass goes looking under
+/// HOME, finds nothing, and every path inside that application's settings is
+/// left pointing at the machine it came from. Nothing reports a problem.
+///
+/// The loader settles this for whatever it is given, so this reads the file
+/// rather than the recipes: what ships should say what it means, and a
+/// hundred and fifty entries that say one thing and mean another are a
+/// hundred and fifty chances to reason from the wrong one.
+///
+/// Where two tokens name one directory - {APPCONFIG} and {APPDATA} are both
+/// "Library/Application Support" on macOS - the one to write is the one
+/// tokenising picks, because that is the one the files are filed under.
+void CatalogTest::everyStatePathIsWrittenWithTheTokenItWouldBeReadAs() {
+    struct Machine {
+        format::OsFamily os;
+        const char* home;
+        QLatin1String name;
+    };
+    static const Machine kMachines[] = {
+        {format::OsFamily::Windows, "C:/Users/bob", QLatin1String("windows")},
+        {format::OsFamily::MacOs, "/Users/bob", QLatin1String("macos")},
+        {format::OsFamily::Linux, "/home/bob", QLatin1String("linux")},
+    };
+
+    const QJsonArray entries = rawEntries(QStringLiteral(":/catalog/app-catalog.json"));
+    QVERIFY2(entries.size() >= 150, "the built-in catalog is much smaller than it should be");
+
+    QStringList wrong;
+    for (const QJsonValue& value : entries) {
+        const QJsonObject app = value.toObject();
+        const QString id = app.value(QStringLiteral("id")).toString();
+
+        for (const QJsonValue& stateValue : app.value(QStringLiteral("state")).toArray()) {
+            const QJsonObject state = stateValue.toObject();
+            const QJsonObject paths = state.value(QStringLiteral("paths")).toObject();
+
+            for (const Machine& machine : kMachines) {
+                const format::PathTokenMap folders =
+                    format::PathTokenMap::defaultsFor(machine.os, machine.home);
+
+                for (const QJsonValue& listed : paths.value(machine.name).toArray()) {
+                    const QString candidate = listed.toString();
+                    const QString resolved =
+                        core::RecipeCatalog::resolveStatePath(candidate, folders);
+                    if (resolved.isEmpty()) {
+                        continue;  // a token this system has no folder for
+                    }
+
+                    const format::TokenizedPath read = folders.tokenize(core::toUtf8(resolved));
+                    const std::string_view name = format::tokenName(read.token);
+                    const QString wouldBeRead =
+                        u'{' + QString::fromUtf8(name.data(), static_cast<qsizetype>(name.size())) +
+                        u'}' +
+                        (read.relative.empty() ? QString() : u'/' + core::fromUtf8(read.relative));
+                    if (wouldBeRead != candidate) {
+                        wrong << QStringLiteral("%1/%2 on %3: says \"%4\", read as \"%5\"")
+                                     .arg(id, state.value(QStringLiteral("id")).toString(),
+                                          machine.name, candidate, wouldBeRead);
+                    }
+                }
+            }
+        }
+    }
+
+    // All of them at once: this is a catalogue-wide shape, and finding it one
+    // entry per run is not a way to fix two hundred and forty-nine of them.
+    QVERIFY2(wrong.isEmpty(),
+             qPrintable(QStringLiteral("%1 state paths name a folder by something other than the "
+                                       "token it would be read as:\n  %2")
+                            .arg(wrong.size())
+                            .arg(wrong.mid(0, 15).join(QStringLiteral("\n  ")))));
+}
+
+/// And whatever it is handed is settled on the way in, because a user overlay
+/// and a file written against the old schema are both outside this program's
+/// reach to correct.
+void CatalogTest::aFolderNamedTheLongWayRoundIsReadAsTheShortOne() {
+    core::RecipeCatalog catalog;
+    QCOMPARE(catalog.loadFromJson(R"([{
+        "id": "test.long.way",
+        "name": "The Long Way",
+        "state": [{"id": "config", "paths": {
+            "linux":   ["{HOME}/.config/lw", "{HOME}/.local/share/lw", "{HOME}/.lw"],
+            "macos":   ["{HOME}/Library/Application Support/lw"],
+            "windows": ["{HOME}/AppData/Roaming/lw"]
+        }}]
+    }])"),
+             1);
+
+    const core::RecipeStatePath* config =
+        catalog.recipeById(QStringLiteral("test.long.way")).rootById(QStringLiteral("config"));
+    QVERIFY(config != nullptr);
+
+    QCOMPARE(config->candidatesByOs.value(QStringLiteral("linux")),
+             QStringList({QStringLiteral("{APPCONFIG}/lw"), QStringLiteral("{APPDATA}/lw"),
+                          QStringLiteral("{HOME}/.lw")}));
+    QCOMPARE(config->candidatesByOs.value(QStringLiteral("macos")),
+             QStringList({QStringLiteral("{APPCONFIG}/lw")}));
+    QCOMPARE(config->candidatesByOs.value(QStringLiteral("windows")),
+             QStringList({QStringLiteral("{APPCONFIG}/lw")}));
 }
 
 void CatalogTest::everyMoveStepNamesARootThatExists() {

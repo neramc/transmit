@@ -38,6 +38,7 @@ private slots:
     void rewritesPathsEmbeddedInLongerText();
     void aSpaceInsideAPathDoesNotEndIt();
     void aSpaceDoesNotLetAPathSwallowTheSentenceAroundIt();
+    void aPathRunningIntoAUriDoesNotEatIt();
 
     void iniRewritePreservesCommentsAndOrdering();
     void jsonRewriteTouchesOnlyTheNamedKeys();
@@ -261,6 +262,35 @@ void PathRewriteTest::aSpaceDoesNotLetAPathSwallowTheSentenceAroundIt() {
     // Quotes and the characters a path may not contain still end it.
     QCOMPARE(fromMac.translateWithin(QStringLiteral(R"("/Users/bob/Documents/My Notes/a.txt")")),
              QStringLiteral(R"("/home/bob/Documents/My Notes/a.txt")"));
+}
+
+/// A value can hold a path and a URI side by side - a recent-files list is
+/// often exactly that - and "file:" is made of characters a path may contain,
+/// with a slash after it that reads as the next component. So one path match
+/// covered both, and the two edits over the same stretch were applied one on
+/// top of the other: the URI came out with its slashes eaten and its own path
+/// still naming the machine the archive came from.
+///
+/// Both are repointed, and the URI keeps its scheme.
+void PathRewriteTest::aPathRunningIntoAUriDoesNotEatIt() {
+    const core::PathTranslator fromMac = macOsToLinux();
+
+    int replacements = 0;
+    QCOMPARE(fromMac.translateWithin(
+                 QStringLiteral("/Users/bob/Documents/a.txt file:///Users/bob/Downloads/b.png"),
+                 &replacements),
+             QStringLiteral("/home/bob/Documents/a.txt file:///home/bob/Downloads/b.png"));
+    QCOMPARE(replacements, 2);
+
+    // The other order, and with a word between, neither of which ever broke -
+    // they are here so a fix that only works one way round is not mistaken for
+    // one that works.
+    QCOMPARE(fromMac.translateWithin(
+                 QStringLiteral("file:///Users/bob/Downloads/b.png /Users/bob/Documents/a.txt")),
+             QStringLiteral("file:///home/bob/Downloads/b.png /home/bob/Documents/a.txt"));
+    QCOMPARE(fromMac.translateWithin(QStringLiteral(
+                 "/Users/bob/Documents/a.txt and file:///Users/bob/Downloads/b.png")),
+             QStringLiteral("/home/bob/Documents/a.txt and file:///home/bob/Downloads/b.png"));
 }
 
 void PathRewriteTest::iniRewritePreservesCommentsAndOrdering() {
