@@ -243,6 +243,7 @@ QList<ContinuityNote> SecretsDomain::restore(format::ByteView payload,
     }
 
     if (!store || !store->isAvailable()) {
+        const int carried = static_cast<int>(records.size());
         notes.push_back(ContinuityNote{
             ContinuityGrade::Manual, DomainId::Secrets,
             QCoreApplication::translate("Secrets", "Saved passwords"),
@@ -250,7 +251,7 @@ QList<ContinuityNote> SecretsDomain::restore(format::ByteView payload,
                 "Secrets",
                 "%n password(s) travelled with this archive, but this system has no credential "
                 "store Transmit can write to. You will need to enter them again.",
-                nullptr, static_cast<int>(records.size()))});
+                nullptr, carried)});
         for (SecretRecord& record : records) {
             record.clear();
         }
@@ -258,12 +259,13 @@ QList<ContinuityNote> SecretsDomain::restore(format::ByteView payload,
     }
 
     if (dryRun) {
-        notes.push_back(ContinuityNote{
-            ContinuityGrade::Adapted, DomainId::Secrets,
-            QCoreApplication::translate("Secrets", "Saved passwords"),
-            QCoreApplication::translate("Secrets", "%n password(s) would be added to %1.", nullptr,
-                                        static_cast<int>(records.size()))
-                .arg(store->describe())});
+        const int carried = static_cast<int>(records.size());
+        notes.push_back(
+            ContinuityNote{ContinuityGrade::Adapted, DomainId::Secrets,
+                           QCoreApplication::translate("Secrets", "Saved passwords"),
+                           QCoreApplication::translate(
+                               "Secrets", "%n password(s) would be added to %1.", nullptr, carried)
+                               .arg(store->describe())});
         for (SecretRecord& record : records) {
             record.clear();
         }

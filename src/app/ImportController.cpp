@@ -88,10 +88,15 @@ QString ImportController::undoDescription() const {
             "Puts back everything this restore replaced and removes what it added. "
             "Programs you installed yourself are not touched.");
     }
+    // The count is a named value rather than a cast written into the call.
+    // lupdate cannot parse a static_cast in that position and silently skips
+    // the whole call, so the sentence never reaches the catalogue and cannot
+    // be translated in any language - and nothing about the code looks wrong.
+    const int rewritten = static_cast<int>(report_.rewrittenFiles.size());
     return tr(
         "Puts back everything this restore replaced, removes what it added, and undoes "
         "the %n settings file(s) whose folder names were corrected.",
-        nullptr, static_cast<int>(report_.rewrittenFiles.size()));
+        nullptr, rewritten);
 }
 
 void ImportController::undoLastRestore() {
@@ -287,10 +292,11 @@ void ImportController::lookForInterruptedRestore(const QString& destinationOverr
     }
 
     if (interrupted_.found) {
+        const int alreadyThere = static_cast<int>(interrupted_.itemsAlreadyInPlace);
         carryOnText_ =
             tr("A restore of this archive here stopped part way, with %n item(s) already in "
                "place. It can be finished rather than started again.",
-               nullptr, static_cast<int>(interrupted_.itemsAlreadyInPlace));
+               nullptr, alreadyThere);
     }
 
     // Said only when it changes. A binding that fires on every folder the user

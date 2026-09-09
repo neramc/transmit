@@ -117,9 +117,14 @@ QVariant CaptureFolderModel::data(const QModelIndex& index, int role) const {
             if (!measured_) {
                 return QString();
             }
-            return QCoreApplication::translate("Folders", "%1 in %n file(s)", nullptr,
-                                               static_cast<int>(folder.fileCount))
-                .arg(core::formatBytes(folder.sizeBytes));
+            {
+                // Named rather than cast in the call: lupdate cannot parse a
+                // static_cast in the count's place and skips the whole call, so
+                // the sentence never reaches the catalogue.
+                const int files = static_cast<int>(folder.fileCount);
+                return QCoreApplication::translate("Folders", "%1 in %n file(s)", nullptr, files)
+                    .arg(core::formatBytes(folder.sizeBytes));
+            }
         case FileCountRole:
             return static_cast<double>(folder.fileCount);
         case SelectedRole:
@@ -167,11 +172,11 @@ QString CaptureFolderModel::selectionSummary() const {
     }
 
     // Two names and a count, rather than seven names nobody reads.
-    QString listed = names.size() <= 2
-                         ? names.join(QCoreApplication::translate("Folders", " and "))
-                         : QCoreApplication::translate("Folders", "%1 and %n other(s)", nullptr,
-                                                       static_cast<int>(names.size() - 2))
-                               .arg(names.mid(0, 2).join(QStringLiteral(", ")));
+    const int others = static_cast<int>(names.size() - 2);
+    QString listed = names.size() <= 2 ? names.join(QCoreApplication::translate("Folders", " and "))
+                                       : QCoreApplication::translate(
+                                             "Folders", "%1 and %n other(s)", nullptr, others)
+                                             .arg(names.mid(0, 2).join(QStringLiteral(", ")));
     if (!measured_) {
         return listed;
     }

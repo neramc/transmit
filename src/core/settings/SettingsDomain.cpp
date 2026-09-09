@@ -188,6 +188,7 @@ QList<ContinuityNote> SettingsDomain::restore(const QList<CapturedSetting>& sett
         const QString path =
             writePrivilegedScript(privilegedCommands, scriptDirectory, platform_.environment().os);
         if (!path.isEmpty()) {
+            const int needingRights = static_cast<int>(privilegedCommands.size());
             notes.push_back(ContinuityNote{
                 ContinuityGrade::Manual, DomainId::SystemSettings,
                 QCoreApplication::translate("Settings", "Settings that need your permission"),
@@ -195,7 +196,7 @@ QList<ContinuityNote> SettingsDomain::restore(const QList<CapturedSetting>& sett
                     "Settings",
                     "%n of them need rights Transmit does not ask for. The commands that would "
                     "make the changes are in \"%1\" - read it before running it.",
-                    nullptr, static_cast<int>(privilegedCommands.size()))
+                    nullptr, needingRights)
                     .arg(path)});
         }
     }

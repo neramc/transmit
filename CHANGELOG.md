@@ -125,6 +125,12 @@ notes say so.
   catalogue's schema refuses `..` in a pattern, but a rule also arrives inside
   an archive and in an overlay in the user's own configuration folder, and
   neither goes past the schema.
+- Eleven sentences that count things can be translated at all. `lupdate` cannot
+  parse a `static_cast` where a plural's count belongs and skips the whole call
+  without a word, so those strings never reached the catalogue and came through
+  in English in every language — "%n file(s) could not be restored", "%n
+  password(s) travelled with this archive", the count of programs to reinstall,
+  and eight more. The counts are named values now, which `lupdate` reads.
 - A restore onto Windows no longer fills its report with renames that did not
   happen. A path longer than the 260 characters Windows accepts by default was
   recorded as a rename — from a name to the same name — and once for every
@@ -319,6 +325,15 @@ notes say so.
   that desktop with those settings chosen, which is the same as saying none was
   exercised. Three of the seven were wrong. The same move the package listings
   got, for the same reason.
+- Whether the catalogue is behind the source is checked on the machine the
+  change was written on, not only in CI. The script that exists for exactly
+  this question said in its own docstring that nothing ran `lupdate`, and did
+  not run it; the eleven untranslatable sentences above sat there for as long
+  as they did because the only check that could see them was a `git diff` in a
+  job. It compares which strings the source offers with which the catalogue has
+  an entry for — in both directions, since a string the catalogue has and the
+  source no longer offers is either a rewording nobody carried across or a call
+  `lupdate` has stopped being able to see.
 - The file layer can be asked to say when it flushes, so a durability rule can
   be checked rather than asserted in a comment. "The bytes are on the disk
   before the name points at them" is invisible from outside: a build that drops

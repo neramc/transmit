@@ -1186,6 +1186,18 @@
         <source>%1 - %2</source>
         <translation type="unfinished"></translation>
     </message>
+    <message numerus="yes">
+        <source>%1 in %n file(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%1 and %n other(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
 </context>
 <context>
     <name>HomePage</name>
@@ -1427,6 +1439,40 @@
     <message>
         <source>Restored as another name for &quot;%1&quot;.</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Longer than this system usually allows</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n path(s) are longer than %1 characters. They will be written if long paths are enabled on this machine, and can otherwise be restored into a folder with a shorter name.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n item(s) were renamed because their names are not valid on this system, or because two of them differ only by capitalisation.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n program(s) from your old computer can be installed here.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n program(s) can be installed here. Transmit wrote a script to &quot;%1&quot; but has not run it - read it first, then run it yourself.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n file(s) could not be restored.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -2192,6 +2238,18 @@
         <source>Website login</source>
         <translation type="unfinished"></translation>
     </message>
+    <message numerus="yes">
+        <source>%n password(s) travelled with this archive, but this system has no credential store Transmit can write to. You will need to enter them again.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n password(s) would be added to %1.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
 </context>
 <context>
     <name>Settings</name>
@@ -2326,6 +2384,12 @@
     <message>
         <source>this system has no way to set it from a script</source>
         <translation>이 시스템에는 스크립트로 설정할 방법이 없습니다</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n of them need rights Transmit does not ask for. The commands that would make the changes are in &quot;%1&quot; - read it before running it.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
     </message>
 </context>
 <context>

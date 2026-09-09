@@ -1169,6 +1169,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
     // already had. What a person can act on is the count and the two things
     // they can do about it.
     if (sanitizer.pathsTooLong() > 0) {
+        const int tooLong = static_cast<int>(sanitizer.pathsTooLong());
         report.notes.push_back(ContinuityNote{
             ContinuityGrade::Adapted, DomainId::UserData,
             QCoreApplication::translate("Import", "Longer than this system usually allows"),
@@ -1177,7 +1178,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                 "%n path(s) are longer than %1 characters. They will be written if long "
                 "paths are enabled on this machine, and can otherwise be restored into a "
                 "folder with a shorter name.",
-                nullptr, static_cast<int>(sanitizer.pathsTooLong()))
+                nullptr, tooLong)
                 .arg(sanitizer.options().maxPathLength)});
     }
 
@@ -1244,6 +1245,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
         }
     }
     if (!report.renames.isEmpty()) {
+        const int renamed = static_cast<int>(report.renames.size());
         report.notes.push_back(ContinuityNote{
             ContinuityGrade::Adapted, DomainId::Unknown,
             QCoreApplication::translate("Import", "Renamed files"),
@@ -1251,7 +1253,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
                 "Import",
                 "%n item(s) were renamed because their names are not valid on this system, or "
                 "because two of them differ only by capitalisation.",
-                nullptr, static_cast<int>(report.renames.size()))});
+                nullptr, renamed)});
     }
 
     // ---------------------------------------------------- saved passwords
@@ -1310,18 +1312,19 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
         }
 
         if (!installPlan.installable.isEmpty()) {
+            const int installable = static_cast<int>(installPlan.installable.size());
             report.notes.push_back(ContinuityNote{
                 ContinuityGrade::Manual, DomainId::AppInventory,
                 QCoreApplication::translate("Import", "Programs to reinstall"),
                 report.installScriptPath.isEmpty()
                     ? QCoreApplication::translate(
                           "Import", "%n program(s) from your old computer can be installed here.",
-                          nullptr, static_cast<int>(installPlan.installable.size()))
+                          nullptr, installable)
                     : QCoreApplication::translate(
                           "Import",
                           "%n program(s) can be installed here. Transmit wrote a script to \"%1\" "
                           "but has not run it - read it first, then run it yourself.",
-                          nullptr, static_cast<int>(installPlan.installable.size()))
+                          nullptr, installable)
                           .arg(report.installScriptPath)});
         }
 
@@ -1369,9 +1372,9 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
     // caller.
     report.succeeded = report.filesFailed == 0;
     if (!report.succeeded) {
-        report.errorMessage =
-            QCoreApplication::translate("Import", "%n file(s) could not be restored.", nullptr,
-                                        static_cast<int>(report.filesFailed));
+        const int failedCount = static_cast<int>(report.filesFailed);
+        report.errorMessage = QCoreApplication::translate(
+            "Import", "%n file(s) could not be restored.", nullptr, failedCount);
     }
 
     // The record goes when the restore is whole and stands on its own. It
