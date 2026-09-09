@@ -9,6 +9,7 @@
 
 #include "app/ImportController.h"
 #include "core/continuity/ContinuityTypes.h"
+#include "core/recipe/RecipeCatalog.h"
 #include "core/rewrite/RewritePlan.h"
 #include "core/services/ExportService.h"
 #include "platform/PlatformService.h"
@@ -124,7 +125,34 @@ QString RestoreUndoTest::findRestoredNote(const QString& destination) {
 
 QString RestoreUndoTest::captureWithSettingsToCorrect() {
     const QString home = workspace_->filePath(QStringLiteral("home"));
-    const QString profiles = home + QStringLiteral("/.mozilla/firefox");
+    qputenv("HOME", home.toUtf8());
+
+    // Where this system keeps a Firefox profile, asked of the catalogue rather
+    // than written down here. The Linux path was hard-coded first, and on the
+    // macOS runner - which does resolve its known folders from HOME - the
+    // capture then found no profile at all, matched no application, carried no
+    // rewrite rules, and the failure read as "the profile index was not
+    // restored" rather than as "it was never captured".
+    auto platform = platform::PlatformService::create();
+    const format::PathTokenMap folders = platform->knownFolders();
+
+    core::RecipeCatalog catalog;
+    catalog.loadDefaults();
+    const core::AppRecipe firefox = catalog.recipeById(QStringLiteral("org.mozilla.firefox"));
+    const core::RecipeStatePath* profile = firefox.rootById(QStringLiteral("profile"));
+    if (profile == nullptr) {
+        return {};
+    }
+
+    const QString profiles =
+        core::RecipeCatalog::resolveStatePath(profile->forOs(platform->environment().os), folders);
+
+    // Somewhere under the temporary home, or this machine resolves its folders
+    // some other way and writing there would mean writing into somebody's real
+    // profile.
+    if (profiles.isEmpty() || !profiles.startsWith(home)) {
+        return {};
+    }
     if (!QDir().mkpath(profiles + QStringLiteral("/Profiles/x1.default"))) {
         return {};
     }
@@ -132,8 +160,8 @@ QString RestoreUndoTest::captureWithSettingsToCorrect() {
     // profiles.ini names the profile folder by an absolute path, which is the
     // shape that has to be repointed: on the new machine that folder is
     // somewhere else, and Firefox started with the old path finds nothing.
-    // IsRelative=0 is what makes it absolute, and it is what real profiles
-    // written by an installer carry.
+    // IsRelative=0 is what makes it absolute, and it is what a real profile
+    // written by an installer carries.
     const auto write = [](const QString& path, const QByteArray& contents) {
         QFile file(path);
         if (!file.open(QIODevice::WriteOnly)) {
@@ -191,14 +219,30 @@ void RestoreUndoTest::theUndoOfferSaysWhenSettingsFilesWereCorrectedToo() {
     // the walk does not go into a hidden folder at all.
     QDirIterator walker(destination, {QStringLiteral("profiles.ini")}, QDir::Files | QDir::Hidden,
                         QDirIterator::Subdirectories);
-    QVERIFY2(walker.hasNext(), "the profile index was not restored at all");
+    if (!walker.hasNext()) {
+        // Saying what did arrive, because "it is not there" does not
+        // distinguish a restore that dropped it from a capture that never took
+        // it - which is the shape this failed in the first time.
+        QStringList arrived;
+        QDirIterator everything(destination, QDir::Files | QDir::Hidden,
+                                QDirIterator::Subdirectories);
+        while (everything.hasNext() && arrived.size() < 20) {
+            arrived << QDir(destination).relativeFilePath(everything.next());
+        }
+        QFAIL(qPrintable(QStringLiteral("no profiles.ini under %1; what was restored: %2")
+                             .arg(destination, arrived.isEmpty()
+                                                   ? QStringLiteral("nothing at all")
+                                                   : arrived.join(QStringLiteral(", ")))));
+    }
     QFile restored(walker.next());
     QVERIFY(restored.open(QIODevice::ReadOnly));
     const QByteArray index = restored.readAll();
 
-    const QByteArray sourceProfiles =
-        (workspace_->filePath(QStringLiteral("home")) + QStringLiteral("/.mozilla")).toUtf8();
-    QVERIFY2(!index.contains(sourceProfiles),
+    // Anything still naming the machine it came from is a path that was not
+    // corrected. The whole temporary home is the test: the restore goes
+    // somewhere else entirely, so nothing under it should survive in the file.
+    const QByteArray sourceHome = workspace_->filePath(QStringLiteral("home")).toUtf8();
+    QVERIFY2(!index.contains(sourceHome),
              qPrintable(QStringLiteral("the restored index still points at the old machine: %1")
                             .arg(QString::fromUtf8(index))));
 
