@@ -33,12 +33,63 @@ constexpr char kPathBody[] = R"([^\s"'<>|*?])";
 /// The run is bounded so a long line cannot be walked repeatedly.
 constexpr char kSpaceInsidePath[] = R"( (?=[^\s"'<>|*?\\/][^\s"'<>|*?]{0,255}[\\/]))";
 
+/// The same folder written with either separator, since both are separators
+/// on Windows and a value copied between programs may use either. What comes
+/// in has been through QRegularExpression::escape, so every separator in it
+/// carries a backslash in front; both forms go to a placeholder first, or the
+/// character class this puts in would be rewritten by the following pass.
+QString eitherSeparator(const QString& escaped) {
+    const QString here = QStringLiteral("\x01");
+    QString flexible = escaped;
+    flexible.replace(QStringLiteral("\\\\"), here);
+    flexible.replace(QStringLiteral("\\/"), here);
+    flexible.replace(here, QStringLiteral("[\\\\/]"));
+    return flexible;
+}
+
 /// Matches an absolute path, so a value can be examined before anything is
 /// changed.
-const QRegularExpression& absolutePathPattern() {
-    static const QRegularExpression pattern(
-        QString::fromLatin1(kPathPrefix) + QStringLiteral("(?:") + QString::fromLatin1(kPathBody) +
-        u'|' + QString::fromLatin1(kSpaceInsidePath) + QStringLiteral(")*"));
+///
+/// The folders the source machine declared come first, spelled out. Two of
+/// them have spaces in the middle - macOS keeps application state under
+/// "Library/Application Support" and its window state under "Library/Saved
+/// Application State" - and where a path begins is not something to be
+/// guessing at when the machine that wrote it said so exactly. Guessing is
+/// left for what follows the folder, where there is nothing better.
+///
+/// Longest first, so a folder is not cut short by the parent it sits in.
+QRegularExpression pathPatternFor(const format::PathTokenMap& folders, OsFamily os) {
+    QStringList beginnings;
+    for (const format::PathTokenId token : format::allTokens()) {
+        const auto base = folders.base(token);
+
+        // The upper bound is on the archive's word, not on ours: these come
+        // from the environment the capture recorded, and a known folder is
+        // never anywhere near this long. Escaping already stops a base from
+        // meaning anything in the expression; this stops one from being the
+        // size of the expression.
+        constexpr int kLongestSensibleBase = 512;
+        if (!base || base->size() < 2 || base->size() > kLongestSensibleBase) {
+            continue;
+        }
+        const QString spelled = eitherSeparator(QRegularExpression::escape(fromUtf8(*base)));
+        if (!beginnings.contains(spelled)) {
+            beginnings.append(spelled);
+        }
+    }
+    std::sort(beginnings.begin(), beginnings.end(),
+              [](const QString& a, const QString& b) { return a.size() > b.size(); });
+    beginnings.append(QString::fromLatin1(kPathPrefix));
+
+    QRegularExpression pattern(QStringLiteral("(?:") + beginnings.join(u'|') +
+                               QStringLiteral(")(?:") + QString::fromLatin1(kPathBody) + u'|' +
+                               QString::fromLatin1(kSpaceInsidePath) + QStringLiteral(")*"));
+    if (format::usesWindowsPathStyle(os)) {
+        // The same folder in a different case is the same folder there, and
+        // the value in the file was not necessarily written by the program
+        // that made the directory.
+        pattern.setPatternOptions(QRegularExpression::CaseInsensitiveOption);
+    }
     return pattern;
 }
 
@@ -65,6 +116,7 @@ PathTranslator::PathTranslator(const format::SourceEnvironment& source,
     for (const auto& [token, base] : source.tokenBases) {
         sourceFolders_.setBase(token, base);
     }
+    pathPattern_ = pathPatternFor(sourceFolders_, sourceOs_);
 }
 
 void PathTranslator::setRenames(const QList<QPair<QString, QString>>& renames) {
@@ -97,7 +149,7 @@ bool PathTranslator::looksLikeSourcePath(const QString& text) const {
     if (text.isEmpty() || text.size() > 4096) {
         return false;
     }
-    const auto match = absolutePathPattern().match(text);
+    const auto match = pathPattern_.match(text);
     return match.hasMatch() && match.capturedStart() == 0;
 }
 
@@ -171,7 +223,7 @@ QString PathTranslator::translateWithin(const QString& text, int* replacements) 
                       {match.capturedLength(0), QStringLiteral("file://") + uriPath}});
     }
 
-    auto pathMatches = absolutePathPattern().globalMatch(working);
+    auto pathMatches = pathPattern_.globalMatch(working);
     while (pathMatches.hasNext()) {
         const auto match = pathMatches.next();
         // Skip anything already covered by a URI edit.

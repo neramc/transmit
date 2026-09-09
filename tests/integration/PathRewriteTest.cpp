@@ -213,6 +213,13 @@ void PathRewriteTest::aSpaceInsideAPathDoesNotEndIt() {
              QStringLiteral("/home/bob/.config/Firefox/Profiles/x1"));
     QCOMPARE(replacements, 1);
 
+    // Two spaces, and it is a folder Transmit itself declares: macOS keeps
+    // window state under "Library/Saved Application State". A rule that
+    // allowed one space per name reached the first of these and stopped.
+    QCOMPARE(fromMac.translateWithin(QStringLiteral(
+                 "/Users/bob/Library/Saved Application State/org.mozilla.firefox.savedState")),
+             QStringLiteral("/home/bob/.local/state/org.mozilla.firefox.savedState"));
+
     const core::PathTranslator fromWindows = windowsToLinux();
     QCOMPARE(
         fromWindows.translateOr(QStringLiteral(R"(C:\Users\Bob\Documents\Tax Returns\2024.pdf)")),

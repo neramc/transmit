@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QHash>
+#include <QRegularExpression>
 #include <QString>
 
 #include <optional>
@@ -70,6 +71,12 @@ private:
     format::PathTokenMap targetFolders_;
     QHash<QString, QString> renames_;  ///< original token path -> applied token path
     const StateRelocator* relocator_ = nullptr;
+
+    /// Where a path starts and how far it reaches, built from the folders the
+    /// source machine declared rather than from a guess about what a path
+    /// looks like. It depends on those folders, so it belongs to the
+    /// translator and not to the file.
+    QRegularExpression pathPattern_;
 };
 
 }  // namespace transmit::core
