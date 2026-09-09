@@ -8,18 +8,49 @@
 namespace transmit::core {
 namespace {
 
-/// Matches the shapes an absolute path takes on the platforms Transmit
-/// supports, so a value can be examined before anything is changed.
+/// How an absolute path begins, on each of the platforms Transmit supports.
 ///   C:\Users\bob\x   C:/Users/bob/x   \\server\share\x   /home/bob/x
+constexpr char kPathPrefix[] = R"((?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/]|/))";
+
+/// The characters that cannot appear in a path on any of them. A space is not
+/// among them, and that omission is the whole difficulty: a space ends a path
+/// when the path is quoted inside a sentence, and sits in the middle of one
+/// almost everywhere else. macOS keeps application state under
+/// "Library/Application Support" and Windows keeps programs under
+/// "Program Files", so a matcher that stops at the first space stops before it
+/// has reached the interesting part of nearly every path it is ever handed.
+constexpr char kPathBody[] = R"([^\s"'<>|*?])";
+
+/// So a space is taken as part of the path only when another component
+/// follows it: something that is not itself a separator, then more ordinary
+/// characters, then a separator. "Application Support/Firefox" qualifies and
+/// is kept; "a.txt and then closed" does not, and the path ends at the file.
+///
+/// The rule is a guess either way - "My Notes" at the end of a sentence is
+/// indistinguishable from prose - so it is made in the direction that cannot
+/// corrupt anything: a component too few leaves a suffix that is carried
+/// through unchanged, which is what would have happened had nothing matched.
+/// The run is bounded so a long line cannot be walked repeatedly.
+constexpr char kSpaceInsidePath[] = R"( (?=[^\s"'<>|*?\\/][^\s"'<>|*?]{0,255}[\\/]))";
+
+/// Matches an absolute path, so a value can be examined before anything is
+/// changed.
 const QRegularExpression& absolutePathPattern() {
     static const QRegularExpression pattern(
-        QStringLiteral(R"((?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/]|/)[^\s"'<>|*?]*)"));
+        QString::fromLatin1(kPathPrefix) + QStringLiteral("(?:") + QString::fromLatin1(kPathBody) +
+        u'|' + QString::fromLatin1(kSpaceInsidePath) + QStringLiteral(")*"));
     return pattern;
 }
 
-/// A URI form that shows up in bookmarks and in LibreOffice's registry.
+/// A URI form that shows up in bookmarks and in LibreOffice's registry. A
+/// space should arrive percent-encoded here and usually does, but macOS
+/// property lists carry plenty that do not, so the same rule applies.
+constexpr char kUriBody[] = R"RX([^\s"'<>])RX";
+
 const QRegularExpression& fileUriPattern() {
-    static const QRegularExpression pattern(QStringLiteral(R"(file://(/[^\s"'<>]*))"));
+    static const QRegularExpression pattern(
+        QStringLiteral("file://(/(?:") + QString::fromLatin1(kUriBody) + u'|' +
+        QString::fromLatin1(kSpaceInsidePath) + QStringLiteral(")*)"));
     return pattern;
 }
 

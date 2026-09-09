@@ -36,6 +36,8 @@ private slots:
     void leavesPathsItDoesNotRecogniseAlone();
     void appliesRenamesRecordedByTheRestore();
     void rewritesPathsEmbeddedInLongerText();
+    void aSpaceInsideAPathDoesNotEndIt();
+    void aSpaceDoesNotLetAPathSwallowTheSentenceAroundIt();
 
     void iniRewritePreservesCommentsAndOrdering();
     void jsonRewriteTouchesOnlyTheNamedKeys();
@@ -48,6 +50,7 @@ private slots:
     void planCanBeAppliedAndReverted();
     void keptOriginalsAreThrownAwayOnRequest();
     void firefoxProfileIsRepointedEndToEnd();
+    void aMacOsFirefoxProfileIsRepointedEndToEnd();
 
     void catalogLoadsAndMatches();
     void relocatesApplicationStateToWhereTheTargetKeepsIt();
@@ -61,6 +64,7 @@ private slots:
 
 private:
     [[nodiscard]] core::PathTranslator windowsToLinux() const;
+    [[nodiscard]] core::PathTranslator macOsToLinux() const;
     void write(const QString& relative, const QByteArray& content);
     [[nodiscard]] QString path(const QString& relative) const {
         return workspace_->filePath(relative);
@@ -105,6 +109,23 @@ core::PathTranslator PathRewriteTest::windowsToLinux() const {
         format::PathTokenMap::defaultsFor(format::OsFamily::Windows, "C:/Users/Bob");
     for (const format::PathTokenId token : format::allTokens()) {
         if (const auto base = windows.base(token)) {
+            source.tokenBases[token] = *base;
+        }
+    }
+
+    return core::PathTranslator(
+        source, format::PathTokenMap::defaultsFor(format::OsFamily::Linux, "/home/bob"),
+        format::OsFamily::Linux);
+}
+
+core::PathTranslator PathRewriteTest::macOsToLinux() const {
+    format::SourceEnvironment source;
+    source.os = format::OsFamily::MacOs;
+    source.homeDirectory = "/Users/bob";
+
+    const auto macos = format::PathTokenMap::defaultsFor(format::OsFamily::MacOs, "/Users/bob");
+    for (const format::PathTokenId token : format::allTokens()) {
+        if (const auto base = macos.base(token)) {
             source.tokenBases[token] = *base;
         }
     }
@@ -165,6 +186,74 @@ void PathRewriteTest::rewritesPathsEmbeddedInLongerText() {
     const QString uri =
         translator.translateWithin(QStringLiteral("file:///C:/Users/Bob/Documents/notes.txt"));
     QCOMPARE(uri, QStringLiteral("file:///home/bob/Documents/notes.txt"));
+}
+
+/// A space is an ordinary character in a path, and on two of the three
+/// platforms it is in the address of nearly everything.
+///
+/// macOS keeps application state in "~/Library/Application Support"; Windows
+/// keeps programs in "C:\\Program Files" and, for a long time, documents in
+/// "My Documents". A path matcher that stops at the first space therefore
+/// stops before it has seen the interesting part of almost every path it will
+/// ever be handed - and the failure is silent, because a value that is not
+/// recognised as a path is simply left alone.
+void PathRewriteTest::aSpaceInsideAPathDoesNotEndIt() {
+    const core::PathTranslator fromMac = macOsToLinux();
+
+    QCOMPARE(fromMac.translateOr(
+                 QStringLiteral("/Users/bob/Library/Application Support/Firefox/profiles.ini")),
+             QStringLiteral("/home/bob/.config/Firefox/profiles.ini"));
+
+    // The same value reached through a whole line of a settings file, which is
+    // how the rewriters actually ask.
+    int replacements = 0;
+    QCOMPARE(fromMac.translateWithin(
+                 QStringLiteral("/Users/bob/Library/Application Support/Firefox/Profiles/x1"),
+                 &replacements),
+             QStringLiteral("/home/bob/.config/Firefox/Profiles/x1"));
+    QCOMPARE(replacements, 1);
+
+    const core::PathTranslator fromWindows = windowsToLinux();
+    QCOMPARE(
+        fromWindows.translateOr(QStringLiteral(R"(C:\Users\Bob\Documents\Tax Returns\2024.pdf)")),
+        QStringLiteral("/home/bob/Documents/Tax Returns/2024.pdf"));
+}
+
+/// The other half of the same promise. Allowing spaces is only correct if a
+/// path stops where the path stops: a sentence that mentions a folder must
+/// come out of the rewrite with its remaining words intact, and a quoted path
+/// must not eat the quote.
+void PathRewriteTest::aSpaceDoesNotLetAPathSwallowTheSentenceAroundIt() {
+    const core::PathTranslator fromMac = macOsToLinux();
+
+    int replacements = 0;
+    const QString sentence = fromMac.translateWithin(
+        QStringLiteral("saved to /Users/bob/Documents/My Notes/a.txt and then closed"),
+        &replacements);
+    QCOMPARE(replacements, 1);
+    QCOMPARE(sentence,
+             QStringLiteral("saved to /home/bob/Documents/My Notes/a.txt and then closed"));
+
+    // A trailing space belongs to the text, not to the name.
+    QCOMPARE(fromMac.translateWithin(QStringLiteral("/Users/bob/Documents/a.txt  ")),
+             QStringLiteral("/home/bob/Documents/a.txt  "));
+
+    // A run of spaces is not a path component either.
+    QCOMPARE(fromMac.translateWithin(QStringLiteral("/Users/bob/Documents  /etc")),
+             QStringLiteral("/home/bob/Documents  /etc"));
+
+    // Neither is a second path. Two paths side by side are two paths, and the
+    // separator that starts the second one is not the separator that would
+    // have made the space interior to the first.
+    int two = 0;
+    QCOMPARE(fromMac.translateWithin(
+                 QStringLiteral("/Users/bob/Documents /Users/bob/Pictures/a.png"), &two),
+             QStringLiteral("/home/bob/Documents /home/bob/Pictures/a.png"));
+    QCOMPARE(two, 2);
+
+    // Quotes and the characters a path may not contain still end it.
+    QCOMPARE(fromMac.translateWithin(QStringLiteral(R"("/Users/bob/Documents/My Notes/a.txt")")),
+             QStringLiteral(R"("/home/bob/Documents/My Notes/a.txt")"));
 }
 
 void PathRewriteTest::iniRewritePreservesCommentsAndOrdering() {
@@ -621,6 +710,55 @@ void PathRewriteTest::firefoxProfileIsRepointedEndToEnd() {
 
     QVERIFY(read(QStringLiteral("Firefox/profiles.ini"))
                 .contains("/home/bob/.config/Mozilla/Firefox/Profiles/x1.default"));
+
+    const QByteArray prefs = read(QStringLiteral("Firefox/Profiles/x1.default/prefs.js"));
+    QVERIFY2(prefs.contains("/home/bob/Downloads"), prefs.constData());
+    QVERIFY2(prefs.contains("about:home"), "unrelated preferences must survive");
+}
+
+/// The same journey, starting from macOS instead - which is where it broke.
+///
+/// macOS keeps this profile under "Library/Application Support/Firefox", and
+/// the name of that folder has a space in it. Every path in the file therefore
+/// has a space in it, and the matcher that decides what is a path used to stop
+/// at the first one: the value was cut down to ".../Library/Application",
+/// which is a real folder under the home token, so it was translated - and the
+/// line came out naming a folder on the new machine followed by the remains of
+/// the old address. Firefox reads that as one path, finds nothing, and starts
+/// with an empty profile.
+///
+/// Nothing here asks the machine it runs on anything, which is the point. The
+/// original was found by the macOS runner, three round trips after the change
+/// that broke it, because every fixture described the layout of the one system
+/// this is developed on.
+void PathRewriteTest::aMacOsFirefoxProfileIsRepointedEndToEnd() {
+    write(QStringLiteral("Firefox/profiles.ini"),
+          "[Profile0]\n"
+          "Name=default-release\n"
+          "IsRelative=0\n"
+          "Path=/Users/bob/Library/Application Support/Firefox/Profiles/x1.default\n");
+    write(QStringLiteral("Firefox/Profiles/x1.default/prefs.js"),
+          "user_pref(\"browser.download.dir\", \"/Users/bob/Downloads\");\n"
+          "user_pref(\"browser.startup.homepage\", \"about:home\");\n");
+
+    core::RecipeCatalog catalog;
+    QVERIFY(catalog.loadFromFile(QStringLiteral(":/catalog/app-catalog.json")) > 0);
+    const core::AppRecipe firefox = catalog.recipeById(QStringLiteral("org.mozilla.firefox"));
+    QVERIFY2(firefox.isValid(), "the shipped catalog must describe Firefox");
+
+    core::RewritePlan plan;
+    core::PathRewriter(macOsToLinux())
+        .planFor(firefox, workspace_->path() + QStringLiteral("/Firefox"), plan);
+    QCOMPARE(plan.apply(), 2);
+
+    const QByteArray index = read(QStringLiteral("Firefox/profiles.ini"));
+    QVERIFY2(index.contains("Path=/home/bob/.config/Firefox/Profiles/x1.default\n"),
+             index.constData());
+
+    // And the whole of the old address is gone. Checking only for the new one
+    // would pass on the mangled result, which contains it.
+    QVERIFY2(!index.contains("/Users/bob"), index.constData());
+    QVERIFY2(!index.contains("Application Support"), index.constData());
 
     const QByteArray prefs = read(QStringLiteral("Firefox/Profiles/x1.default/prefs.js"));
     QVERIFY2(prefs.contains("/home/bob/Downloads"), prefs.constData());
