@@ -868,12 +868,16 @@ void PathRewriteTest::relocatesApplicationStateToWhereTheTargetKeepsIt() {
     QCOMPARE(QString::fromStdString(moved.relative),
              QStringLiteral("Mozilla/Firefox/profiles.ini"));
 
-    // And on to macOS, from the same capture.
+    // And on to macOS, from the same capture. {APPCONFIG} rather than {HOME}
+    // and the whole of "Library/Application Support": that directory is what
+    // macOS's {APPCONFIG} is, and a file under it is filed by that name and no
+    // other. Naming it the long way round was the defect - the files went to
+    // one folder and everything that looked for them went to another - so what
+    // this used to expect was the shape of the bug.
     const core::StateRelocator toMac(inventory, format::OsFamily::Linux, format::OsFamily::MacOs);
     const format::TokenizedPath onMac = toMac.relocate(profile);
-    QCOMPARE(onMac.token, format::PathTokenId::Home);
-    QCOMPARE(QString::fromStdString(onMac.relative),
-             QStringLiteral("Library/Application Support/Firefox/profiles.ini"));
+    QCOMPARE(onMac.token, format::PathTokenId::AppConfig);
+    QCOMPARE(QString::fromStdString(onMac.relative), QStringLiteral("Firefox/profiles.ini"));
 
     // Restoring onto the same system moves nothing.
     const core::StateRelocator sameOs(inventory, format::OsFamily::Linux, format::OsFamily::Linux);

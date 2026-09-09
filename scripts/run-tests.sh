@@ -20,6 +20,16 @@ build="${1:-build}"
 log="$(mktemp)"
 trap 'rm -f "$log"' EXIT
 
+# Built first, because a suite run against yesterday's binaries is a green
+# that means nothing. Changing resources/app-catalog.json and then building
+# one target by name left every other test binary holding the old catalogue,
+# and the whole suite passed on it - twice - while CI failed on the change.
+# It costs nothing when the tree is already built, which in CI it is.
+if ! cmake --build "$build"; then
+    echo "The build failed, so there is nothing to run." >&2
+    exit 1
+fi
+
 ctest --test-dir "$build" --output-on-failure 2>&1 | tee "$log"
 [ "${PIPESTATUS[0]}" -eq 0 ] && exit 0
 
