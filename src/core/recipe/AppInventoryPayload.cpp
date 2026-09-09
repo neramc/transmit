@@ -1,5 +1,6 @@
 #include "core/recipe/AppInventoryPayload.h"
 
+#include "core/recipe/RecipeCatalog.h"
 #include "core/utils/Conversions.h"
 #include "core/utils/Logging.h"
 #include "format/Serialization.h"
@@ -506,7 +507,16 @@ QList<InventoryEntry> decodeAppInventory(format::ByteView data) {
                         } else if (stateTag->field == state_field::kOs) {
                             if (const auto nested = stateReader.getBytes()) {
                                 if (const auto pair = readPair(*nested)) {
-                                    state.candidatesByOs[pair->first] << pair->second;
+                                    // Settled here as well as at the catalogue,
+                                    // because this one came out of an archive:
+                                    // a capture taken by an older build named
+                                    // these folders the long way round, and a
+                                    // restore that believed it would look for
+                                    // the application's state in a directory
+                                    // its files were never put in.
+                                    state.candidatesByOs[pair->first]
+                                        << RecipeCatalog::underItsMostSpecificFolder(pair->second,
+                                                                                     pair->first);
                                 }
                             }
                         } else if (stateTag->field == state_field::kContent) {

@@ -70,6 +70,20 @@ public:
     [[nodiscard]] static QString resolveStatePath(const QString& tokenised,
                                                   const format::PathTokenMap& folders);
 
+    /// The name that same folder has to be written under, on the system named
+    /// ("windows", "macos", "linux").
+    ///
+    /// On macOS "{HOME}/Library/Application Support/Firefox" and
+    /// "{APPCONFIG}/Firefox" are one directory, and only one of them works: a
+    /// captured file is filed under the longest known folder containing it,
+    /// and a restore into a folder of the user's choosing gives every token a
+    /// directory of its own, so the two spellings become two places. Anything
+    /// that takes a recipe from outside this program - a user overlay, a file
+    /// written against the old schema, an archive made by an older build -
+    /// goes through here first. Unchanged when there is nothing to settle.
+    [[nodiscard]] static QString underItsMostSpecificFolder(const QString& tokenised,
+                                                            const QString& os);
+
 private:
     QHash<QString, AppRecipe> recipes_;
 };

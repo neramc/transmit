@@ -42,6 +42,7 @@ private slots:
     void aSandboxedInstallIsFoundWhenItIsNotTheFirstCandidate();
     void theOldSchemaAndTheNewProduceTheSameRecipes();
     void theInventoryPayloadSurvivesTheJourney();
+    void anArchiveThatNamesAFolderTheLongWayRoundIsReadTheShortWay();
     void theGradeAndTheReasonComeFromTheSameEntry();
 
 private:
@@ -605,6 +606,40 @@ void CatalogTest::theInventoryPayloadSurvivesTheJourney() {
 /// grade beside the explanation of the adapted one. Nothing in the shipped
 /// catalogue is written that way yet, which is precisely why this is stated
 /// here rather than waiting to be noticed by whoever writes the first one.
+/// An archive carries the recipes the capture used, and a restore believes
+/// them over the catalogue it has - which is right, since the archive knows
+/// what was actually taken. So a capture by a build that named these folders
+/// the long way round would hand a restore a directory its files were never
+/// put in, and the rewrite pass would find nothing there and say nothing
+/// about it. That reaches the restore through the archive rather than
+/// through a file, so it is settled on the way out as well.
+void CatalogTest::anArchiveThatNamesAFolderTheLongWayRoundIsReadTheShortWay() {
+    core::MatchedApp match;
+    match.recipe.id = QStringLiteral("test.old.capture");
+    match.recipe.displayName = QStringLiteral("An Older Capture");
+    match.installation.id = match.recipe.id;
+
+    core::RecipeStatePath state;
+    state.id = QStringLiteral("config");
+    state.role = QStringLiteral("config");
+
+    // Written straight onto the structure, which is what a build without the
+    // settling did and what its archives therefore hold.
+    state.candidatesByOs.insert(QStringLiteral("macos"),
+                                {QStringLiteral("{HOME}/Library/Application Support/OldCapture")});
+    state.candidatesByOs.insert(QStringLiteral("linux"),
+                                {QStringLiteral("{HOME}/.config/oldcapture")});
+    match.recipe.state.push_back(state);
+
+    const core::AppRecipe back =
+        core::decodeAppInventory(core::encodeAppInventory({match})).first().toRecipe();
+    QCOMPARE(back.state.size(), qsizetype(1));
+    QCOMPARE(back.state[0].candidatesByOs.value(QStringLiteral("macos")),
+             QStringList({QStringLiteral("{APPCONFIG}/OldCapture")}));
+    QCOMPARE(back.state[0].candidatesByOs.value(QStringLiteral("linux")),
+             QStringList({QStringLiteral("{APPCONFIG}/oldcapture")}));
+}
+
 void CatalogTest::theGradeAndTheReasonComeFromTheSameEntry() {
     using format::OsFamily;
 
