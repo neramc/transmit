@@ -29,10 +29,16 @@ private slots:
     void keepingTheRestoreClearsUpAfterItself();
     void undoingPutsTheMachineBack();
     void aRestoreThatCouldNotWriteSaysSoAndStaysUndoable();
+    void theUndoOfferSaysWhenSettingsFilesWereCorrectedToo();
 
 private:
-    /// Captures a small home directory and returns the archive path.
-    [[nodiscard]] QString captureSomething();
+    /// Captures a small home directory and returns the archive path. The
+    /// domains default to what a capture takes on its own.
+    [[nodiscard]] QString captureSomething(const QSet<int>& domains = {});
+
+    /// The same, plus a Firefox profile whose index names an absolute path on
+    /// this machine - which is what a restore has to correct.
+    [[nodiscard]] QString captureWithSettingsToCorrect();
 
     /// Restores into a directory of its own and waits for it to finish.
     void restoreInto(app::ImportController& controller, const QString& archive,
@@ -55,7 +61,7 @@ void RestoreUndoTest::cleanup() {
     workspace_.reset();
 }
 
-QString RestoreUndoTest::captureSomething() {
+QString RestoreUndoTest::captureSomething(const QSet<int>& domains) {
     const QString home = workspace_->filePath(QStringLiteral("home"));
     QDir().mkpath(home + QStringLiteral("/Documents"));
 
@@ -91,6 +97,9 @@ QString RestoreUndoTest::captureSomething() {
     documentsRoot.token = format::PathTokenId::Documents;
     documentsRoot.domain = format::DomainId::UserData;
     request.selection.roots.push_back(documentsRoot);
+    if (!domains.isEmpty()) {
+        request.selection.domains = domains;
+    }
 
     core::CancelToken token;
     const core::ExportReport report = service.run(request, token, nullptr);
@@ -111,6 +120,92 @@ QString RestoreUndoTest::findRestoredNote(const QString& destination) {
     QDirIterator walker(destination, {QStringLiteral("notes.txt")}, QDir::Files,
                         QDirIterator::Subdirectories);
     return walker.hasNext() ? walker.next() : QString();
+}
+
+QString RestoreUndoTest::captureWithSettingsToCorrect() {
+    const QString home = workspace_->filePath(QStringLiteral("home"));
+    const QString profiles = home + QStringLiteral("/.mozilla/firefox");
+    if (!QDir().mkpath(profiles + QStringLiteral("/Profiles/x1.default"))) {
+        return {};
+    }
+
+    // profiles.ini names the profile folder by an absolute path, which is the
+    // shape that has to be repointed: on the new machine that folder is
+    // somewhere else, and Firefox started with the old path finds nothing.
+    // IsRelative=0 is what makes it absolute, and it is what real profiles
+    // written by an installer carry.
+    const auto write = [](const QString& path, const QByteArray& contents) {
+        QFile file(path);
+        if (!file.open(QIODevice::WriteOnly)) {
+            return false;
+        }
+        return file.write(contents) == contents.size();
+    };
+
+    if (!write(profiles + QStringLiteral("/profiles.ini"),
+               ("[General]\nStartWithLastProfile=1\n\n[Profile0]\nName=default\nIsRelative=0\n"
+                "Path=" +
+                profiles.toUtf8() + "/Profiles/x1.default\n"))) {
+        return {};
+    }
+    if (!write(profiles + QStringLiteral("/Profiles/x1.default/prefs.js"),
+               "user_pref(\"browser.startup.homepage\", \"about:home\");\n")) {
+        return {};
+    }
+
+    // The profile has to be asked for. A capture's domains default to "your
+    // own files" alone, and the rewrite rules a restore uses come out of the
+    // archive's application list - so without AppState and AppInventory there
+    // is no list, no rules, and nothing to correct.
+    return captureSomething({static_cast<int>(format::DomainId::UserData),
+                             static_cast<int>(format::DomainId::AppState),
+                             static_cast<int>(format::DomainId::AppInventory)});
+}
+
+/// The sentence offered beside the undo button, when the restore did more than
+/// put files down.
+///
+/// A restore that repoints a settings file has changed something the archive
+/// did not contain, so the offer has to say that undoing puts those back too -
+/// and that branch was never taken by any test, in a controller that is the
+/// only thing a person ever sees. It needs an archive that carries an
+/// application's settings, which is why the fixture builds a profile rather
+/// than a folder of notes: the rewrite rules come out of the archive's own
+/// application list, and there is no list without an application.
+void RestoreUndoTest::theUndoOfferSaysWhenSettingsFilesWereCorrectedToo() {
+    const QString archive = captureWithSettingsToCorrect();
+    if (archive.isEmpty()) {
+        QSKIP("this platform does not resolve its known folders from HOME");
+    }
+
+    app::ImportController controller;
+    const QString destination = workspace_->filePath(QStringLiteral("restored"));
+    restoreInto(controller, archive, destination);
+
+    QVERIFY2(controller.canUndo(), "a completed restore must be undoable");
+
+    // That the repointing happened at all is checked against the file rather
+    // than against the sentence: a restore that quietly stopped correcting
+    // paths would otherwise leave this test passing on the wording alone.
+    // QDir::Hidden because the profile lives under ".mozilla", and without it
+    // the walk does not go into a hidden folder at all.
+    QDirIterator walker(destination, {QStringLiteral("profiles.ini")}, QDir::Files | QDir::Hidden,
+                        QDirIterator::Subdirectories);
+    QVERIFY2(walker.hasNext(), "the profile index was not restored at all");
+    QFile restored(walker.next());
+    QVERIFY(restored.open(QIODevice::ReadOnly));
+    const QByteArray index = restored.readAll();
+
+    const QByteArray sourceProfiles =
+        (workspace_->filePath(QStringLiteral("home")) + QStringLiteral("/.mozilla")).toUtf8();
+    QVERIFY2(!index.contains(sourceProfiles),
+             qPrintable(QStringLiteral("the restored index still points at the old machine: %1")
+                            .arg(QString::fromUtf8(index))));
+
+    // And the offer says so. The two sentences differ in exactly this: one
+    // mentions the settings files that were corrected, the other does not.
+    const QString offer = controller.undoDescription();
+    QVERIFY2(offer.contains(QStringLiteral("settings file")), qPrintable(offer));
 }
 
 void RestoreUndoTest::aRestoreOffersAnUndoPoint() {

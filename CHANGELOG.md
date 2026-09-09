@@ -325,6 +325,16 @@ notes say so.
   that desktop with those settings chosen, which is the same as saying none was
   exercised. Three of the seven were wrong. The same move the package listings
   got, for the same reason.
+- The sentence under the folder list is checked: two names and a count rather
+  than seven names, the pair joined when there are two, and a sentence rather
+  than an empty line when there are none. Nothing had ever asked it anything.
+- A restore that repoints an application's settings is followed all the way
+  through the interface for the first time — an archive carrying a profile
+  whose index names an absolute path on the old machine, restored elsewhere,
+  and the undo offer that has to say those files will be put back too. The
+  fixture asks for the application domains explicitly, because a capture takes
+  only your own files unless told otherwise and there are no rewrite rules
+  without an application list.
 - Whether the catalogue is behind the source is checked on the machine the
   change was written on, not only in CI. The script that exists for exactly
   this question said in its own docstring that nothing ran `lupdate`, and did

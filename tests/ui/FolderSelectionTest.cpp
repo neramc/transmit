@@ -39,6 +39,7 @@ private slots:
     void untickingAFolderTakesItOutOfTheCapture();
     void untickingAFolderLeavesEverythingElseTheProfileAskedFor();
     void anUntouchedListChangesNothing();
+    void theSummarySaysWhatIsBeingTakenWithoutListingSeven();
 
 private:
     [[nodiscard]] int rowFor(const CaptureFolderModel& model, const QString& name) const;
@@ -210,6 +211,59 @@ void FolderSelectionTest::untickingAFolderLeavesEverythingElseTheProfileAskedFor
     const core::CaptureSelection after = controller.selectionFor(QStringLiteral("full"), {}, false);
 
     QCOMPARE(otherRoots(after), otherRoots(before));
+}
+
+/// The sentence under the list.
+///
+/// Nothing checked it, and it is the one line somebody reads before deciding
+/// they are done: two names and a count, rather than seven names nobody reads,
+/// and the total beside them once the sizes are known.
+void FolderSelectionTest::theSummarySaysWhatIsBeingTakenWithoutListingSeven() {
+    // A third and a fourth folder, so the "and n others" branch is real rather
+    // than described. The model reads what exists when it is built, so these
+    // have to be there first.
+    for (const QString& folder : {QStringLiteral("Music"), QStringLiteral("Downloads")}) {
+        QVERIFY(QDir().mkpath(home_.filePath(folder)));
+    }
+
+    CaptureFolderModel model;
+    QStringList present;
+    for (int row = 0; row < model.rowCount(); ++row) {
+        if (valueAt(model, row, CaptureFolderModel::PresentRole).toBool()) {
+            present << valueAt(model, row, CaptureFolderModel::DisplayNameRole).toString();
+        }
+    }
+    if (present.size() < 3) {
+        QSKIP("this machine has too few of the known folders for the count to appear");
+    }
+
+    // Everything present is ticked to start with, so the summary names the
+    // first two and counts the rest.
+    const QString all = model.selectionSummary();
+    QVERIFY2(all.contains(present.at(0)), qPrintable(all));
+    QVERIFY2(all.contains(present.at(1)), qPrintable(all));
+    QVERIFY2(all.contains(QString::number(present.size() - 2)), qPrintable(all));
+    QVERIFY2(!all.contains(present.at(2)),
+             qPrintable(QStringLiteral("the third name is counted, not listed: %1").arg(all)));
+
+    // Down to two, which are joined rather than counted.
+    for (int row = model.rowCount() - 1; row >= 0; --row) {
+        if (model.selectedCount() <= 2) {
+            break;
+        }
+        if (valueAt(model, row, CaptureFolderModel::SelectedRole).toBool()) {
+            model.setSelected(row, false);
+        }
+    }
+    QCOMPARE(model.selectedCount(), 2);
+    const QString two = model.selectionSummary();
+    QVERIFY2(two.contains(QStringLiteral(" and ")), qPrintable(two));
+    QVERIFY2(!two.contains(QStringLiteral("other")), qPrintable(two));
+
+    // And none, which is a sentence rather than an empty line.
+    model.selectNone();
+    QCOMPARE(model.selectedCount(), 0);
+    QCOMPARE(model.selectionSummary(), QStringLiteral("No folders of your own"));
 }
 
 void FolderSelectionTest::anUntouchedListChangesNothing() {
