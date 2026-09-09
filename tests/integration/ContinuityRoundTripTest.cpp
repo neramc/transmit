@@ -19,6 +19,7 @@
 #endif
 #endif
 
+#include "core/recipe/RecipeCatalog.h"
 #include "core/services/ExportService.h"
 #include "core/services/ImportService.h"
 #include "core/services/ProfileService.h"
@@ -56,6 +57,7 @@ private slots:
     void theArchiveFolderIsMadeButNotInvented();
     void aRestoreCanBeUndone();
     void settingsOfAnUnknownProgramStillTravel();
+    void aRecipesRulesReachTheFolderItsFilesLandIn();
     void overlappingRootsCaptureAFileOnlyOnce();
     void foldersAreRestoredBeforeWhatGoesInsideThem();
     void aFolderThatArrivesReadOnlyStillGetsItsContents();
@@ -527,7 +529,11 @@ bool ContinuityRoundTripTest::distinguishesCase(const QString& directory) {
 }
 
 QString ContinuityRoundTripTest::findRestored(const QString& root, const QString& name) {
-    QDirIterator walker(root, {name}, QDir::Files, QDirIterator::Subdirectories);
+    // QDir::Hidden, or the walk does not go into a hidden folder at all - and
+    // an application's state on Linux is nearly always in one. Without it this
+    // reads as "the file was not restored" for every program whose directory
+    // begins with a dot, which is most of them.
+    QDirIterator walker(root, {name}, QDir::Files | QDir::Hidden, QDirIterator::Subdirectories);
     return walker.hasNext() ? walker.next() : QString();
 }
 
@@ -1175,6 +1181,89 @@ void ContinuityRoundTripTest::settingsOfAnUnknownProgramStillTravel() {
 
     QVERIFY2(!findRestored(destination, QStringLiteral("state.db")).isEmpty(),
              "the unknown program's data did not travel");
+}
+
+/// Where an application's state lives is asked of the catalogue, and its files
+/// have to arrive in that same directory - or every rule the recipe carries is
+/// applied to an empty folder, and nothing at all happens.
+///
+/// This is the shape that failed on the macOS runner for three rounds while
+/// passing here. A captured file is filed under the longest known folder that
+/// contains it, and a restore into a folder of the user's choosing gives every
+/// token a directory of its own. So a recipe that named the same directory the
+/// long way round - "{HOME}/Library/Application Support/X" rather than
+/// "{APPCONFIG}/X" - sent the rewrite pass to a folder its files were never
+/// put in. The restore reported success, because it had succeeded.
+///
+/// Transmission is the fixture rather than Firefox because its profile is
+/// under {APPCONFIG} on every system, this one included. Firefox keeps its at
+/// "{HOME}/.mozilla/firefox", which is beneath no known folder at all - so the
+/// one application the undo test used was the one this could not happen to on
+/// the machine that test ran on, and it took three runs of CI to see it.
+void ContinuityRoundTripTest::aRecipesRulesReachTheFolderItsFilesLandIn() {
+    core::RecipeCatalog catalog;
+    catalog.loadDefaults();
+    const core::AppRecipe transmission =
+        catalog.recipeById(QStringLiteral("com.transmissionbt.transmission"));
+    QVERIFY2(transmission.isValid(), "the shipped catalog must describe Transmission");
+
+    const core::RecipeStatePath* configRoot = transmission.rootById(QStringLiteral("config"));
+    QVERIFY(configRoot != nullptr);
+
+    const QString settingsRoot = core::RecipeCatalog::resolveStatePath(
+        configRoot->forOs(platform_->environment().os), platform_->knownFolders());
+    if (settingsRoot.isEmpty() || !settingsRoot.startsWith(sourceHome())) {
+        QSKIP("this platform does not resolve its known folders from HOME");
+    }
+    QVERIFY(QDir().mkpath(settingsRoot));
+
+    // download-dir names an absolute path on the machine it was written on,
+    // which is exactly what a restore has to repoint.
+    const QByteArray original = "{\n  \"download-dir\": \"" +
+                                (sourceHome() + QStringLiteral("/Downloads")).toUtf8() +
+                                "\",\n  \"peer-port\": 51413\n}\n";
+    const QString settingsPath = settingsRoot + QStringLiteral("/settings.json");
+    {
+        QFile file(settingsPath);
+        QVERIFY2(file.open(QIODevice::WriteOnly), qPrintable(settingsPath));
+        QCOMPARE(file.write(original), original.size());
+    }
+
+    core::ExportService exporter(*platform_);
+    core::CancelToken token;
+
+    core::ExportRequest request;
+    request.destinationPath = archivePath("recipe-rules.txa");
+    request.selection = core::ProfileService::fullContinuity().selection;
+    request.packaging.preset = format::CompressionPreset::Fast;
+
+    const core::ExportReport exported = exporter.run(request, token);
+    QVERIFY2(exported.succeeded, qPrintable(exported.errorMessage));
+
+    const QString destination = workspace_.filePath("rules-applied");
+    core::ImportService importer(*platform_);
+    core::ImportRequest restore;
+    restore.archivePath = request.destinationPath;
+    restore.destinationOverride = destination;
+    restore.createRollback = false;
+
+    const core::ImportReport report = importer.run(restore, token);
+    QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
+
+    const QString restored = findRestored(destination, QStringLiteral("settings.json"));
+    QVERIFY2(!restored.isEmpty(), "the settings did not travel, so nothing below means anything");
+
+    QFile arrived(restored);
+    QVERIFY2(arrived.open(QIODevice::ReadOnly), qPrintable(restored));
+    const QByteArray text = arrived.readAll();
+
+    // Anything still naming the machine it came from is a path that was not
+    // repointed. Checking for the new address instead would pass on a value
+    // that had been half-rewritten.
+    QVERIFY2(!text.contains(sourceHome().toUtf8()),
+             qPrintable(QStringLiteral("the restored settings still point at the old machine: %1")
+                            .arg(QString::fromUtf8(text))));
+    QVERIFY2(text.contains("51413"), "the settings that are not paths must survive untouched");
 }
 
 /// The catalog names an application's own directory, and the full profile also
