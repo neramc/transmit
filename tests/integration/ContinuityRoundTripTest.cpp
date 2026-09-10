@@ -97,10 +97,15 @@ private:
     /// the capture to find them at all.
     [[nodiscard]] QString baseFor(format::PathTokenId token) const;
 
-    /// The first file of this name anywhere under `root`. Which token folder a
-    /// file lands in depends on how the platform lays out its known folders,
-    /// and that is not what these tests are checking.
-    [[nodiscard]] static QString findRestored(const QString& root, const QString& name);
+    /// The restored file whose path ends with `relative`, anywhere under
+    /// `root`. Which token folder a file lands in depends on how the platform
+    /// lays out its known folders, and that is not what these tests are
+    /// checking - but which file it is very much is, so enough of the path is
+    /// given to say. A bare name matched the first "settings.json" the walk
+    /// happened to reach, and the fixture has two; the one it reached was a
+    /// property of the filesystem, so the suite passed here and failed on the
+    /// runner.
+    [[nodiscard]] static QString findRestored(const QString& root, const QString& relative);
     [[nodiscard]] QString sourceHome() const { return workspace_.filePath("home"); }
     [[nodiscard]] QString archivePath(const QString& name) const {
         return workspace_.filePath(name);
@@ -528,13 +533,20 @@ bool ContinuityRoundTripTest::distinguishesCase(const QString& directory) {
     return !folded;
 }
 
-QString ContinuityRoundTripTest::findRestored(const QString& root, const QString& name) {
+QString ContinuityRoundTripTest::findRestored(const QString& root, const QString& relative) {
     // QDir::Hidden, or the walk does not go into a hidden folder at all - and
     // an application's state on Linux is nearly always in one. Without it this
     // reads as "the file was not restored" for every program whose directory
     // begins with a dot, which is most of them.
+    const QString name = relative.section(u'/', -1);
     QDirIterator walker(root, {name}, QDir::Files | QDir::Hidden, QDirIterator::Subdirectories);
-    return walker.hasNext() ? walker.next() : QString();
+    while (walker.hasNext()) {
+        const QString path = walker.next();
+        if (path.endsWith(u'/' + relative)) {
+            return path;
+        }
+    }
+    return {};
 }
 
 QString ContinuityRoundTripTest::baseFor(format::PathTokenId token) const {
@@ -1172,14 +1184,15 @@ void ContinuityRoundTripTest::settingsOfAnUnknownProgramStillTravel() {
     // there and whichever claims the folder first owns both files - which is
     // the right behaviour, and makes the exact token folder an implementation
     // detail. What the test is about is that the files travelled at all.
-    const QString settingsPath = findRestored(destination, QStringLiteral("settings.json"));
+    const QString settingsPath =
+        findRestored(destination, QStringLiteral("some-obscure-tool/settings.json"));
     QVERIFY2(!settingsPath.isEmpty(), "the unknown program's settings did not travel");
 
     QFile settings(settingsPath);
     QVERIFY2(settings.open(QIODevice::ReadOnly), qPrintable(settingsPath));
     QCOMPARE(settings.readAll(), QByteArray("{\"root\":\"/tmp\"}\n"));
 
-    QVERIFY2(!findRestored(destination, QStringLiteral("state.db")).isEmpty(),
+    QVERIFY2(!findRestored(destination, QStringLiteral("some-obscure-tool/state.db")).isEmpty(),
              "the unknown program's data did not travel");
 }
 
@@ -1250,7 +1263,13 @@ void ContinuityRoundTripTest::aRecipesRulesReachTheFolderItsFilesLandIn() {
     const core::ImportReport report = importer.run(restore, token);
     QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
 
-    const QString restored = findRestored(destination, QStringLiteral("settings.json"));
+    // Named by the folder it is in, not by name alone: the fixture holds two
+    // settings.json and a bare name matched whichever the walk reached first,
+    // which is a property of the filesystem. And the folder is taken from the
+    // path resolved above rather than written down - Transmission's directory
+    // is "transmission" on Linux and "Transmission" everywhere else.
+    const QString restored = findRestored(
+        destination, QFileInfo(settingsRoot).fileName() + QStringLiteral("/settings.json"));
     QVERIFY2(!restored.isEmpty(), "the settings did not travel, so nothing below means anything");
 
     QFile arrived(restored);
