@@ -8,6 +8,7 @@ add_library(transmit_core STATIC
     recipe/AppRecipe.cpp
     recipe/RecipeCatalog.cpp
     recipe/AppInventoryPayload.cpp
+    recipe/RestoreSkips.cpp
     recipe/StateRelocator.cpp
     recipe/InstallScriptWriter.cpp
     settings/SettingsDomain.cpp

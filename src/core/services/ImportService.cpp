@@ -20,6 +20,7 @@
 #include "core/recipe/AppInventoryPayload.h"
 #include "core/recipe/InstallScriptWriter.h"
 #include "core/recipe/RecipeCatalog.h"
+#include "core/recipe/RestoreSkips.h"
 #include "core/recipe/StateRelocator.h"
 #include "core/rewrite/PathRewriter.h"
 #include "core/rewrite/PathTranslator.h"
@@ -564,6 +565,7 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
         inventoryEntries = decodeAppInventory(payload->data);
     }
     const StateRelocator relocator(inventoryEntries, manifest.source.os, targetOs);
+    const RestoreSkips skips(inventoryEntries, manifest.source.os, targetOs);
 
     if (relocator.hasRelocations()) {
         QStringList moved;
@@ -837,6 +839,22 @@ ImportReport ImportService::run(const ImportRequest& request, CancelToken& cance
 
         RestoredItem item;
         item.sourcePath = fromUtf8(entry.path.toDisplayString());
+
+        // Left behind because the recipe says so. Checked against where the
+        // file would land rather than where it was taken from: a skip is about
+        // this machine, and the two are different addresses whenever the
+        // application keeps its state somewhere else here.
+        if (const RestoreSkips::Rule* rule = skips.ruleFor(safePath); rule != nullptr) {
+            item.grade = ContinuityGrade::Manual;
+            item.note = rule->note.isEmpty()
+                            ? QCoreApplication::translate(
+                                  "Import", "%1 does not carry this to another machine.")
+                                  .arg(rule->displayName)
+                            : rule->note;
+            report.items.push_back(item);
+            ++report.filesSkipped;
+            continue;
+        }
 
         // Records where this item ended up, whichever way the iteration
         // leaves.

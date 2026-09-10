@@ -58,6 +58,7 @@ private slots:
     void aRestoreCanBeUndone();
     void settingsOfAnUnknownProgramStillTravel();
     void aRecipesRulesReachTheFolderItsFilesLandIn();
+    void whatARecipeSaysNotToCarryDoesNotArrive();
     void overlappingRootsCaptureAFileOnlyOnce();
     void foldersAreRestoredBeforeWhatGoesInsideThem();
     void aFolderThatArrivesReadOnlyStillGetsItsContents();
@@ -1283,6 +1284,74 @@ void ContinuityRoundTripTest::aRecipesRulesReachTheFolderItsFilesLandIn() {
              qPrintable(QStringLiteral("the restored settings still point at the old machine: %1")
                             .arg(QString::fromUtf8(text))));
     QVERIFY2(text.contains("51413"), "the settings that are not paths must survive untouched");
+}
+
+/// Some state is worth carrying only as far as the archive.
+///
+/// VS Code keeps a workspaceStorage folder keyed by the paths of the folders
+/// that were open, and on a new machine none of those paths exist. Taking it
+/// is cheap and harmless; putting it back hands the editor a set of stale
+/// entries to trip over. The catalogue has said so for a while, with a "skip"
+/// step nothing read - and unlike the rest of a move step, this one cannot be
+/// done by editing the file afterwards, because the point is that it never
+/// arrives.
+void ContinuityRoundTripTest::whatARecipeSaysNotToCarryDoesNotArrive() {
+    core::RecipeCatalog catalog;
+    catalog.loadDefaults();
+    const core::AppRecipe code = catalog.recipeById(QStringLiteral("com.microsoft.vscode"));
+    QVERIFY2(code.isValid(), "the shipped catalog must describe VS Code");
+
+    const core::RecipeStatePath* configRoot = code.rootById(QStringLiteral("config"));
+    QVERIFY(configRoot != nullptr);
+
+    const QString settingsRoot = core::RecipeCatalog::resolveStatePath(
+        configRoot->forOs(platform_->environment().os), platform_->knownFolders());
+    if (settingsRoot.isEmpty() || !settingsRoot.startsWith(sourceHome())) {
+        QSKIP("this platform does not resolve its known folders from HOME");
+    }
+
+    const auto write = [](const QString& path, const QByteArray& content) {
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        QFile file(path);
+        QVERIFY2(file.open(QIODevice::WriteOnly), qPrintable(path));
+        QCOMPARE(file.write(content), content.size());
+    };
+
+    // One file that has to travel and one, inside the folder the recipe names,
+    // that must not - so a restore that carried nothing at all cannot pass.
+    write(settingsRoot + QStringLiteral("/settings.json"), "{\"editor.fontSize\":13}\n");
+    write(settingsRoot + QStringLiteral("/workspaceStorage/9f2/state.vscdb"), "stale\n");
+
+    core::ExportService exporter(*platform_);
+    core::CancelToken token;
+
+    core::ExportRequest request;
+    request.destinationPath = archivePath("skipped.txa");
+    request.selection = core::ProfileService::fullContinuity().selection;
+    request.packaging.preset = format::CompressionPreset::Fast;
+
+    const core::ExportReport exported = exporter.run(request, token);
+    QVERIFY2(exported.succeeded, qPrintable(exported.errorMessage));
+
+    const QString destination = workspace_.filePath("skipped-restored");
+    core::ImportService importer(*platform_);
+    core::ImportRequest restore;
+    restore.archivePath = request.destinationPath;
+    restore.destinationOverride = destination;
+    restore.createRollback = false;
+
+    const core::ImportReport report = importer.run(restore, token);
+    QVERIFY2(report.succeeded, qPrintable(report.errorMessage));
+
+    QVERIFY2(!findRestored(destination, QStringLiteral("User/settings.json")).isEmpty(),
+             "the editor's own settings did not travel, so nothing below means anything");
+    QVERIFY2(findRestored(destination, QStringLiteral("state.vscdb")).isEmpty(),
+             "the workspace cache was put back on a machine where none of those folders exist");
+
+    // And it is said rather than silently dropped.
+    QVERIFY2(report.filesSkipped >= 1,
+             qPrintable(QStringLiteral("nothing was reported as left behind (%1 skipped)")
+                            .arg(report.filesSkipped)));
 }
 
 /// The catalog names an application's own directory, and the full profile also

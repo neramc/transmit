@@ -1474,6 +1474,10 @@
             <numerusform></numerusform>
         </translation>
     </message>
+    <message>
+        <source>%1 does not carry this to another machine.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ImportPage</name>

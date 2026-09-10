@@ -13,6 +13,7 @@
 
 #include "core/recipe/AppInventoryPayload.h"
 #include "core/recipe/RecipeCatalog.h"
+#include "core/recipe/RestoreSkips.h"
 #include "core/recipe/StateRelocator.h"
 #include "core/rewrite/PathRewriter.h"
 #include "core/rewrite/PathTranslator.h"
@@ -58,6 +59,7 @@ private slots:
     void catalogLoadsAndMatches();
     void relocatesApplicationStateToWhereTheTargetKeepsIt();
     void relocationLeavesUnknownPathsAlone();
+    void aSkipTakesTheWholeFolderButNotItsNeighbour();
 
     void aRewriterThatCannotStageReportsNothing();
     void aMalformedPlistIsNotReportedAsRewritten();
@@ -1053,6 +1055,53 @@ void PathRewriteTest::relocationLeavesUnknownPathsAlone() {
 /// which the swap then installed, and the plan reported the change as made.
 /// Asked here of every format, because the fix is one function and a format
 /// that stopped calling it would look exactly like one that never did.
+/// A folder named in a skip takes everything inside it, and nothing beside it.
+///
+/// "workspaceStorage" is written to mean the folder and all of it - nobody is
+/// going to add a second rule for its contents - so the match has to reach
+/// down. It also has to stop at a component boundary: "workspaceStorage2" is
+/// a different folder, and a prefix comparison that did not say so would leave
+/// somebody's data behind while reporting that the restore succeeded.
+void PathRewriteTest::aSkipTakesTheWholeFolderButNotItsNeighbour() {
+    core::RecipeCatalog catalog;
+    QVERIFY(catalog.loadFromFile(QStringLiteral(":/catalog/app-catalog.json")) > 0);
+
+    core::MatchedApp code;
+    code.recipe = catalog.recipeById(QStringLiteral("com.microsoft.vscode"));
+    QVERIFY(code.recipe.isValid());
+    code.installation.id = code.recipe.id;
+
+    const QList<core::InventoryEntry> inventory =
+        core::decodeAppInventory(core::encodeAppInventory({code}));
+    const core::RestoreSkips skips(inventory, format::OsFamily::Linux, format::OsFamily::Linux);
+    QVERIFY2(skips.hasAny(), "the recipe must carry the step this is about");
+
+    // {APPCONFIG}/Code/User is where it lands on Linux.
+    const auto under = [](const char* relative) {
+        return format::TokenizedPath{format::PathTokenId::AppConfig, relative};
+    };
+
+    QVERIFY(skips.ruleFor(under("Code/User/workspaceStorage")) != nullptr);
+    QVERIFY(skips.ruleFor(under("Code/User/workspaceStorage/9f2/state.vscdb")) != nullptr);
+
+    // Beside it, not inside it.
+    QVERIFY(skips.ruleFor(under("Code/User/workspaceStorage2/state.vscdb")) == nullptr);
+    QVERIFY(skips.ruleFor(under("Code/User/settings.json")) == nullptr);
+
+    // And outside the root the rule was given entirely.
+    QVERIFY(skips.ruleFor(under("Code/Users/workspaceStorage/x")) == nullptr);
+    QVERIFY(skips.ruleFor(under("Codex/User/workspaceStorage/x")) == nullptr);
+    QVERIFY(skips.ruleFor(format::TokenizedPath{format::PathTokenId::Home,
+                                                "Code/User/workspaceStorage/x"}) == nullptr);
+
+    // A folder of somebody's own called "User_workspaceStorage", which shares
+    // "Code/User" with the root and then carries on. It reads oddly, and it is
+    // the one shape that tells whether the root is matched by whole components
+    // or by counting characters: every other near miss is caught later by the
+    // pattern, and this one lines up with it exactly.
+    QVERIFY(skips.ruleFor(under("Code/User_workspaceStorage/state.vscdb")) == nullptr);
+}
+
 void PathRewriteTest::aRewriterThatCannotStageReportsNothing() {
     struct Case {
         QString file;
