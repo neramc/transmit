@@ -33,6 +33,7 @@ private slots:
     void aFolderNamedTheLongWayRoundIsReadAsTheShortOne();
     void everyMoveStepNamesARootThatExists();
     void everyMoveStepUsesAnActionWeImplement();
+    void aFileNamedTwiceInOneRecipeIsNamedTheSameWay();
     void noTwoApplicationsClaimTheSameFolder();
     void carriesDataAgreesWithHavingState();
     void everyRecipeCanBeFoundOneWayOrTheOther();
@@ -314,6 +315,69 @@ void CatalogTest::everyMoveStepUsesAnActionWeImplement() {
                                     .arg(entry.value(QStringLiteral("id")).toString(), action)));
         }
     }
+}
+
+/// A file named twice in one recipe is named the same way both times.
+///
+/// A recipe can name one file from two places: a rewrite rule says which paths
+/// inside it to correct, and a move step says what else has to happen to it.
+/// Firefox's prefs.js was named "**/prefs.js" by the rule and "*/prefs.js" by
+/// the step - any depth in one, exactly one folder down in the other - and a
+/// profile is one folder down on Linux and two on Windows and macOS. So the
+/// rule found the file everywhere and the step found it only on Linux, and on
+/// the other two systems the settings that describe the old machine stayed in
+/// the profile with nothing said about it.
+///
+/// The two are evidently about the same file when they end in the same name,
+/// and disagreeing about how deep it is means one of them is wrong.
+///
+/// It only sees a file that is named from both places, which was two of the
+/// thirteen that were wrong - the rest had a move step and no rule to compare
+/// it against. Two was enough to find the other eleven by hand, and one file
+/// described two ways in one recipe is worth refusing whatever else is true.
+void CatalogTest::aFileNamedTwiceInOneRecipeIsNamedTheSameWay() {
+    const core::RecipeCatalog catalog = builtIn();
+
+    const auto depthOf = [](const QString& pattern) {
+        if (pattern.startsWith(QStringLiteral("**/"))) {
+            return QStringLiteral("any depth");
+        }
+        const qsizetype folders = pattern.count(u'/');
+        return folders == 1 ? QStringLiteral("one folder down")
+                            : QStringLiteral("%1 folders down").arg(folders);
+    };
+    const auto tail = [](const QString& pattern) { return pattern.section(u'/', -1); };
+
+    QStringList disagreements;
+    for (const core::AppRecipe& recipe : catalog.recipes()) {
+        QHash<QString, QString> namedByARule;
+        for (const core::RecipeRewriteRule& rule : recipe.rewrites) {
+            if (!rule.filePattern.isEmpty()) {
+                namedByARule.insert(tail(rule.filePattern), rule.filePattern);
+            }
+        }
+
+        for (const core::RecipeMoveStep& step : recipe.moves) {
+            const auto rule = namedByARule.constFind(tail(step.file));
+            if (rule == namedByARule.constEnd() || rule.value() == step.file) {
+                continue;
+            }
+            if (depthOf(rule.value()) == depthOf(step.file)) {
+                continue;  // different wildcards, same reach
+            }
+            disagreements << QStringLiteral(
+                                 "%1: a rule says \"%2\" (%3) and a %4 step says "
+                                 "\"%5\" (%6)")
+                                 .arg(recipe.id, rule.value(), depthOf(rule.value()),
+                                      core::moveActionName(step.action), step.file,
+                                      depthOf(step.file));
+        }
+    }
+
+    QVERIFY2(disagreements.isEmpty(),
+             qPrintable(QStringLiteral("%1 files are named two different ways:\n  %2")
+                            .arg(disagreements.size())
+                            .arg(disagreements.join(QStringLiteral("\n  ")))));
 }
 
 void CatalogTest::noTwoApplicationsClaimTheSameFolder() {
