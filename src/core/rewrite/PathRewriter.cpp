@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QDirIterator>
+#include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
 
@@ -134,13 +135,106 @@ void PathRewriter::planForRule(const RecipeRewriteRule& rule, const QString& sta
     }
 }
 
+void PathRewriter::planForMove(const RecipeMoveStep& step, const QString& stateRoot,
+                               const QString& appId, RewritePlan& plan) const {
+    if (!step.appliesTo(translator_.sourceOs(), translator_.targetOs())) {
+        return;
+    }
+
+    // A step's own rewrite rules name their own files, so they are applied
+    // once rather than once per file this step matched.
+    for (const RecipeRewriteRule& rule : step.rewrites) {
+        planForRule(rule, stateRoot, appId, plan);
+    }
+
+    for (const QString& path : matchFiles(stateRoot, step.file)) {
+        QList<RewriteEdit> edits;
+
+        switch (step.action) {
+            case MoveAction::Regenerate:
+                edits.append(RewriteEdit{path, QFileInfo(path).fileName(), QString(), QString(),
+                                         appId, EditKind::Remove});
+                break;
+
+            case MoveAction::DropKeys:
+                if (step.format == QLatin1String("json")) {
+                    edits = rewriters::dropKeysJson(path, step.keys, appId);
+                } else if (step.format == QLatin1String("ini")) {
+                    edits = rewriters::dropKeysIni(path, step.keys, appId);
+                } else if (step.format == QLatin1String("text")) {
+                    edits = rewriters::dropKeysText(path, step.keys, appId);
+                } else {
+                    qCWarning(logRewrite)
+                        << "cannot drop keys from" << step.format << "for" << appId;
+                }
+                break;
+
+            case MoveAction::Rewrite:
+                // The other half of the same file: its paths are corrected by
+                // the rules above, and the settings that have to read a
+                // particular way are forced here. Firefox needs both in
+                // profiles.ini - a Path to correct and an IsRelative to force.
+                if (!step.assignments.isEmpty()) {
+                    if (step.format == QLatin1String("ini")) {
+                        QList<QPair<QString, QString>> pairs;
+                        pairs.reserve(step.assignments.size());
+                        for (const RecipeMoveStep::Assignment& assignment : step.assignments) {
+                            pairs.append({assignment.key, assignment.value});
+                        }
+                        edits = rewriters::assignIni(path, pairs, appId);
+                    } else {
+                        qCWarning(logRewrite)
+                            << "cannot set values in" << step.format << "for" << appId;
+                    }
+                }
+                break;
+
+            case MoveAction::Copy:
+                break;  // the default, and nothing to do
+
+            case MoveAction::Skip:
+            case MoveAction::Rename:
+            case MoveAction::Merge:
+                // These decide where a file goes rather than what is inside
+                // it, so they belong to the restore's placement pass and not
+                // to this one. Said out loud rather than silently ignored.
+                qCInfo(logRewrite) << "the" << moveActionName(step.action) << "step for" << appId
+                                   << "is not applied by the rewrite pass";
+                break;
+        }
+
+        for (RewriteEdit& edit : edits) {
+            plan.add(std::move(edit));
+        }
+    }
+}
+
+void PathRewriter::forgetAnythingLeftStaged(const QString& stateRoot) const {
+    if (cleared_.contains(stateRoot)) {
+        return;
+    }
+    cleared_.insert(stateRoot);
+
+    QDirIterator stale(stateRoot, {QStringLiteral("*.transmit-staged")}, QDir::Files | QDir::Hidden,
+                       QDirIterator::Subdirectories);
+    while (stale.hasNext()) {
+        const QString path = stale.next();
+        qCWarning(logRewrite) << "throwing away a staged file left by an earlier run" << path;
+        QFile::remove(path);
+    }
+}
+
 void PathRewriter::planFor(const AppRecipe& recipe, const QString& stateRoot,
                            RewritePlan& plan) const {
     if (!QFileInfo::exists(stateRoot)) {
         return;
     }
+    forgetAnythingLeftStaged(stateRoot);
     for (const RecipeRewriteRule& rule : recipe.rewrites) {
         planForRule(rule, stateRoot, recipe.id, plan);
+    }
+    for (const RecipeMoveStep& step : recipe.moves) {
+        planForMove(step, stateRoot, recipe.id, plan);
     }
 }
 

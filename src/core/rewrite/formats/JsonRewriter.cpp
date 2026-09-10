@@ -101,12 +101,10 @@ QList<RewriteEdit> rewriteJson(const QString& path, const QStringList& keys,
                                const PathTranslator& translator, const QString& appId) {
     QList<RewriteEdit> edits;
 
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
+    const QByteArray raw = readForStaging(path);
+    if (raw.isEmpty()) {
         return edits;
     }
-    const QByteArray raw = file.readAll();
-    file.close();
 
     QJsonParseError error{};
     QJsonDocument document = QJsonDocument::fromJson(raw, &error);
@@ -130,6 +128,97 @@ QList<RewriteEdit> rewriteJson(const QString& path, const QStringList& keys,
     // Compact when the original was compact: these files are machine-written,
     // and reflowing one would show up as a spurious change to anything
     // watching it.
+    const bool wasIndented = raw.contains("\n  ");
+    const QByteArray output =
+        QJsonDocument(root).toJson(wasIndented ? QJsonDocument::Indented : QJsonDocument::Compact);
+    if (!writeStaged(path + QStringLiteral(".transmit-staged"), output)) {
+        return {};
+    }
+    return edits;
+}
+
+namespace {
+
+/// Removes what a dotted name asks for, and says whether it found anything.
+/// A name ending in "." asks for the family beneath it rather than for one
+/// member, which is how a whole set of machine-specific settings is written.
+bool removeAtKeyPath(QJsonObject& object, const QStringList& parts, int depth, const QString& path,
+                     const QString& appId, const QString& location, QList<RewriteEdit>& edits) {
+    if (depth >= parts.size()) {
+        return false;
+    }
+    const QString& part = parts[depth];
+    const QString here = location.isEmpty() ? part : location + u'.' + part;
+
+    if (depth + 1 < parts.size()) {
+        if (!object.contains(part) || !object.value(part).isObject()) {
+            return false;
+        }
+        QJsonObject child = object.value(part).toObject();
+        if (!removeAtKeyPath(child, parts, depth + 1, path, appId, here, edits)) {
+            return false;
+        }
+        object[part] = child;
+        return true;
+    }
+
+    // The last part. A family takes every member beginning with it.
+    const bool family = part.endsWith(u'.');
+    QStringList going;
+    for (const QString& name : object.keys()) {
+        if (family ? name.startsWith(part) : name == part) {
+            going << name;
+        }
+    }
+    for (const QString& name : going) {
+        const QString gone = location.isEmpty() ? name : location + u'.' + name;
+        const QJsonValue value = object.value(name);
+        edits.append(RewriteEdit{path, gone,
+                                 value.isString() ? value.toString() : QStringLiteral("..."),
+                                 QString(), appId, EditKind::Change});
+        object.remove(name);
+    }
+    return !going.isEmpty();
+}
+
+}  // namespace
+
+QList<RewriteEdit> dropKeysJson(const QString& path, const QStringList& keys,
+                                const QString& appId) {
+    QList<RewriteEdit> edits;
+    if (keys.isEmpty()) {
+        return edits;
+    }
+
+    const QByteArray raw = readForStaging(path);
+    if (raw.isEmpty()) {
+        return edits;
+    }
+
+    QJsonParseError error{};
+    const QJsonDocument document = QJsonDocument::fromJson(raw, &error);
+    if (error.error != QJsonParseError::NoError || !document.isObject()) {
+        return edits;
+    }
+
+    QJsonObject root = document.object();
+    bool changed = false;
+    for (const QString& key : keys) {
+        // The family form keeps its trailing dot, so it is split off the end
+        // rather than dropped by SkipEmptyParts.
+        QStringList parts = key.split(u'.', Qt::SkipEmptyParts);
+        if (key.endsWith(u'.') && !parts.isEmpty()) {
+            parts.last() += u'.';
+        }
+        if (removeAtKeyPath(root, parts, 0, path, appId, {}, edits)) {
+            changed = true;
+        }
+    }
+
+    if (!changed) {
+        return edits;
+    }
+
     const bool wasIndented = raw.contains("\n  ");
     const QByteArray output =
         QJsonDocument(root).toJson(wasIndented ? QJsonDocument::Indented : QJsonDocument::Compact);

@@ -51,12 +51,10 @@ QList<RewriteEdit> rewriteText(const QString& path, const QString& pattern, int 
                                const PathTranslator& translator, const QString& appId) {
     QList<RewriteEdit> edits;
 
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
+    const QByteArray raw = readForStaging(path);
+    if (raw.isEmpty()) {
         return edits;
     }
-    const QByteArray raw = file.readAll();
-    file.close();
 
     const TextEncoding form = detectEncoding(raw);
     QString text = decode(raw, form);
@@ -112,6 +110,71 @@ QList<RewriteEdit> rewriteText(const QString& path, const QString& pattern, int 
     }
 
     if (!writeStaged(path + QStringLiteral(".transmit-staged"), encode(text, form))) {
+        return {};
+    }
+    return edits;
+}
+
+namespace {
+
+/// Whether one of the names asks for this setting. A name ending in "."
+/// asks for the family beneath it, which is how a catalogue writes
+/// "every gfx.blacklist.* this machine's old graphics card produced".
+bool namesTheSetting(const QStringList& keys, const QString& key) {
+    for (const QString& wanted : keys) {
+        if (wanted.endsWith(u'.') ? key.startsWith(wanted) : key == wanted) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// The setting a line declares, for the line-per-setting shape:
+///   user_pref("browser.startup.homepage", "about:home");
+/// Empty for a line that declares nothing, which includes every comment and
+/// every blank line - both of which have to survive untouched.
+QString settingOnLine(const QString& line) {
+    static const QRegularExpression declaration(
+        QStringLiteral("^\\s*[A-Za-z_][A-Za-z0-9_]*\\s*\\(\\s*[\"']([^\"']+)[\"']\\s*,"));
+    const auto match = declaration.match(line);
+    return match.hasMatch() ? match.captured(1) : QString();
+}
+
+}  // namespace
+
+QList<RewriteEdit> dropKeysText(const QString& path, const QStringList& keys,
+                                const QString& appId) {
+    QList<RewriteEdit> edits;
+    if (keys.isEmpty()) {
+        return edits;
+    }
+
+    const QByteArray raw = readForStaging(path);
+    if (raw.isEmpty()) {
+        return edits;
+    }
+
+    // Through the same detect-and-reproduce as the rewriting pass, or a
+    // UTF-16 preferences file would come back as mojibake with the settings
+    // correctly removed from it.
+    const TextEncoding form = detectEncoding(raw);
+    const QStringList lines = decode(raw, form).split(u'\n');
+    QStringList kept;
+    kept.reserve(lines.size());
+
+    for (const QString& line : lines) {
+        const QString key = settingOnLine(line);
+        if (key.isEmpty() || !namesTheSetting(keys, key)) {
+            kept.push_back(line);
+            continue;
+        }
+        edits.append(RewriteEdit{path, key, line.trimmed(), QString(), appId, EditKind::Change});
+    }
+
+    if (edits.isEmpty()) {
+        return edits;
+    }
+    if (!writeStaged(path + QStringLiteral(".transmit-staged"), encode(kept.join(u'\n'), form))) {
         return {};
     }
     return edits;

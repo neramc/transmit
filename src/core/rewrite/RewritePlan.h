@@ -7,6 +7,19 @@
 
 namespace transmit::core {
 
+/// What a planned change does to the file it names.
+enum class EditKind {
+    /// The staged copy replaces the original. Every path rewrite is this.
+    Change,
+
+    /// The file goes, and the application builds itself a new one on first
+    /// start. Some files cannot be carried at all - an index keyed by a hash
+    /// of the old installation directory, a preferences file signed against
+    /// the installation that wrote it - and leaving one in place is worse
+    /// than having none, because the application trusts it.
+    Remove,
+};
+
 /// One value inside one file that a restore would change.
 struct RewriteEdit {
     QString filePath;  ///< the restored file on this machine
@@ -14,6 +27,7 @@ struct RewriteEdit {
     QString oldValue;
     QString newValue;
     QString appId;  ///< the recipe that asked for this
+    EditKind kind = EditKind::Change;
 };
 
 /// Everything a restore intends to change inside restored files, gathered

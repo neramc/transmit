@@ -124,12 +124,10 @@ QList<RewriteEdit> rewritePlist(const QString& path, const QStringList& keys,
                                 const PathTranslator& translator, const QString& appId) {
     QList<RewriteEdit> edits;
 
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
+    const QByteArray raw = readForStaging(path);
+    if (raw.isEmpty()) {
         return edits;
     }
-    const QByteArray raw = file.readAll();
-    file.close();
 
     QTemporaryDir workspace;
     QByteArray xml = raw;

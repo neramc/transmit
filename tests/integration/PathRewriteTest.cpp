@@ -52,6 +52,8 @@ private slots:
     void keptOriginalsAreThrownAwayOnRequest();
     void firefoxProfileIsRepointedEndToEnd();
     void aMacOsFirefoxProfileIsRepointedEndToEnd();
+    void theMoveStepsInTheCatalogAreCarriedOut();
+    void droppingAKeyKeepsTheFilesEncoding();
 
     void catalogLoadsAndMatches();
     void relocatesApplicationStateToWhereTheTargetKeepsIt();
@@ -800,6 +802,130 @@ void PathRewriteTest::aMacOsFirefoxProfileIsRepointedEndToEnd() {
     const QByteArray prefs = read(QStringLiteral("Firefox/Profiles/x1.default/prefs.js"));
     QVERIFY2(prefs.contains("/home/bob/Downloads"), prefs.constData());
     QVERIFY2(prefs.contains("about:home"), "unrelated preferences must survive");
+}
+
+/// What the catalogue has been saying all along, and nothing read.
+///
+/// Correcting the paths inside a file is not the whole of moving it. The
+/// schema has been able to say the rest since it went to version 2 - delete
+/// this index, drop these settings, force this one - and forty-seven such
+/// steps were parsed, carried through the archive, and acted on by nothing at
+/// all. A restore reported success and left every one of them undone.
+///
+/// A Firefox profile is what those steps were written for, and it needs all
+/// three at once:
+///   - profiles.ini is forced to IsRelative=1, so the profile is found
+///     wherever the folder ended up rather than at the address it had
+///   - installs.ini is keyed by a hash of the old installation directory, so
+///     every entry in it is stale and the file has to go
+///   - prefs.js records the build that last ran and the graphics hardware it
+///     was checked against; left in place, Firefox reads them and believes it
+///     has already dealt with this profile
+void PathRewriteTest::theMoveStepsInTheCatalogAreCarriedOut() {
+    write(QStringLiteral("Firefox/profiles.ini"),
+          "[Profile0]\n"
+          "Name=default-release\n"
+          "IsRelative=0\n"
+          "Path=C:\\Users\\Bob\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles\\x1.default\n");
+    write(QStringLiteral("Firefox/installs.ini"),
+          "[2F5A8B1C9D3E4F60]\n"
+          "Default=Profiles/x1.default\n"
+          "Locked=1\n");
+    write(QStringLiteral("Firefox/Profiles/x1.default/prefs.js"),
+          "user_pref(\"browser.startup.homepage\", \"about:home\");\n"
+          "user_pref(\"browser.startup.homepage_override.buildID\", \"20240101\");\n"
+          "user_pref(\"gfx.blacklist.layers.opengl\", 4);\n"
+          "user_pref(\"gfx.blacklist.webgl.msaa\", 4);\n"
+          "// a comment nobody asked to remove\n"
+          "user_pref(\"browser.download.dir\", \"C:\\\\Users\\\\Bob\\\\Downloads\");\n");
+    write(QStringLiteral("Firefox/Profiles/x1.default/compatibility.ini"),
+          "[Compatibility]\nLastVersion=121.0\n");
+
+    core::RecipeCatalog catalog;
+    QVERIFY(catalog.loadFromFile(QStringLiteral(":/catalog/app-catalog.json")) > 0);
+    const core::AppRecipe firefox = catalog.recipeById(QStringLiteral("org.mozilla.firefox"));
+    QVERIFY2(firefox.isValid(), "the shipped catalog must describe Firefox");
+    QVERIFY2(!firefox.moves.isEmpty(), "the recipe must carry the steps this is about");
+
+    core::RewritePlan plan;
+    core::PathRewriter(windowsToLinux())
+        .planFor(firefox, workspace_->path() + QStringLiteral("/Firefox"), plan);
+    QStringList planned;
+    for (const core::RewriteEdit& e : plan.edits()) {
+        planned << QStringLiteral("%1 [%2] %3")
+                       .arg(QFileInfo(e.filePath).fileName(), e.location,
+                            e.kind == core::EditKind::Remove ? QStringLiteral("remove")
+                                                             : QStringLiteral("change"));
+    }
+    const int changed = plan.apply();
+    QVERIFY2(changed >= 4, qPrintable(QStringLiteral("only %1 files changed; planned: %2")
+                                          .arg(changed)
+                                          .arg(planned.join(QStringLiteral(" | ")))));
+
+    // Forced to relative, and the path corrected in the same file.
+    const QByteArray index = read(QStringLiteral("Firefox/profiles.ini"));
+    QVERIFY2(index.contains("IsRelative=1"), index.constData());
+    QVERIFY2(index.contains("/home/bob/.config/Mozilla/Firefox/Profiles/x1.default"),
+             index.constData());
+    QVERIFY2(index.contains("Name=default-release"), "the rest of the file must survive");
+
+    // Both indexes keyed by the old installation are gone.
+    QVERIFY2(!QFile::exists(path(QStringLiteral("Firefox/installs.ini"))),
+             "installs.ini is keyed by a hash of the old installation directory");
+    QVERIFY2(!QFile::exists(path(QStringLiteral("Firefox/Profiles/x1.default/compatibility.ini"))),
+             "compatibility.ini records where the last build lived");
+
+    // The settings that describe the old machine are out, and the family form
+    // took both of the graphics entries rather than the one named exactly.
+    const QByteArray prefs = read(QStringLiteral("Firefox/Profiles/x1.default/prefs.js"));
+    QVERIFY2(!prefs.contains("homepage_override.buildID"), prefs.constData());
+    QVERIFY2(!prefs.contains("gfx.blacklist"), prefs.constData());
+
+    // And nothing else was touched: the comment, the unrelated setting, and
+    // the path the ordinary rewrite rules correct.
+    QVERIFY2(prefs.contains("a comment nobody asked to remove"), prefs.constData());
+    QVERIFY2(prefs.contains("\"browser.startup.homepage\", \"about:home\""), prefs.constData());
+    QVERIFY2(prefs.contains("/home/bob/Downloads"), prefs.constData());
+}
+
+/// Taking a setting out has to leave the file in the form it arrived in, the
+/// same as correcting one does. A preferences file written UTF-16 that came
+/// back UTF-8 would have the right settings removed from it and be unreadable
+/// to the application that wrote it.
+void PathRewriteTest::droppingAKeyKeepsTheFilesEncoding() {
+    const QString source = QStringLiteral(
+        "user_pref(\"intl.locale\", \"ko-KR\");\n"
+        "user_pref(\"gfx.blacklist.layers.opengl\", 4);\n");
+    QByteArray utf16;
+    utf16.append("\xFF\xFE", 2);
+    for (const QChar c : source) {
+        const ushort unit = c.unicode();
+        utf16.append(static_cast<char>(unit & 0xFF));
+        utf16.append(static_cast<char>(unit >> 8));
+    }
+    write(QStringLiteral("prefs.js"), utf16);
+
+    core::AppRecipe recipe;
+    recipe.id = QStringLiteral("test.firefox");
+    core::RecipeMoveStep step;
+    step.fromOs = QStringLiteral("*");
+    step.toOs = QStringLiteral("*");
+    step.file = QStringLiteral("prefs.js");
+    step.format = QStringLiteral("text");
+    step.action = core::MoveAction::DropKeys;
+    step.keys = {QStringLiteral("gfx.blacklist.")};
+    recipe.moves.push_back(step);
+
+    core::RewritePlan plan;
+    core::PathRewriter(windowsToLinux()).planFor(recipe, workspace_->path(), plan);
+    QCOMPARE(plan.edits().size(), 1);
+    QCOMPARE(plan.apply(), 1);
+
+    const QByteArray after = read(QStringLiteral("prefs.js"));
+    QVERIFY2(after.startsWith("\xFF\xFE"), "the byte order mark went missing");
+    QVERIFY2(after.contains(QByteArray("i\0n\0t\0l\0", 8)),
+             "the settings that were not asked about must survive");
+    QVERIFY2(!after.contains(QByteArray("g\0f\0x\0", 6)), "the setting was not removed");
 }
 
 void PathRewriteTest::catalogLoadsAndMatches() {

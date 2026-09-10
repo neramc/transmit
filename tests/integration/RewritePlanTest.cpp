@@ -32,6 +32,8 @@ private slots:
     void saysWhereTheFileIsWhenItCannotBePutBack();
     void throwsAwayTheKeptOriginalsOnlyWhenAsked();
     void everyEditBecomesSomethingTheUserCanRead();
+    void aFileThatHasToGoIsTakenAwayAndCanComeBack();
+    void aRemovalOfAFileThatIsNotThereIsNotAFailure();
 
 private:
     [[nodiscard]] QString path(const QString& name) const { return workspace_.filePath(name); }
@@ -77,6 +79,62 @@ void RewritePlanTest::cleanup() {
             QFile::remove(entry.absoluteFilePath());
         }
     }
+}
+
+/// Some files cannot be carried and cannot be corrected either: an index keyed
+/// by a hash of the old installation directory, a preferences file signed
+/// against the installation that wrote it. Leaving one in place is worse than
+/// having none, because the application reads it and trusts it. So the restore
+/// takes it away and the application writes itself a new one - and because
+/// that is a change to somebody's folder like any other, the undo has to put
+/// it back.
+void RewritePlanTest::aFileThatHasToGoIsTakenAwayAndCanComeBack() {
+    write(QStringLiteral("installs.ini"), "[abc123]\nDefault=Profiles/x1\n");
+
+    RewriteEdit going =
+        edit(QStringLiteral("installs.ini"), QStringLiteral("installs.ini"), QString(), QString());
+    going.kind = EditKind::Remove;
+
+    RewritePlan plan;
+    plan.add(going);
+
+    // An edit from nothing to nothing would be thrown away as a change that
+    // changes nothing, and a removal is not that.
+    QCOMPARE(plan.edits().size(), 1);
+    QCOMPARE(plan.fileCount(), 1);
+
+    QStringList errors;
+    QCOMPARE(plan.apply(&errors), 1);
+    QVERIFY2(errors.isEmpty(), qPrintable(errors.join(u',')));
+    QVERIFY2(!QFile::exists(path(QStringLiteral("installs.ini"))), "the file is still there");
+    QVERIFY2(QFile::exists(path(QStringLiteral("installs.ini.transmit-backup"))),
+             "nothing was kept, so this could not be undone");
+
+    QCOMPARE(plan.revert(&errors), 1);
+    QVERIFY2(errors.isEmpty(), qPrintable(errors.join(u',')));
+    QCOMPARE(read(QStringLiteral("installs.ini")), QByteArray("[abc123]\nDefault=Profiles/x1\n"));
+    QVERIFY2(!QFile::exists(path(QStringLiteral("installs.ini.transmit-backup"))),
+             "the kept copy is litter once the original is back");
+}
+
+/// A rule may name a file the capture never held. Nothing to take away is not
+/// a failure, and it must not leave a backup of a file that never existed for
+/// the undo to put down.
+void RewritePlanTest::aRemovalOfAFileThatIsNotThereIsNotAFailure() {
+    RewriteEdit going = edit(QStringLiteral("never-existed.ini"),
+                             QStringLiteral("never-existed.ini"), QString(), QString());
+    going.kind = EditKind::Remove;
+
+    RewritePlan plan;
+    plan.add(going);
+
+    QStringList errors;
+    QCOMPARE(plan.apply(&errors), 0);
+    QVERIFY2(errors.isEmpty(), qPrintable(errors.join(u',')));
+    QVERIFY(!QFile::exists(path(QStringLiteral("never-existed.ini.transmit-backup"))));
+
+    QCOMPARE(plan.revert(&errors), 0);
+    QVERIFY(!QFile::exists(path(QStringLiteral("never-existed.ini"))));
 }
 
 void RewritePlanTest::anEditThatChangesNothingIsNotAnEdit() {

@@ -10,7 +10,9 @@
 namespace transmit::core {
 
 void RewritePlan::add(RewriteEdit edit) {
-    if (edit.oldValue != edit.newValue) {
+    // A removal has no new value to differ from the old one, so the guard that
+    // throws away a change that changes nothing does not apply to it.
+    if (edit.kind == EditKind::Remove || edit.oldValue != edit.newValue) {
         edits_.push_back(std::move(edit));
     }
 }
@@ -50,12 +52,45 @@ int RewritePlan::apply(QStringList* errors) const {
     // next to the target; applying is the swap, which is what makes the whole
     // pass reversible.
     QSet<QString> files;
+    QSet<QString> removals;
     for (const RewriteEdit& edit : edits_) {
         files.insert(edit.filePath);
+        if (edit.kind == EditKind::Remove) {
+            removals.insert(edit.filePath);
+        }
     }
 
     int changed = 0;
     for (const QString& path : files) {
+        // A file that is to go has no staged copy: what replaces it is
+        // nothing. It still goes through the backup, so the whole pass stays
+        // reversible - a file this deleted is one the undo has to put back.
+        if (removals.contains(path)) {
+            if (!QFile::exists(path)) {
+                continue;
+            }
+            const QString backup = path + QLatin1String(kBackupSuffix);
+            QFile::remove(backup);
+            if (!QFile::copy(path, backup)) {
+                if (errors != nullptr) {
+                    *errors << QCoreApplication::translate("Rewrite",
+                                                           "Could not set aside the original of %1")
+                                   .arg(path);
+                }
+                continue;
+            }
+            if (!QFile::remove(path)) {
+                if (errors != nullptr) {
+                    *errors
+                        << QCoreApplication::translate("Rewrite", "Could not remove %1").arg(path);
+                }
+                QFile::remove(backup);
+                continue;
+            }
+            ++changed;
+            continue;
+        }
+
         const QString staged = path + QStringLiteral(".transmit-staged");
         if (!QFile::exists(staged)) {
             continue;  // nothing was actually produced for this file
@@ -109,7 +144,7 @@ int RewritePlan::apply(QStringList* errors) const {
         ++changed;
     }
 
-    qCInfo(logRewrite) << "rewrote paths inside" << changed << "files";
+    qCInfo(logRewrite) << "rewrote or removed" << changed << "files";
     return changed;
 }
 
@@ -163,8 +198,13 @@ QList<ContinuityNote> RewritePlan::toNotes() const {
         note.domain = DomainId::AppState;
         note.subject =
             QStringLiteral("%1 - %2").arg(QFileInfo(edit.filePath).fileName(), edit.location);
-        note.detail = QCoreApplication::translate("Rewrite", "Pointed at \"%1\" instead of \"%2\".")
-                          .arg(edit.newValue, edit.oldValue);
+        note.detail =
+            edit.kind == EditKind::Remove
+                ? QCoreApplication::translate(
+                      "Rewrite", "Removed, because %1 rebuilds it for this machine on first start.")
+                      .arg(edit.appId)
+                : QCoreApplication::translate("Rewrite", "Pointed at \"%1\" instead of \"%2\".")
+                      .arg(edit.newValue, edit.oldValue);
         notes.push_back(note);
     }
     return notes;

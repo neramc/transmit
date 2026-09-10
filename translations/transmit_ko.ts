@@ -2171,6 +2171,14 @@
         <source>Could not put back %1 - the original is still at %2</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Could not remove %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Removed, because %1 rebuilds it for this machine on first start.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>Secrets</name>

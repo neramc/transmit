@@ -29,4 +29,14 @@ bool writeStaged(const QString& stagedPath, const QByteArray& contents) {
     return true;
 }
 
+QByteArray readForStaging(const QString& path) {
+    for (const QString& candidate : {path + QStringLiteral(".transmit-staged"), path}) {
+        QFile file(candidate);
+        if (file.open(QIODevice::ReadOnly)) {
+            return file.readAll();
+        }
+    }
+    return {};
+}
+
 }  // namespace transmit::core::rewriters
