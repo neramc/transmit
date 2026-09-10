@@ -34,6 +34,8 @@ private slots:
     void everyEditBecomesSomethingTheUserCanRead();
     void aFileThatHasToGoIsTakenAwayAndCanComeBack();
     void aRemovalOfAFileThatIsNotThereIsNotAFailure();
+    void saysSoWhenAFileThatHasToGoCannotBeSetAside();
+    void aRemovalSaysWhyRatherThanWhatItPointsAtNow();
 
 private:
     [[nodiscard]] QString path(const QString& name) const { return workspace_.filePath(name); }
@@ -135,6 +137,51 @@ void RewritePlanTest::aRemovalOfAFileThatIsNotThereIsNotAFailure() {
 
     QCOMPARE(plan.revert(&errors), 0);
     QVERIFY(!QFile::exists(path(QStringLiteral("never-existed.ini"))));
+}
+
+/// The same promise as every other change: nothing is taken away until a copy
+/// of it is somewhere else. A removal that cannot keep the copy does not
+/// happen, and the person is told which file it was.
+void RewritePlanTest::saysSoWhenAFileThatHasToGoCannotBeSetAside() {
+    // A directory under the name, which QFile::copy will not copy - the same
+    // way the case for a change makes the copy fail.
+    QVERIFY(QDir().mkpath(path(QStringLiteral("stubborn.ini"))));
+
+    RewriteEdit going =
+        edit(QStringLiteral("stubborn.ini"), QStringLiteral("stubborn.ini"), QString(), QString());
+    going.kind = EditKind::Remove;
+
+    RewritePlan plan;
+    plan.add(going);
+
+    QStringList errors;
+    QCOMPARE(plan.apply(&errors), 0);
+    QCOMPARE(errors.size(), 1);
+    QVERIFY2(errors.first().contains(QStringLiteral("stubborn.ini")), qPrintable(errors.first()));
+    QVERIFY2(QDir(path(QStringLiteral("stubborn.ini"))).exists(),
+             "what could not be copied aside must still be where it was");
+    QVERIFY2(!QFile::exists(path(QStringLiteral("stubborn.ini.transmit-backup"))),
+             "a backup of a file that is still there would be read as one that had gone");
+}
+
+/// A removal reads differently from a correction, because "pointed at nothing
+/// instead of nothing" says less than nothing. What a person needs to know is
+/// which program will build the file again.
+void RewritePlanTest::aRemovalSaysWhyRatherThanWhatItPointsAtNow() {
+    RewriteEdit going =
+        edit(QStringLiteral("installs.ini"), QStringLiteral("installs.ini"), QString(), QString());
+    going.kind = EditKind::Remove;
+
+    RewritePlan plan;
+    plan.add(going);
+
+    const QList<ContinuityNote> notes = plan.toNotes();
+    QCOMPARE(notes.size(), 1);
+    QCOMPARE(notes.first().subject, QStringLiteral("installs.ini - installs.ini"));
+    QVERIFY2(notes.first().detail.contains(QStringLiteral("org.example.app")),
+             qPrintable(notes.first().detail));
+    QVERIFY2(!notes.first().detail.contains(QStringLiteral("Pointed at")),
+             qPrintable(notes.first().detail));
 }
 
 void RewritePlanTest::anEditThatChangesNothingIsNotAnEdit() {

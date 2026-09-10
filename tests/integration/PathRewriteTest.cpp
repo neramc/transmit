@@ -55,6 +55,8 @@ private slots:
     void aMacOsFirefoxProfileIsRepointedEndToEnd();
     void theMoveStepsInTheCatalogAreCarriedOut();
     void droppingAKeyKeepsTheFilesEncoding();
+    void aSettingIsDroppedFromEveryShapeItComesIn();
+    void aStepThisPassCannotCarryOutSaysSo();
 
     void catalogLoadsAndMatches();
     void relocatesApplicationStateToWhereTheTargetKeepsIt();
@@ -928,6 +930,118 @@ void PathRewriteTest::droppingAKeyKeepsTheFilesEncoding() {
     QVERIFY2(after.contains(QByteArray("i\0n\0t\0l\0", 8)),
              "the settings that were not asked about must survive");
     QVERIFY2(!after.contains(QByteArray("g\0f\0x\0", 6)), "the setting was not removed");
+}
+
+/// The other two shapes a setting comes in.
+///
+/// Chromium keeps a key sealed to the old account in a JSON Local State, and
+/// git keeps a credential helper naming a program that may not be installed
+/// here in an INI .gitconfig. Both have to come out, and both are what the
+/// catalogue actually asks for - the end-to-end case above only exercises the
+/// line-per-setting shape a Firefox prefs.js is.
+void PathRewriteTest::aSettingIsDroppedFromEveryShapeItComesIn() {
+    const auto planFor = [this](const QString& file, const QString& format,
+                                const QStringList& keys) {
+        core::AppRecipe recipe;
+        recipe.id = QStringLiteral("test.app");
+
+        core::RecipeMoveStep step;
+        step.fromOs = QStringLiteral("*");
+        step.toOs = QStringLiteral("*");
+        step.file = file;
+        step.format = format;
+        step.action = core::MoveAction::DropKeys;
+        step.keys = keys;
+        recipe.moves.push_back(step);
+
+        auto plan = std::make_shared<core::RewritePlan>();
+        core::PathRewriter(windowsToLinux()).planFor(recipe, workspace_->path(), *plan);
+        return plan;
+    };
+
+    // JSON: one named member, one nested, and a family.
+    write(QStringLiteral("Local State"),
+          "{\n"
+          "  \"os_crypt\": {\"encrypted_key\": \"c2VhbGVk\"},\n"
+          "  \"profile\": {\"info_cache\": {\"a\": 1}, \"last_used\": \"Default\"},\n"
+          "  \"gfx\": {\"blacklist.opengl\": 4, \"blacklist.webgl\": 4, \"vendor\": \"acme\"},\n"
+          "  \"user_experience_metrics\": {\"x\": 1}\n"
+          "}\n");
+    const auto json = planFor(QStringLiteral("Local State"), QStringLiteral("json"),
+                              {QStringLiteral("os_crypt"), QStringLiteral("profile.info_cache"),
+                               QStringLiteral("gfx.blacklist.")});
+    QCOMPARE(json->apply(), 1);
+
+    const QByteArray state = read(QStringLiteral("Local State"));
+    QVERIFY2(!state.contains("os_crypt"), state.constData());
+    QVERIFY2(!state.contains("info_cache"), state.constData());
+    QVERIFY2(!state.contains("blacklist"), state.constData());
+    QVERIFY2(state.contains("last_used"), "a sibling of a dropped member must survive");
+    QVERIFY2(state.contains("\"vendor\""), "a sibling of a dropped family must survive");
+    QVERIFY2(state.contains("user_experience_metrics"), "an untouched member must survive");
+
+    // INI: "section/key", and a bare key means that key in any section.
+    write(QStringLiteral(".gitconfig"),
+          "; how this machine talks to servers\n"
+          "[credential]\n"
+          "\thelper = /usr/lib/git-core/git-credential-libsecret\n"
+          "[core]\n"
+          "\tsshCommand = ssh -i /home/bob/.ssh/id_work\n"
+          "\teditor = vim\n"
+          "[user]\n"
+          "\tname = Bob\n");
+    const auto ini =
+        planFor(QStringLiteral(".gitconfig"), QStringLiteral("ini"),
+                {QStringLiteral("credential/helper"), QStringLiteral("core/sshCommand")});
+    QCOMPARE(ini->apply(), 1);
+
+    const QByteArray config = read(QStringLiteral(".gitconfig"));
+    QVERIFY2(!config.contains("credential-libsecret"), config.constData());
+    QVERIFY2(!config.contains("sshCommand"), config.constData());
+    QVERIFY2(config.contains("editor = vim"), "a sibling in the same section must survive");
+    QVERIFY2(config.contains("name = Bob"), "another section must survive");
+    QVERIFY2(config.contains("; how this machine talks to servers"),
+             "the comments must survive, as everywhere else in this pass");
+    QVERIFY2(config.contains("[credential]"),
+             "the section header stays; only the setting was asked about");
+}
+
+/// A format nothing here can read is said rather than done quietly, and a step
+/// that belongs to a different pass says which pass. Both used to be the same
+/// silence as a step that had worked.
+void PathRewriteTest::aStepThisPassCannotCarryOutSaysSo() {
+    write(QStringLiteral("prefs.dat"), "binary-ish\n");
+
+    core::AppRecipe recipe;
+    recipe.id = QStringLiteral("test.app");
+
+    core::RecipeMoveStep unreadable;
+    unreadable.fromOs = QStringLiteral("*");
+    unreadable.toOs = QStringLiteral("*");
+    unreadable.file = QStringLiteral("prefs.dat");
+    unreadable.format = QStringLiteral("registry");
+    unreadable.action = core::MoveAction::DropKeys;
+    unreadable.keys = {QStringLiteral("anything")};
+    recipe.moves.push_back(unreadable);
+
+    core::RecipeMoveStep forcedInABinary = unreadable;
+    forcedInABinary.action = core::MoveAction::Rewrite;
+    forcedInABinary.assignments.push_back({QStringLiteral("a/b"), QStringLiteral("1")});
+    recipe.moves.push_back(forcedInABinary);
+
+    core::RecipeMoveStep elsewhere = unreadable;
+    elsewhere.action = core::MoveAction::Skip;
+    recipe.moves.push_back(elsewhere);
+
+    core::RecipeMoveStep copied = unreadable;
+    copied.action = core::MoveAction::Copy;
+    recipe.moves.push_back(copied);
+
+    core::RewritePlan plan;
+    core::PathRewriter(windowsToLinux()).planFor(recipe, workspace_->path(), plan);
+
+    QVERIFY2(plan.isEmpty(), "nothing may be planned for a step this pass cannot carry out");
+    QCOMPARE(read(QStringLiteral("prefs.dat")), QByteArray("binary-ish\n"));
 }
 
 void PathRewriteTest::catalogLoadsAndMatches() {
